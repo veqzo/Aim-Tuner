@@ -5,6 +5,7 @@ import de.yuuto.aimtune.core.accel.AccelCurve
 import de.yuuto.aimtune.core.accel.AccelScenarios
 import de.yuuto.aimtune.core.accel.CurveStrength
 import de.yuuto.aimtune.core.accel.NaturalCurve
+import de.yuuto.aimtune.core.accel.OwnCurveStrength
 import de.yuuto.aimtune.core.accel.RawAccelArgs
 import de.yuuto.aimtune.core.accel.RawAccelCapMode
 import de.yuuto.aimtune.core.accel.RawAccelMode
@@ -63,15 +64,16 @@ class FindCurveReferenceGateTest {
     private val scale = (System.getenv("AIMTUNE_SEEDS")?.toIntOrNull() ?: 40) / 40.0
     private fun n(base: Int) = (base * scale).toInt().coerceAtLeast(4)
 
-    private class Truth(val name: String, val curve: (Double) -> Double, val runs: Int)
+    /** [side]: which side of strength 1 the truth is on when the search scales the player's own curve (-1 weaker, 0 the same, +1 stronger, null unclear). */
+    private class Truth(val name: String, val curve: (Double) -> Double, val runs: Int, val side: Int? = null)
 
     private val truths = listOf(
-        Truth("OWN (truth = profile)", { imported.curve.multiplier(it) }, n(24)),
-        Truth("CAP x0.5", { imported.adjusted(RefineParameter.HIGH_GAIN, 0.5).curve.multiplier(it) }, n(24)),
-        Truth("CAP x2.0", { imported.adjusted(RefineParameter.HIGH_GAIN, 2.0).curve.multiplier(it) }, n(24)),
-        Truth("TRANS x2.0 (later rise)", { imported.adjusted(RefineParameter.TRANSITION, 2.0).curve.multiplier(it) }, n(24)),
+        Truth("OWN (truth = profile)", { imported.curve.multiplier(it) }, n(24), side = 0),
+        Truth("CAP x0.5", { imported.adjusted(RefineParameter.HIGH_GAIN, 0.5).curve.multiplier(it) }, n(24), side = -1),
+        Truth("CAP x2.0", { imported.adjusted(RefineParameter.HIGH_GAIN, 2.0).curve.multiplier(it) }, n(24), side = 1),
+        Truth("TRANS x2.0 (later rise)", { imported.adjusted(RefineParameter.TRANSITION, 2.0).curve.multiplier(it) }, n(24), side = -1),
         Truth("NATURAL limit 1.3", { NaturalCurve(0.05, 1.3).multiplier(it) }, n(24)),
-        Truth("PLAIN (truth = linear)", { 1.0 }, n(24)),
+        Truth("PLAIN (truth = linear)", { 1.0 }, n(24), side = -1),
     )
 
     private fun player(hand: Hand, truth: Truth, optimumScale: Double): SimulatedPlayer =
@@ -132,6 +134,7 @@ class FindCurveReferenceGateTest {
     }
 
     private class SearchRun(val offered: Boolean, val strength: Double, val shapeError: Double)
+    private class OwnSearchRun(val offered: Boolean, val strength: Double, val atEdge: Boolean)
     private class CalibRun(val offered: Boolean, val shapeError: Double, val above10: Double, val above20: Double, val q5: Double, val q50: Double, val q95: Double)
     private class OwnRun(val bins: Int, val signal: Double, val error: Double, val noise: Double, val offered: Boolean)
 
@@ -149,6 +152,21 @@ class FindCurveReferenceGateTest {
         val analysis = AccelAnalysis(movementSamples(rounds(player(hand, truth, optimumScale), hand, seed + 1, 6, null), TEST_DPI))
         val curve: AccelCurve = NaturalCurve(CurveStrength.DECAY, s)
         return SearchRun(offered, s, shapeError({ curve.multiplier(it) }, truth.curve, analysis))
+    }
+
+    /** The strength search on top of the user's profile (step 2): 24 blind rounds, flash on, the strength scales the rise of the profile. */
+    private fun searchOwn(hand: Hand, truth: Truth, optimumScale: Double, seed: Long): OwnSearchRun {
+        val kinds = AccelScenarios.of(true)
+        val own = OwnCurveStrength(imported, TEST_DPI)
+        val result = checkNotNull(
+            playBlindTest(
+                player(hand, truth, optimumScale), own.searchRange, 24, seed, scenarioFor = { kinds[it % kinds.size] },
+                geometry = hand.geometry, accelOf = { p -> own.model(CurveStrength.fromPseudo(p)) }, playedCm360 = hand.gameCm360,
+            ).result,
+        )
+        val s = CurveStrength.fromPseudo(result.optimumCm360)
+        val offered = CurveStrength.excludesPlain(s, CurveStrength.fromPseudo(result.intervalLowCm360), CurveStrength.fromPseudo(result.intervalHighCm360))
+        return OwnSearchRun(offered, s, result.atRangeEdge)
     }
 
     private fun calibPlain(hand: Hand, truth: Truth, optimumScale: Double, seed: Long): CalibRun {
@@ -189,13 +207,23 @@ class FindCurveReferenceGateTest {
         val optimumScale = calibrate(hand, log)
         val started = System.currentTimeMillis()
         val searchRows = StringBuilder()
+        val ownRows2 = StringBuilder()
         val plainRows = StringBuilder()
         val ownRows = StringBuilder()
         for (truth in truths) {
             val search = parallelList(truth.runs) { s -> search(hand, truth, optimumScale, 7_000L + s) }
+            val ownSearch = parallelList(truth.runs) { s -> searchOwn(hand, truth, optimumScale, 6_000L + s) }
             val plain = parallelList(truth.runs) { s -> calibPlain(hand, truth, optimumScale, 8_000L + s) }
             val own = parallelList(truth.runs) { s -> calibOwn(hand, truth, optimumScale, 9_000L + s) }
             fun pct(count: Int, total: Int) = "%5.1f%%".format(100.0 * count / total)
+            val right = ownSearch.count { it.offered && truth.side != null && truth.side != 0 && (if (truth.side > 0) it.strength > 1.0 else it.strength < 1.0) }
+            val wrong = ownSearch.count { it.offered && truth.side != null && truth.side != 0 && (if (truth.side > 0) it.strength < 1.0 else it.strength > 1.0) }
+            ownRows2.appendLine(
+                "%-26s %4d  %6s  %6s  %6s  %8.3f  %6s".format(
+                    truth.name, ownSearch.size, pct(ownSearch.count { it.offered }, ownSearch.size), if (truth.side == null || truth.side == 0) "-" else pct(right, ownSearch.size),
+                    if (truth.side == null || truth.side == 0) "-" else pct(wrong, ownSearch.size), median(ownSearch.map { it.strength }), pct(ownSearch.count { it.atEdge }, ownSearch.size),
+                ),
+            )
             searchRows.appendLine(
                 "%-26s %4d  %6s  %8.3f  %10.3f".format(
                     truth.name, search.size, pct(search.count { it.offered }, search.size), median(search.map { it.strength }), meanOf(search.map { it.shapeError }),
@@ -223,6 +251,10 @@ class FindCurveReferenceGateTest {
         out.appendLine("-- SEARCH (today's primary path): 24 blind rounds, flash on. offered = the interval excludes 'no curve'; strength = median best strength; shape err vs the truth")
         out.appendLine("truth                      runs  offered  strength  shape err")
         out.append(searchRows)
+        out.appendLine()
+        out.appendLine("-- SEARCH-OWN (step 2): 24 blind rounds, flash on, the strength scales the rise of the user's profile (0.5 = half, 1 = the profile, 2 = double). offered = interval excludes 1 (falling only below 0.90); right/wrong = offered on the true / the opposite side of 1 (OWN is the null)")
+        out.appendLine("truth                      runs  offered   right   wrong  strength  at edge")
+        out.append(ownRows2)
         out.appendLine()
         out.appendLine("-- CALIB-PLAIN (today's analysis path): 15 plain rounds, bounded fit. offered = a curve is recommended. Speeds in in/s: share of used reaches above the profile's offset (10) and above twice that, q5/q50/q95 median")
         out.appendLine("truth                      runs  offered  shape err  | >10 in/s  >20 in/s |   q5   q50   q95")

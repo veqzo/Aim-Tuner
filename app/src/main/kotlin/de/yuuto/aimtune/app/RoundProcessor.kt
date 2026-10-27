@@ -5,6 +5,7 @@ import de.yuuto.aimtune.app.accel.LastCalibration
 import de.yuuto.aimtune.app.accel.LastSearch
 import de.yuuto.aimtune.app.accel.PriorCalibration
 import de.yuuto.aimtune.app.accel.PriorSearchRound
+import de.yuuto.aimtune.app.accel.SearchBase
 import de.yuuto.aimtune.app.accel.SettingsAnalyses
 import de.yuuto.aimtune.app.accel.StoredSearches
 import de.yuuto.aimtune.app.blind.AxisErrors
@@ -157,7 +158,7 @@ class RoundProcessor(private val database: Database?, private val exportDir: Pat
      * The stored blind strength searches at the setup of the newest one, analysed again together from their rounds; null when
      * there is none or reading fails. Read on the storage thread.
      */
-    fun lastSearch(weights: MetricWeights): LastSearch? {
+    fun lastSearch(weights: MetricWeights, baseCurve: RawAccelProfile? = null): LastSearch? {
         val repo = repository ?: return null
         return try {
             executor.submit<LastSearch?> {
@@ -165,7 +166,7 @@ class RoundProcessor(private val database: Database?, private val exportDir: Pat
                     val rounds = StoredSearches.searchRounds(session.kind, repo.rounds(session.id))
                     if (rounds.isEmpty()) null else StoredSearches.SearchSession(session.id, session.dpi, rounds)
                 }
-                StoredSearches.pool(searches, weights)
+                StoredSearches.pool(searches, weights, baseCurve?.let { SearchBase(it, searches.first().dpi) })
             }.get()
         } catch (e: Exception) {
             log.log(System.Logger.Level.ERROR, "reading the last search failed: ${e.message}", e)
@@ -173,8 +174,11 @@ class RoundProcessor(private val database: Database?, private val exportDir: Pat
         }
     }
 
-    /** The stored search rounds at this DPI and sensitivity for a new search to build on; none without a database or if reading fails. */
-    fun priorSearch(dpi: Double, cm360: Double): List<PriorSearchRound> {
+    /**
+     * The stored search rounds at this DPI and sensitivity for a new search to build on; none without a database or if reading fails.
+     * With a [baseCurve] the rounds of searches on top of exactly that curve, otherwise those of the plain mouse's natural curves.
+     */
+    fun priorSearch(dpi: Double, cm360: Double, baseCurve: RawAccelProfile? = null): List<PriorSearchRound> {
         val repo = repository ?: return emptyList()
         return try {
             executor.submit<List<PriorSearchRound>> {
@@ -182,7 +186,7 @@ class RoundProcessor(private val database: Database?, private val exportDir: Pat
                     val rounds = StoredSearches.searchRounds(session.kind, repo.rounds(session.id))
                     if (rounds.isEmpty()) null else StoredSearches.SearchSession(session.id, session.dpi, rounds)
                 }
-                StoredSearches.priorRounds(searches, dpi, cm360)
+                StoredSearches.priorRounds(searches, dpi, cm360, baseCurve?.let { SearchBase(it, dpi) })
             }.get()
         } catch (e: Exception) {
             log.log(System.Logger.Level.ERROR, "reading earlier search rounds failed: ${e.message}", e)

@@ -81,8 +81,8 @@ class AccelRun(
     private val boundedCurves: Boolean = true,
     /**
      * The player's own Raw Accel curve, when they play one: the calibration and the control arm of the blind test are played with it,
-     * and the analysis divides it out (docs/FIND-CURVE-REDESIGN.md step 1). Null is a plain mouse. The strength search still plays
-     * natural curves over plain until step 2.
+     * the analysis divides it out and the strength search scales its rise (docs/FIND-CURVE-REDESIGN.md steps 1 and 2). Null is a
+     * plain mouse: the search then plays natural curves over plain.
      */
     val baseCurve: RawAccelProfile? = null,
 ) {
@@ -121,7 +121,8 @@ class AccelRun(
     private var tested: AccelFit? = startWithTest
     private var source = Source.ANALYSIS
 
-    private val search = StrengthSearch(weights, seed, plannedRounds = StrengthSearch.plannedFor(priorSearch.size), prior = priorSearch, flash = flash)
+    private val searchBase = baseCurve?.let { SearchBase(it, baseConfig.dpi) }
+    private val search = StrengthSearch(weights, seed, plannedRounds = StrengthSearch.plannedFor(priorSearch.size), prior = priorSearch, flash = flash, base = searchBase)
     private var searchCandidate: AccelFit? = null
     private var currentStrength = CurveStrength.NEUTRAL
 
@@ -202,7 +203,7 @@ class AccelRun(
             baseConfig.copy(
                 scenario = testScenarios[search.roundsPlayed % testScenarios.size],
                 seed = seed * SEARCH_SEED_MIX + search.roundsPlayed,
-                accel = CurveStrength.curve(currentStrength),
+                accel = searchBase?.strengths?.model(currentStrength) ?: CurveStrength.curve(currentStrength),
             )
         }
         AccelPhase.ANALYSIS, AccelPhase.SEARCH_RESULT, AccelPhase.DONE -> error("no round is due in phase $phase")
@@ -285,7 +286,7 @@ class AccelRun(
     private fun finishSearch() {
         val result = search.result()
         searchResult = result
-        searchCandidate = result?.takeIf { it.excludesPlain }?.let { strengthAccel(it.strength) }
+        searchCandidate = result?.takeIf { it.excludesPlain }?.let { searchBase?.strengths?.offer(it.strength) ?: strengthAccel(it.strength) }
         phase = AccelPhase.SEARCH_RESULT
     }
 

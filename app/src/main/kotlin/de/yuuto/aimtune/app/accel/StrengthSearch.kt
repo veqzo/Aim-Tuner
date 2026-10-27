@@ -47,9 +47,12 @@ class StrengthSearch(
     private val prior: List<PriorSearchRound> = emptyList(),
     /** Whether the search plays flash rounds, which widens its strength range (`CurveStrength.searchRange`). */
     flash: Boolean = false,
+    /** The player's own curve the strengths scale, or null for the natural curves over a plain mouse; it sets the range. */
+    base: SearchBase? = null,
 ) {
     // Earlier rounds above the narrow range (a search that played flash rounds) widen it too, so the optimizer covers them.
-    private val range = CurveStrength.searchRange(flash || prior.any { it.strength > CurveStrength.MAX + STRENGTH_TOLERANCE })
+    private val range = base?.strengths?.searchRange
+        ?: CurveStrength.searchRange(flash || prior.any { it.strength > CurveStrength.MAX + STRENGTH_TOLERANCE })
     private val optimizer = SensitivityOptimizer(range, seed)
     private val inputs = mutableListOf<Map<ScoreMetric, Double>>()
     private val scenarios = mutableListOf<String>()

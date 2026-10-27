@@ -26,9 +26,15 @@ class AccelSearchResultScreen(ctx: AppContext, private val run: AccelRun) : Acce
     override fun build(): Actor {
         val offer = run.searchOffer
         val content = Table()
-        content.add(ui.label(if (offer != null) t("accel.search.found") else t("accel.search.none"), Styles.HEADING)).left().padBottom(32f).row()
-        content.add(ui.label(searchExplanation(result, offer != null), Styles.BODY_MUTED, wrap = true)).left().width(TEXT_WIDTH).padBottom(32f).row()
-        result?.let { content.add(searchCard(it)).left().width(CARD_WIDTH).row() }
+        val own = run.baseCurve != null
+        val heading = when {
+            offer != null -> t("accel.search.found")
+            own -> t("accel.search.own_none")
+            else -> t("accel.search.none")
+        }
+        content.add(ui.label(heading, Styles.HEADING)).left().padBottom(32f).row()
+        content.add(ui.label(searchExplanation(result, offer != null, own), Styles.BODY_MUTED, wrap = true)).left().width(TEXT_WIDTH).padBottom(32f).row()
+        result?.let { content.add(searchCard(it, own = own)).left().width(CARD_WIDTH).row() }
 
         val footer = Table()
         footer.add(ui.button(if (offer == null) t("common.back") else t("accel.analysis.not_now"), Styles.TEXT) { leave() }).left().height(FOOTER_BUTTON_HEIGHT).padLeft(8f)

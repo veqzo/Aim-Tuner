@@ -284,16 +284,17 @@ class AppContext(
         val config = trainerConfig() ?: return null
         val setup = settings.current
         val sensitivity = setup.inGameSensitivity ?: return null
+        val imported = hub.restoreImported()
+        val choice = imported?.let { RefineImport.choose(it.source, it.profileName, config.dpi) }
+        val own = choice?.profile?.takeIf { useOwnCurve }
         val finder = storedAnalysis()?.let { stored ->
             stored.result?.let {
                 val sensitivity = config.profile.formatSensitivity(config.profile.sensitivityFor(config.dpi, it.optimumCm360))
-                FinderResult(it.optimumCm360, it.confidencePercent, stored.rounds.size, sensitivity, processor.priorSearch(config.dpi, it.optimumCm360).size)
+                FinderResult(it.optimumCm360, it.confidencePercent, stored.rounds.size, sensitivity, processor.priorSearch(config.dpi, it.optimumCm360, own).size)
             }
         }
-        val imported = hub.restoreImported()
-        val choice = imported?.let { RefineImport.choose(it.source, it.profileName, config.dpi) }
         return AccelBaseline(
-            config.cm360, config.profile.formatSensitivity(sensitivity), config.profile.name, finder, processor.priorSearch(config.dpi, config.cm360).size,
+            config.cm360, config.profile.formatSensitivity(sensitivity), config.profile.name, finder, processor.priorSearch(config.dpi, config.cm360, own).size,
             ownCurve = choice?.profile, ownCurveLabel = imported?.let { "${it.fileLabel} · ${it.profileName}" }, ownCurveFileDpi = choice?.dpiMismatch, settingsDpi = config.dpi,
         )
     }
@@ -324,7 +325,7 @@ class AppContext(
     fun importProfile(profile: ImportedProfile) = hub.setImported(profile)
 
     /** The newest blind strength search, analysed again from its stored rounds. */
-    fun showLastSearch(last: LastSearch? = processor.lastSearch(metricWeights())) = switchTo(AccelLastSearchScreen(this, last))
+    fun showLastSearch(last: LastSearch? = processor.lastSearch(metricWeights(), accelBaseline()?.ownCurve?.takeIf { useOwnCurve })) = switchTo(AccelLastSearchScreen(this, last))
 
     /** The analysis of the stored calibration rounds, computed again from them. */
     fun showLastAccelAnalysis(last: LastCalibration? = processor.lastCalibration()) = switchTo(AccelLastAnalysisScreen(this, last))
@@ -366,10 +367,10 @@ class AppContext(
         val config = trainerConfig() ?: return showOnboarding(afterFinish = ::showMenu)
         val base = config.copy(cm360 = baseline.cm360(useFinderResult))
         // A run looks for the earlier rounds of what it starts with: the calibration or the search.
-        // The strength search still plays natural curves over a plain mouse (step 2 changes that), so only the analysis path uses the player's own curve.
-        val own = baseline.ownCurve?.takeIf { useOwnCurve && !search }
+        // On top of the player's own curve both paths play it: the analysis as its base, the search scaling its rise.
+        val own = baseline.ownCurve?.takeIf { useOwnCurve }
         val prior = if (search) PriorCalibration.NONE else processor.priorCalibration(base.dpi, base.cm360, own)
-        val priorSearch = if (search && usePriorSearch) processor.priorSearch(base.dpi, base.cm360) else emptyList()
+        val priorSearch = if (search && usePriorSearch) processor.priorSearch(base.dpi, base.cm360, own) else emptyList()
         val run = AccelRun(
             base, metricWeights(), runKey = System.currentTimeMillis(), seed = nextSeed++, prior = prior, startWithSearch = search,
             flash = settings.current.flashImportance() != FlashImportance.NEVER, priorSearch = priorSearch,

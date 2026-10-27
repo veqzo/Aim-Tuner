@@ -208,6 +208,30 @@ Bekannte Einschränkungen:
 - Aus Schritt 0 gilt weiter: Ob eine Abweichung in der Familie deines Profils erkennbar ist, entscheidet 15 Runden nicht (Signal 0.1-0.3 % gegen 0.67 % Rauschen). Schritt 1 macht die Basis richtig, nicht die Messung genauer.
 - `ExportAuditTest.usersOwnProfile` (storage) schlägt fehl, weil `user-rawaccel-settings.json` im Repo-Root von den hartkodierten Sollwerten (Wert bei 20 in/s: erwartet 1.0286, gelesen 1.0310) abweicht. Er prüft eine eigene Referenzimplementierung und die lokale Datei, nicht den geänderten Code.
 
+## 9. Stand Schritt 2 (Suchfamilie)
+
+Umgesetzt:
+- `AccelFit`: neue Familie `classic+offset` (4 Parameter, Offset 1-30 in/s, BIC-Strafe wie jede andere Familie), per `fitAccel(withOffsetFamily = true)` zuschaltbar, **standardmäßig aus** (siehe unten). Gate `OffsetFamilyGateTest` (`gate-find-redesign-2-offset.txt`, 15 Runden, 4 Spielermodelle): Flache Spieler bekommen mit und ohne die Familie gleich oft ein Angebot (DEFAULT, DECOUPLED, ADAPTIVE 0 von 200; RANGE 200 von 200 in beiden Spalten, die bekannte Range-Bias-Schwäche). Erkennung von +-15 % und +-30 % unverändert bis auf einen Lauf (RANGE -30 %: 26 auf 27). Bei -30 % wird die neue Familie oft gewählt (24 von 30, DEFAULT).
+  - **Nicht übernommen:** Dieses Gate zählte nur Angebote, nicht die Qualität der Kurven. `AccelPipelineTest` ("the blind test confirms a real improvement ...") fiel mit der Familie auf 29 bestätigte von rund 60 Angeboten (Schwelle 60 %), ohne sie besteht er. Die Familie passt für Spieler mit fallender Präferenz besser an die Bins an, die Kurven bestehen den Blindtest aber seltener. Deshalb ist sie vorhanden und getestet (Offset wird wiedergefunden), aber nicht Teil der Empfehlung. Ob sie mit einer eigenen Basiskurve hilft, ist nicht gemessen.
+- `OwnCurveStrength` (core): Die Stärke `s` skaliert den Anstieg der eigenen Kurve auf der Log-Skala, `C_s(v) = B(low) * (B(v)/B(low))^s`. 1 ist die Kurve selbst (innerhalb des Neutralbands wird das Profil direkt gespielt), Bereich 0.5 bis 2.0, gespielt als 64-Punkte-Tabelle. `strengthOf` liest `s` aus der gespeicherten Tabelle zurück.
+- App: `SearchBase`, `StrengthSearch(base)`, `AccelRun` (Suche, Angebot und Blindtest auf der eigenen Kurve), `StoredSearches.strengthOf/priorRounds/pool(base)`: Sitzungen einer anderen Basis werden übersprungen statt zu raten (vorher `checkNotNull`), `RoundProcessor.priorSearch/lastSearch(baseCurve)`, Ergebnis- und "Last search"-Texte für die eigene Kurve (EN/DE).
+- Tests: `OwnCurveStrengthTest` (5), `OwnCurveSearchTest` (4), `AccelFitTest` (+2).
+
+**Gate-Ergebnis der Suche auf der eigenen Kurve (SEARCH-OWN, 24 Läufe je Zeile, Hand real):** Akzeptanz verfehlt.
+
+| Wahrheit | Angebot | richtige Seite | falsche Seite | Stärke (Median) | am Rand |
+|---|---|---|---|---|---|
+| OWN (Null) | 12.5 % | - | - | 1.22 | 42 % |
+| CAP x0.5 | 8.3 % | 4.2 % | 4.2 % | 1.12 | 63 % |
+| CAP x2.0 | 20.8 % | 16.7 % | 4.2 % | 1.16 | 38 % |
+| TRANS x2.0 | 20.8 % | 12.5 % | 8.3 % | 1.12 | 50 % |
+| PLAIN | 25.0 % | 12.5 % | 12.5 % | 1.10 | 54 % |
+
+- Die Null-Rate (12.5 %) liegt über dem Ziel von 5 %, die Richtung wird nicht gefunden (richtig und falsch etwa gleich oft, die Mediane liegen alle bei 1.1-1.2). 40-60 % der besten Werte liegen am Rand der Suche. Die Standardhand liefert dasselbe Bild.
+- Das deckt sich mit Schritt 0 und dem Refine-Befund: Auf diesem Geschwindigkeitsbereich ändert die Skalierung des Anstiegs den Score um nur ein bis drei Punkte, die Streuung der Rundenscores ist größer.
+- Folge: Die Suche auf der eigenen Kurve ist als Hinweis nutzbar, nicht als Messung. Ein Angebot daraus ist wie das alte "ein Hinweis, kein Ergebnis" zu beschriften (der Text sagt das schon: "Test it blind ..."), und es darf nicht als gemessene Präferenz auftreten. Die Stärke muss in Schritt 5 aus dem Bewegungsprofil kommen, wie in Abschnitt 7 begründet.
+- Offen, nicht untersucht: ob ein größerer Suchbereich oder ein anderer Rundenmix die Richtung verbessert. Ich habe es nicht probiert, weil die Streuung der Scores das Hauptproblem ist und Schritt 5 das Problem anders löst.
+
 ## Regeln dieser Session
 Kein Code, keine Commits, kein Push, kein Merge nach `main`, `user-rawaccel-settings.json` und Datenbanken nur lesend. Der Nutzerprofil-Inhalt gehört in keinen Bericht.
 

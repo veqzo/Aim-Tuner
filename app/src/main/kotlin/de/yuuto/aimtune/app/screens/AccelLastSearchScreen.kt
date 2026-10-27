@@ -27,8 +27,8 @@ class AccelLastSearchScreen(ctx: AppContext, private val last: LastSearch?) : Ac
         } else {
             val note = t("accel.last_search.note", last.rounds, "%.1f".format(Locale.ROOT, last.cm360), last.sessions)
             content.add(ui.label(note, Styles.CAPTION_MUTED, wrap = true)).left().width(TEXT_WIDTH).colspan(2).padBottom(16f).row()
-            content.add(ui.label(searchExplanation(last.result, last.clear), Styles.BODY_MUTED, wrap = true)).left().width(TEXT_WIDTH).colspan(2).padBottom(24f).row()
-            last.result?.let { content.add(searchCard(it, SIDE_CARD_WIDTH)).left().top().width(SIDE_CARD_WIDTH) }
+            content.add(ui.label(searchExplanation(last.result, last.clear, last.base != null), Styles.BODY_MUTED, wrap = true)).left().width(TEXT_WIDTH).colspan(2).padBottom(24f).row()
+            last.result?.let { content.add(searchCard(it, SIDE_CARD_WIDTH, last.base != null)).left().top().width(SIDE_CARD_WIDTH) }
             if (offer != null) content.add(unconfirmedCard()).left().top().width(EXPORT_CARD_WIDTH).padLeft(24f)
         }
 

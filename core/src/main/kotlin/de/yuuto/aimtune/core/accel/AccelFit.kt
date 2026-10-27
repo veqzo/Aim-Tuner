@@ -51,6 +51,12 @@ fun fitAccel(
     minBicGain: Double = MIN_BIC_GAIN,
     minGainRange: Double = MIN_GAIN_RANGE,
     floor: Double = FLOOR,
+    /**
+     * Also fit classic with an input offset (below it the gain stays 1). Off by default: in the pipeline test it was chosen for players
+     * who want a falling gain, and its curves passed the blind test far less often (29 of 60 offers against at least 36), so it is
+     * available but not part of the recommendation (docs/FIND-CURVE-REDESIGN.md section 9).
+     */
+    withOffsetFamily: Boolean = false,
 ): AccelFitResult {
     val points = analysis.points
     if (points.size < AccelAnalysis.MIN_BINS) {
@@ -65,7 +71,7 @@ fun fitAccel(
     val nullChi = weights.indices.sumOf { weights[it] * ys[it] * ys[it] }
     val bicPenalty = ln(points.size.toDouble())
 
-    val fits = FAMILIES.mapNotNull { family ->
+    val fits = (if (withOffsetFamily) FAMILIES + OFFSET_FAMILY else FAMILIES).mapNotNull { family ->
         val best = family.starts.map { start ->
             NelderMead.minimize(start, step = START_STEP) { objective(family, it, points, weights, ys).first }
         }.minBy { it.value }
@@ -137,6 +143,29 @@ private val FAMILIES = listOf(
         PowerCurve(scale = exp(t[0].coerceIn(ln(0.005), ln(2.0))), exponent = t[1].coerceIn(0.05, 1.5), outputOffset = 1.0)
     },
 )
+
+/**
+ * Classic with an input offset: the gain stays 1 up to [ClassicCurve.inputOffset], then rises (or falls) as classic does. Raw Accel
+ * players use it to keep small, slow movements untouched; the offset is in in/s and searched between [MIN_OFFSET] and [MAX_OFFSET].
+ * It counts as a fourth parameter in the BIC, so it is only chosen when the offset pays for itself.
+ */
+private val OFFSET_FAMILY = Family(
+    "classic+offset", 4,
+    listOf(
+        doubleArrayOf(ln(0.1), 2.0, ln(1.5), 6.0), doubleArrayOf(ln(0.1), 2.0, ln(1.5), 10.0),
+        doubleArrayOf(ln(0.15), 2.0, ln(0.7), 6.0), doubleArrayOf(ln(0.05), 2.5, ln(3.0), 12.0),
+    ),
+) { t ->
+    ClassicCurve(
+        acceleration = exp(t[0].coerceIn(ln(0.005), ln(5.0))),
+        exponent = t[1].coerceIn(1.1, 4.0),
+        inputOffset = t[3].coerceIn(MIN_OFFSET, MAX_OFFSET),
+        cap = exp(t[2].coerceIn(ln(0.3), ln(6.0))),
+    )
+}
+
+private const val MIN_OFFSET = 1.0
+private const val MAX_OFFSET = 30.0
 
 /** Weighted misfit of a family at [params] with the best overall factor, and that factor's log. */
 private fun objective(family: Family, params: DoubleArray, points: List<GainPoint>, weights: List<Double>, ys: List<Double>): Pair<Double, Double> {

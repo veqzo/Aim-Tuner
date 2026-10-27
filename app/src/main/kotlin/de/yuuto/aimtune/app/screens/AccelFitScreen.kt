@@ -57,35 +57,45 @@ abstract class AccelFitScreen(ctx: AppContext) : UiScreen(ctx) {
     }
 
     /** What the blind strength search found: the best strength, its credible range and a warning when it is at the edge of the range. */
-    protected fun searchCard(r: StrengthResult, width: Float = CARD_WIDTH): Table {
+    protected fun searchCard(r: StrengthResult, width: Float = CARD_WIDTH, own: Boolean = false): Table {
         val card = Table()
         card.background(ui.skin.getDrawable(Styles.CARD))
         card.pad(CARD_PADDING)
         card.add(ui.caps(t("accel.search.card_title"))).left().row()
         val percent = ((r.strength - 1.0) * 100.0).roundToInt()
+        val strength = "%.2f".format(Locale.ROOT, r.strength)
+        // On top of the player's own curve a strength is how much of that curve's rise is played, not a gain against a plain mouse.
         val text = when {
-            !CurveStrength.isCurve(r.strength) -> t("accel.search.strength_plain")
+            !CurveStrength.isCurve(r.strength) -> t(if (own) "accel.search.own_strength_same" else "accel.search.strength_plain")
+            own && r.strength > 1.0 -> t("accel.search.own_strength_stronger", strength)
+            own -> t("accel.search.own_strength_weaker", strength)
             percent > 0 -> t("accel.search.strength_rising", percent)
             else -> t("accel.search.strength_falling", abs(percent))
         }
         card.add(ui.label(text, Styles.TITLE, wrap = true)).left().width(width - 2 * CARD_PADDING).padTop(8f).row()
         card.add(
-            ui.label(t("accel.search.range", "%.2f".format(Locale.ROOT, r.low), "%.2f".format(Locale.ROOT, r.high), r.confidencePercent), Styles.CAPTION_MUTED, wrap = true),
+            ui.label(t(if (own) "accel.search.own_range" else "accel.search.range", "%.2f".format(Locale.ROOT, r.low), "%.2f".format(Locale.ROOT, r.high), r.confidencePercent), Styles.CAPTION_MUTED, wrap = true),
         ).left().width(width - 2 * CARD_PADDING).padTop(12f).row()
         if (r.atEdge) {
-            card.add(ui.label(t("accel.search.edge", "%.2f".format(Locale.ROOT, r.rangeMin), "%.2f".format(Locale.ROOT, r.rangeMax)), Styles.CAUTION, wrap = true))
+            card.add(ui.label(t(if (own) "accel.search.own_edge" else "accel.search.edge", "%.2f".format(Locale.ROOT, r.rangeMin), "%.2f".format(Locale.ROOT, r.rangeMax)), Styles.CAUTION, wrap = true))
                 .left().width(width - 2 * CARD_PADDING).padTop(12f)
         }
         return card
     }
 
     /** The sentence under the heading of a search result. */
-    protected fun searchExplanation(r: StrengthResult?, offered: Boolean): String {
+    protected fun searchExplanation(r: StrengthResult?, offered: Boolean, own: Boolean = false): String {
         if (r == null) return t("accel.search.too_few")
+        val inRange = r.low <= CurveStrength.NEUTRAL && r.high >= CurveStrength.NEUTRAL
+        val weaker = CurveStrength.isCurve(r.strength) && r.strength < CurveStrength.NEUTRAL
         return when {
+            offered && own -> t("accel.search.own_offer_note", r.rounds)
             offered -> t("accel.search.offer_note", r.rounds)
-            r.low <= CurveStrength.NEUTRAL && r.high >= CurveStrength.NEUTRAL -> t("accel.search.reason_range")
-            CurveStrength.isCurve(r.strength) && r.strength < CurveStrength.NEUTRAL -> t("accel.search.reason_falling")
+            inRange && own -> t("accel.search.own_reason_range")
+            inRange -> t("accel.search.reason_range")
+            weaker && own -> t("accel.search.own_reason_weaker")
+            weaker -> t("accel.search.reason_falling")
+            own -> t("accel.search.own_reason_plain")
             else -> t("accel.search.reason_plain")
         }
     }

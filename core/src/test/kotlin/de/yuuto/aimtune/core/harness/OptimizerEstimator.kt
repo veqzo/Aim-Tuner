@@ -38,7 +38,7 @@ fun playBlindTest(
     weights: MetricWeights = MetricWeights.DEFAULT,
     geometry: de.yuuto.aimtune.core.scenario.TrainerGeometry? = null,
     /** When set, the suggestion is not a sensitivity: every round is played at [playedCm360] with the curve this function makes of the suggestion. */
-    accelOf: ((Double) -> de.yuuto.aimtune.core.accel.AccelCurve?)? = null,
+    accelOf: ((Double) -> de.yuuto.aimtune.core.accel.AccelModel?)? = null,
     playedCm360: Double? = null,
 ): SimulatedTest {
     val optimizer = SensitivityOptimizer(range, seed, config)
