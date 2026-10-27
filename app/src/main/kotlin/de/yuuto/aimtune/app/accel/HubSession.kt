@@ -26,6 +26,10 @@ class HubSession(
         private set
     var refine: RefineOutcome? = null
         private set
+
+    /** Stage 1 of the draft the player chose to export; it belongs to the imported profile it was made on. */
+    var stage: DraftStage? = null
+        private set
     private val ticks = mutableSetOf<RawAccelSetting>()
     private var analyses: CompletableFuture<SettingsAnalyses>? = null
     private var analysedAt = -1
@@ -34,6 +38,7 @@ class HubSession(
     fun setImported(profile: ImportedProfile) {
         imported = profile
         refine = refine?.takeIf { it.source === profile.source && it.profile.name == profile.profileName }
+        stage = stage?.takeIf { it.source === profile.source && it.profileName == profile.profileName }
         val path = profile.path?.toString()
         if (settings.current.lastImportedProfilePath != path) settings.save(settings.current.copy(lastImportedProfilePath = path))
     }
@@ -53,6 +58,10 @@ class HubSession(
     fun useSample(profile: ImportedProfile?, outcome: RefineOutcome? = null) {
         imported = profile
         refine = outcome
+    }
+
+    fun rememberStage(stage: DraftStage) {
+        this.stage = stage
     }
 
     fun rememberRefine(outcome: RefineOutcome) {
@@ -89,6 +98,11 @@ class HubSession(
     fun patchedCopy(dpi: Double, results: SettingsAnalyses?): PatchedCopy? {
         val outcome = refine
         val current = imported
+        val chosen = stage
+        if (chosen != null && current != null && chosen.source === current.source && chosen.profileName == current.profileName) {
+            val profile = current.profile(dpi) ?: return null
+            return PatchedCopy(current.source, profile, null, passiveChanges(results), chosen)
+        }
         if (outcome != null) return PatchedCopy(outcome.source, outcome.profile, outcome.candidate, passiveChanges(results))
         val profile = current?.profile(dpi) ?: return null
         return PatchedCopy(current.source, profile, null, passiveChanges(results))

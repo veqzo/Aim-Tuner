@@ -56,6 +56,7 @@ class AccelAnalysisScreen(ctx: AppContext, private val run: AccelRun) : AccelFit
         }
         footer.addButton(ui.button(t("accel.analysis.search"), if (candidate == null && run.draftOffer == null) Styles.PRIMARY else Styles.SECONDARY) { startSearch() }, minWidth = 300f)
         if (run.draftOffer != null) {
+            footer.addButton(ui.button(t("accel.draft.export"), Styles.SECONDARY) { ctx.showDraftExport(run) }, minWidth = 340f).padLeft(16f)
             footer.addButton(ui.button(t("accel.draft.test"), if (candidate == null) Styles.PRIMARY else Styles.SECONDARY) { startDraft() }, minWidth = 300f).padLeft(16f)
         }
         if (candidate != null) {

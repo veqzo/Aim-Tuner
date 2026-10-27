@@ -147,6 +147,42 @@ object RawAccelExport {
         return JsonObject(root)
     }
 
+    /**
+     * Like [patch], but the copy plays [table] instead of the profile's own curve (docs/FIND-CURVE-REDESIGN.md step 7): the mode of
+     * the whole block becomes `lut` in the Velocity form, with the table's points as `data`, and every other key of the profile and the
+     * file stays as it was. [table] is the total gain the trainer played, which includes the output DPI's share of the device DPI,
+     * so the points are divided by that share and the profile's output DPI keeps its value. A profile by component has two
+     * curves and is refused.
+     */
+    fun patchWithTable(original: JsonObject, profileName: String, imported: RawAccelProfile, table: LookupCurve, newName: String): JsonObject {
+        val profiles = RawAccelFile.profiles(original)
+        val source = RawAccelFile(original).profileObject(profileName)
+        require(newName.isNotBlank() && newName.length <= MAX_PROFILE_NAME) { "the profile name must have 1 to $MAX_PROFILE_NAME characters" }
+        require(profiles.none { it[RawAccelKeys.NAME]?.jsonPrimitive?.content == newName }) { "the file already has a profile named '$newName'" }
+        require(imported.speed.whole) { "a profile by component has two curves; a table for it is not supported" }
+        val share = imported.outputDpi / (if (imported.deviceDpi == 0.0) NORMALIZED_DEVICE_DPI else imported.deviceDpi)
+        val driverTable = LookupCurve(table.speeds, table.multipliers.map { it / share })
+        val block = LinkedHashMap(source.getValue(RawAccelKeys.WHOLE_ARGS).jsonObject)
+        block["mode"] = JsonPrimitive("lut")
+        block["Gain / Velocity"] = JsonPrimitive(false)
+        block["data"] = JsonArray(tablePoints(driverTable).map { JsonPrimitive(it.toFloat()) })
+        val copy = LinkedHashMap(source)
+        copy[RawAccelKeys.NAME] = JsonPrimitive(newName)
+        copy[RawAccelKeys.WHOLE_ARGS] = JsonObject(block)
+        val root = LinkedHashMap(original)
+        root[RawAccelKeys.PROFILES] = JsonArray(profiles + JsonObject(copy))
+        return JsonObject(root)
+    }
+
+    /** The table as the flat `data` array x1, y1, ...; a far last point with the last value makes Raw Accel's line past the table flat, as in the trainer. */
+    private fun tablePoints(lut: LookupCurve): List<Double> {
+        val points = lut.speeds.indices.flatMap { listOf(lut.speeds[it], lut.multipliers[it]) }
+        return if (lut.speeds.size < LookupCurve.MAX_POINTS && lut.speeds.last() < FLAT_TAIL_SPEED) points + listOf(FLAT_TAIL_SPEED, lut.multipliers.last()) else points
+    }
+
+    /** Raw Accel treats a device DPI of 0 as 1000 (`RawAccelProfile`). */
+    private const val NORMALIZED_DEVICE_DPI = 1000.0
+
     /** Writes [root] as `settings-<name>.json` into [directory] (created if needed), with ` (2)`, ` (3)`, ... before the extension if the name is taken; returns the path. */
     fun write(directory: Path, root: JsonObject, name: String): Path {
         Files.createDirectories(directory)
@@ -247,10 +283,7 @@ object RawAccelExport {
         // Above its last point Raw Accel continues the line through the last two points (lerp with t > 1,
         // accel-lookup.hpp:36-43, 83-89), while LookupCurve holds the last value; a far point with the same
         // value makes the last segment flat, so the driver plays what was tested.
-        val table = (curve as? LookupCurve)?.let { lut ->
-            val points = lut.speeds.indices.flatMap { listOf(lut.speeds[it], lut.multipliers[it]) }
-            if (lut.speeds.size < LookupCurve.MAX_POINTS && lut.speeds.last() < FLAT_TAIL_SPEED) points + listOf(FLAT_TAIL_SPEED, lut.multipliers.last()) else points
-        } ?: emptyList()
+        val table = (curve as? LookupCurve)?.let(::tablePoints) ?: emptyList()
         return buildJsonObject {
             put("mode", mode)
             // true would be the Gain form; the curves here are sensitivity multipliers per speed.

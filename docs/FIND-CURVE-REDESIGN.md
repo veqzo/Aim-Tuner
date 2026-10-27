@@ -250,6 +250,17 @@ Was das für die Aussage der App heißt: Der Entwurf ist ein kleiner, begründet
 
 Nicht umgesetzt in Schritt 5: die Gewichte aus Micro-Anteil und Konstanz (Schritt 6 definiert Konstanz erst), und der Export von Stufe 1 als gepatchte Kopie deiner Datei (Schritt 7). Der Blindtest-Ergebnisbildschirm kann bisher nur nach `ACCEL_BETTER` exportieren.
 
+## 11. Stand Schritt 7 (Export von Stufe 1, Teil des Schritts)
+
+Umgesetzt:
+- `RawAccelExport.patchWithTable`: Kopie deines Profils unter dem Namen "<Profil> (AimTune)", die die Tabelle von Stufe 1 spielt. Nur der Modus-Block ändert sich (Modus `lut`, Form Velocity, `data` = die Tabellenpunkte); alle anderen Schlüssel des Profils und der Datei, auch dein Original-Profil, bleiben unverändert. Die Tabelle ist der Gesamt-Gain, den der Trainer gespielt hat; sie wird durch den Anteil Output-DPI/Geräte-DPI (bei dir 600/800) geteilt, die Output-DPI behält ihren Wert. Ein flacher Endpunkt bei 10000 in/s hält den letzten Wert wie im Trainer. Ein Profil nach Komponenten (zwei Kurven) wird abgelehnt.
+- `DraftStage`, `PatchedCopy(stage = ...)`, `HubSession.rememberStage` (gehört zum importierten Profil, fällt beim Import eines anderen weg), `AppContext.showDraftExport` und der Knopf "Stufe 1 als Kopie meiner Datei speichern" auf der Entwurf-Karte. Der Export läuft über den vorhandenen Export-Bildschirm des Hubs (Speichern unter, Export-Ordner, Zwischenablage); die Änderung steht dort als "curve: classic -> table of N points: your curve with its rise at x1.12 (stage 1 of the draft)". Der Export braucht keinen bestandenen A/B (deine Entscheidung 3); der Bildschirm sagt weiter, dass nur die Änderungen aus dem Blindtest getestet sind.
+- Tests: `RawAccelPatchTest` (+2: Tabelle wird so gespielt, wie sie getestet wurde, bis 1e-5; Name vergeben und Profil nach Komponenten werden abgelehnt), `PatchedCopyTest` (+1), `HubSessionTest` (+1).
+
+**Nicht geprüft:** Die erzeugte Datei wurde nicht in Raw Accel selbst geladen (wie bei den bisherigen Exporten, siehe offene Punkte M13/M14/M17). Bitte vor dem Spielen in Raw Accel importieren und den Graphen mit der Karte vergleichen.
+
+Offen aus Schritt 7: Rest der UI-Texte (Begründung auf der Ergebnisseite), Stufenplan-Anzeige (hängt an Schritt 4).
+
 ## Regeln dieser Session
 Kein Code, keine Commits, kein Push, kein Merge nach `main`, `user-rawaccel-settings.json` und Datenbanken nur lesend. Der Nutzerprofil-Inhalt gehört in keinen Bericht.
 

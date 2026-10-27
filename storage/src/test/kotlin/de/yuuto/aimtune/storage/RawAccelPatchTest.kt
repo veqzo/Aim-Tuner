@@ -1,6 +1,8 @@
 package de.yuuto.aimtune.storage
 
+import de.yuuto.aimtune.core.accel.LookupCurve
 import de.yuuto.aimtune.core.accel.NoAccel
+import de.yuuto.aimtune.core.accel.OwnCurveStrength
 import de.yuuto.aimtune.core.accel.RawAccelArgs
 import de.yuuto.aimtune.core.accel.RawAccelCapMode
 import de.yuuto.aimtune.core.accel.RawAccelMode
@@ -174,5 +176,36 @@ class RawAccelPatchTest {
         val device = root.getValue("defaultDeviceConfig").jsonObject.getValue("DPI (normalizes input speed unit: counts/ms -> in/s)").jsonPrimitive
         assertEquals("800", device.content)
         assertEquals(400.0, profiles(root).single().getValue("Output DPI").jsonPrimitive.double, 1e-9)
+    }
+
+    @Test
+    fun `a table replaces the curve of the copy, the rest of the profile and the file stay, and the driver plays the table that was tested`() {
+        val table = OwnCurveStrength(imported, 800.0).model(1.4) as LookupCurve
+        val patched = RawAccelExport.patchWithTable(original, "default", imported, table, "AimTune stage 1")
+        val old = profiles(original).single()
+        assertEquals(original.keys.toList(), patched.keys.toList())
+        assertEquals(old, profiles(patched).first(), "the original profile is untouched")
+        val copy = profiles(patched).last()
+        assertEquals(old.keys.toList(), copy.keys.toList(), "key order")
+        for (key in old.keys - "name" - wholeKey) assertEquals(old.getValue(key), copy.getValue(key), key)
+        val block = copy.getValue(wholeKey).jsonObject
+        assertEquals("lut", block.getValue("mode").jsonPrimitive.content)
+        assertEquals("false", block.getValue("Gain / Velocity").jsonPrimitive.content, "the table holds multipliers per speed")
+
+        val played = import(patched, "AimTune stage 1")
+        assertEquals(RawAccelMode.LUT, played.args.mode)
+        assertEquals(imported.outputDpi, played.outputDpi, "the output DPI stays; the table is divided by its share")
+        for (v in listOf(0.7, 3.0, 9.0, 12.0, 20.0, 45.0, 90.0, 150.0, 400.0)) {
+            assertEquals(table.multiplier(v), played.totalMultiplier(v), table.multiplier(v) * 1e-5, "total gain at $v in/s")
+        }
+    }
+
+    @Test
+    fun `a table copy refuses a taken name and a profile with two curves`() {
+        val table = OwnCurveStrength(imported, 800.0).model(1.4) as LookupCurve
+        assertFailsWith<IllegalArgumentException> { RawAccelExport.patchWithTable(original, "default", imported, table, "default") }
+        assertFailsWith<IllegalArgumentException> {
+            RawAccelExport.patchWithTable(original, "default", imported.copy(speed = imported.speed.copy(whole = false)), table, "AimTune stage 1")
+        }
     }
 }

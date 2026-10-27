@@ -15,6 +15,7 @@ import de.yuuto.aimtune.app.accel.LastSearch
 import de.yuuto.aimtune.app.accel.PriorCalibration
 import de.yuuto.aimtune.app.accel.HubSession
 import de.yuuto.aimtune.app.accel.ImportedProfile
+import de.yuuto.aimtune.app.accel.DraftStage
 import de.yuuto.aimtune.app.accel.PatchedCopy
 import de.yuuto.aimtune.app.accel.RawAccelSetting
 import de.yuuto.aimtune.app.accel.RefineOutcome
@@ -31,6 +32,7 @@ import de.yuuto.aimtune.app.screens.RefineBetweenScreen
 import de.yuuto.aimtune.app.screens.RefineImportScreen
 import de.yuuto.aimtune.app.screens.RefineResultScreen
 import de.yuuto.aimtune.app.screens.RefineStageScreen
+import de.yuuto.aimtune.core.accel.LookupCurve
 import de.yuuto.aimtune.core.accel.RawAccelProfile
 import de.yuuto.aimtune.core.accel.RefinePhase
 import de.yuuto.aimtune.app.blind.AxisSummary
@@ -446,6 +448,14 @@ class AppContext(
     /** The patched copy of a finished refine run, with the recommendations ticked on the setting pages. */
     fun patchedCopy(run: RefineRun, analyses: SettingsAnalyses? = null): PatchedCopy =
         PatchedCopy(run.source, run.profile, run.engine.candidate, hub.passiveChanges(analyses))
+
+    /** Offers stage 1 of the draft of [run] as a copy of the player's file on the export screen; nothing if there is none. */
+    fun showDraftExport(run: AccelRun) {
+        val table = run.draftOffer?.curve as? LookupCurve ?: return
+        val imported = hub.restoreImported() ?: return
+        hub.rememberStage(DraftStage(imported.source, imported.profileName, table, checkNotNull(run.draft).stage1))
+        showPatchedExport()
+    }
 
     /** Writes the patched copy into the export folder; the path, or the reason it failed. */
     fun exportPatched(copy: PatchedCopy): Result<Path> = runCatching {

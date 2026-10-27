@@ -1,5 +1,7 @@
 package de.yuuto.aimtune.app.accel
 
+import de.yuuto.aimtune.core.accel.OwnCurveStrength
+import de.yuuto.aimtune.core.accel.LookupCurve
 import de.yuuto.aimtune.app.SettingsHolder
 import de.yuuto.aimtune.core.accel.settings.PassiveResult
 import de.yuuto.aimtune.storage.AppSettings
@@ -104,5 +106,17 @@ class HubSessionTest {
         assertNotNull(hub.refine, "the same profile of the same file keeps its result")
         hub.setImported(ImportedProfile(sampleImport().source, imported.profileName))
         assertNull(hub.refine)
+    }
+
+    @Test
+    fun `a draft stage goes into the patched copy for its profile and is dropped when another profile is imported`() {
+        val imported = sampleImport()
+        val profile = sampleProfile()
+        val table = OwnCurveStrength(profile, 800.0).model(1.3) as LookupCurve
+        hub.useSample(imported)
+        hub.rememberStage(DraftStage(imported.source, imported.profileName, table, 1.3))
+        assertEquals(true, hub.patchedCopy(800.0, sampleSettingsAnalyses())?.changes()?.any { it.field == "curve" })
+        hub.setImported(ImportedProfile(sampleImport().source, "default", null))
+        assertEquals(false, hub.patchedCopy(800.0, sampleSettingsAnalyses())?.hasChanges, "another read of the file is another source")
     }
 }
