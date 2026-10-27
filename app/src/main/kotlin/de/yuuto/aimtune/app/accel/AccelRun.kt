@@ -16,6 +16,8 @@ import de.yuuto.aimtune.core.accel.evaluateAb
 import de.yuuto.aimtune.core.accel.CurveStrength
 import de.yuuto.aimtune.core.accel.MovementSample
 import de.yuuto.aimtune.core.accel.RawAccelProfile
+import de.yuuto.aimtune.core.accel.StrengthDraft
+import de.yuuto.aimtune.core.accel.draftStrength
 import de.yuuto.aimtune.core.accel.scaledBy
 import de.yuuto.aimtune.core.accel.fitAccel
 import de.yuuto.aimtune.core.accel.strengthAccel
@@ -116,7 +118,7 @@ class AccelRun(
     val runsUse: RunsUse get() = RunsUse.running(baseConfig)
 
     /** Where the curve under test came from. */
-    enum class Source { ANALYSIS, TRIAL, SEARCH }
+    enum class Source { ANALYSIS, TRIAL, SEARCH, DRAFT }
 
     private var tested: AccelFit? = startWithTest
     private var source = Source.ANALYSIS
@@ -141,6 +143,9 @@ class AccelRun(
 
     /** True when the curve under test is the result of the blind strength search. */
     val isSearch: Boolean get() = tested != null && source == Source.SEARCH
+
+    /** True when the curve under test is the draft drawn from the movement profile. */
+    val isDraft: Boolean get() = tested != null && source == Source.DRAFT
 
     val searchDone: Int get() = search.roundsPlayed
 
@@ -242,6 +247,25 @@ class AccelRun(
         finishCalibration()
     }
 
+    /**
+     * The strength drawn from the movement profile after a calibration on the player's own curve (docs/FIND-CURVE-REDESIGN.md step 5);
+     * null on a plain mouse or with too few movements.
+     */
+    var draft: StrengthDraft? = null
+        private set
+
+    /** The first stage of the [draft] as a table to test against the player's curve; null without a draft or when stage 1 is the curve itself. */
+    val draftOffer: AccelFit?
+        get() = draft?.takeIf { CurveStrength.isCurve(it.stage1) }?.let { searchBase?.strengths?.offer(it.stage1) }
+
+    /** Begins the blind test of the draft's first stage against the player's own curve. */
+    fun startDraftTest() {
+        check(phase == AccelPhase.ANALYSIS) { "the draft is tested after the analysis" }
+        tested = checkNotNull(draftOffer) { "there is no draft to test" }
+        source = Source.DRAFT
+        phase = AccelPhase.TEST
+    }
+
     /** Begins the blind test of the recommended curve. */
     fun startTest() {
         check(phase == AccelPhase.ANALYSIS && fit?.recommended != null) { "there is no curve to test" }
@@ -301,6 +325,7 @@ class AccelRun(
             val level = base.planningGain(analysis.speedQuantile(0.5), dpi)
             result.bounded(analysis).let { bounded -> bounded.copy(recommended = bounded.recommended?.scaledBy(level)) }
         }
+        draft = base?.let { b -> draftStrength(analysis, { speed -> b.planningGain(speed, dpi) }) }
         phase = AccelPhase.ANALYSIS
     }
 

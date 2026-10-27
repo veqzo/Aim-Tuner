@@ -1,6 +1,11 @@
 package de.yuuto.aimtune.core.harness.review
 
+import de.yuuto.aimtune.core.accel.AbCondition
+import de.yuuto.aimtune.core.accel.AccelAbPlan
 import de.yuuto.aimtune.core.accel.AccelAnalysis
+import de.yuuto.aimtune.core.accel.DraftBasis
+import de.yuuto.aimtune.core.accel.StrengthDraft
+import de.yuuto.aimtune.core.accel.draftStrength
 import de.yuuto.aimtune.core.accel.AccelCurve
 import de.yuuto.aimtune.core.accel.AccelScenarios
 import de.yuuto.aimtune.core.accel.CurveStrength
@@ -135,6 +140,7 @@ class FindCurveReferenceGateTest {
 
     private class SearchRun(val offered: Boolean, val strength: Double, val shapeError: Double)
     private class OwnSearchRun(val offered: Boolean, val strength: Double, val atEdge: Boolean)
+    private class DraftRun(val draft: StrengthDraft?, val benefit: Double?)
     private class CalibRun(val offered: Boolean, val shapeError: Double, val above10: Double, val above20: Double, val q5: Double, val q50: Double, val q95: Double)
     private class OwnRun(val bins: Int, val signal: Double, val error: Double, val noise: Double, val offered: Boolean)
 
@@ -169,6 +175,35 @@ class FindCurveReferenceGateTest {
         return OwnSearchRun(offered, s, result.atRangeEdge)
     }
 
+    /**
+     * Step 5: the draft strength from 15 rounds played with the user's profile, and what its first stage is worth: the mean score of
+     * the stage-1 table minus the profile over [BENEFIT_PAIRS] pairs of the real A/B plan, played by a fresh person of the same truth.
+     */
+    private fun draftOwn(hand: Hand, truth: Truth, optimumScale: Double, seed: Long): DraftRun {
+        val metrics = rounds(player(hand, truth, optimumScale), hand, seed, 15, imported)
+        val delivered = { v: Double -> imported.planningGain(v, TEST_DPI) }
+        val draft = draftStrength(AccelAnalysis(movementSamples(metrics, TEST_DPI), delivered = delivered), delivered) ?: return DraftRun(null, null)
+        val candidate = OwnCurveStrength(imported, TEST_DPI).model(draft.stage1)
+        if (candidate === imported) return DraftRun(draft, 0.0)
+        val tester = player(hand, truth, optimumScale)
+        val plan = AccelAbPlan(AccelScenarios.of(true), 900_000L + seed, BENEFIT_PAIRS)
+        val played = (0 until 2 * BENEFIT_PAIRS).map { plan.round(it) }
+        val inputs = played.mapIndexed { i, r ->
+            computeRoundMetrics(
+                HeadlessRound.of(r.scenario, tester, TEST_DPI, hand.gameCm360, r.seed, ROUND_SECONDS, i * ROUND_SECONDS * NANOS_PER_SECOND, accel = if (r.condition == AbCondition.ACCEL) candidate else imported, geometry = hand.geometry),
+            ).scoreInputs()
+        }
+        val scores = ScoreCalculator(MetricWeights.DEFAULT).scoreRounds(inputs, played.map { it.scenario.id })
+        val diffs = (0 until BENEFIT_PAIRS).mapNotNull { pair ->
+            val a = (2 * pair..2 * pair + 1).first { played[it].condition == AbCondition.ACCEL }
+            val c = (2 * pair..2 * pair + 1).first { played[it].condition == AbCondition.PLAIN }
+            val sa = scores[a]
+            val sc = scores[c]
+            if (sa != null && sc != null) sa - sc else null
+        }
+        return DraftRun(draft, diffs.average())
+    }
+
     private fun calibPlain(hand: Hand, truth: Truth, optimumScale: Double, seed: Long): CalibRun {
         val metrics = rounds(player(hand, truth, optimumScale), hand, seed, 15, null)
         val analysis = AccelAnalysis(movementSamples(metrics, TEST_DPI))
@@ -196,6 +231,10 @@ class FindCurveReferenceGateTest {
         return OwnRun(points.size, signal, error, points.map { it.standardError }.average(), fit != null)
     }
 
+    private companion object {
+        const val BENEFIT_PAIRS = 20
+    }
+
     @Test fun defaultHand() = runHand(hands[0])
 
     @Test fun realHand() = runHand(hands[1])
@@ -208,11 +247,13 @@ class FindCurveReferenceGateTest {
         val started = System.currentTimeMillis()
         val searchRows = StringBuilder()
         val ownRows2 = StringBuilder()
+        val draftRows = StringBuilder()
         val plainRows = StringBuilder()
         val ownRows = StringBuilder()
         for (truth in truths) {
             val search = parallelList(truth.runs) { s -> search(hand, truth, optimumScale, 7_000L + s) }
             val ownSearch = parallelList(truth.runs) { s -> searchOwn(hand, truth, optimumScale, 6_000L + s) }
+            val drafts = parallelList(truth.runs) { s -> draftOwn(hand, truth, optimumScale, 5_000L + s) }
             val plain = parallelList(truth.runs) { s -> calibPlain(hand, truth, optimumScale, 8_000L + s) }
             val own = parallelList(truth.runs) { s -> calibOwn(hand, truth, optimumScale, 9_000L + s) }
             fun pct(count: Int, total: Int) = "%5.1f%%".format(100.0 * count / total)
@@ -222,6 +263,18 @@ class FindCurveReferenceGateTest {
                 "%-26s %4d  %6s  %6s  %6s  %8.3f  %6s".format(
                     truth.name, ownSearch.size, pct(ownSearch.count { it.offered }, ownSearch.size), if (truth.side == null || truth.side == 0) "-" else pct(right, ownSearch.size),
                     if (truth.side == null || truth.side == 0) "-" else pct(wrong, ownSearch.size), median(ownSearch.map { it.strength }), pct(ownSearch.count { it.atEdge }, ownSearch.size),
+                ),
+            )
+            val made = drafts.filter { it.draft != null }
+            val benefits = made.mapNotNull { it.benefit }
+            draftRows.appendLine(
+                "%-26s %4d  %5.1f%% %5.1f%% %5.1f%%  %6.3f  %6.3f  %6.3f  %6.3f | %+7.2f  %6s  %6s".format(
+                    truth.name, made.size,
+                    100.0 * made.count { it.draft?.basis == DraftBasis.MEASURED_STRONGER } / made.size.coerceAtLeast(1),
+                    100.0 * made.count { it.draft?.basis == DraftBasis.MEASURED_WEAKER } / made.size.coerceAtLeast(1),
+                    100.0 * made.count { it.draft?.basis == DraftBasis.DESIGN } / made.size.coerceAtLeast(1),
+                    median(made.map { it.draft!!.estimate }), median(made.map { it.draft!!.ceiling }), median(made.map { it.draft!!.strength }), median(made.map { it.draft!!.stage1 }),
+                    meanOf(benefits), pct(benefits.count { it < 0.0 }, benefits.size.coerceAtLeast(1)), pct(benefits.count { it <= -2.0 }, benefits.size.coerceAtLeast(1)),
                 ),
             )
             searchRows.appendLine(
@@ -255,6 +308,10 @@ class FindCurveReferenceGateTest {
         out.appendLine("-- SEARCH-OWN (step 2): 24 blind rounds, flash on, the strength scales the rise of the user's profile (0.5 = half, 1 = the profile, 2 = double). offered = interval excludes 1 (falling only below 0.90); right/wrong = offered on the true / the opposite side of 1 (OWN is the null)")
         out.appendLine("truth                      runs  offered   right   wrong  strength  at edge")
         out.append(ownRows2)
+        out.appendLine()
+        out.appendLine("-- DRAFT (step 5): strength from 15 rounds played with the user's profile; basis shares (stronger / weaker measured, design default), medians of the estimate, the ceiling, the draft and stage 1 (1 = the profile); benefit = mean score of stage 1 minus the profile over $BENEFIT_PAIRS pairs, share of runs below 0 and at or below -2 points")
+        out.appendLine("truth                      runs  stronger weaker design | estimate ceiling draft  stage1 |  benefit  <0     <=-2")
+        out.append(draftRows)
         out.appendLine()
         out.appendLine("-- CALIB-PLAIN (today's analysis path): 15 plain rounds, bounded fit. offered = a curve is recommended. Speeds in in/s: share of used reaches above the profile's offset (10) and above twice that, q5/q50/q95 median")
         out.appendLine("truth                      runs  offered  shape err  | >10 in/s  >20 in/s |   q5   q50   q95")

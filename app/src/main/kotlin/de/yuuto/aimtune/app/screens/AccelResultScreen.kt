@@ -63,6 +63,7 @@ class AccelResultScreen(ctx: AppContext, private val run: AccelRun) : UiScreen(c
         )
         val trial = when {
             run.isTrial -> " " + t("accel.result.trial_note")
+            run.isDraft -> " " + t("accel.result.draft_note")
             run.isSearch -> " " + t("accel.result.search_note")
             else -> ""
         }

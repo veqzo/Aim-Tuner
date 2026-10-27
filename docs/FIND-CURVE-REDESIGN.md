@@ -232,6 +232,24 @@ Umgesetzt:
 - Folge: Die Suche auf der eigenen Kurve ist als Hinweis nutzbar, nicht als Messung. Ein Angebot daraus ist wie das alte "ein Hinweis, kein Ergebnis" zu beschriften (der Text sagt das schon: "Test it blind ..."), und es darf nicht als gemessene Präferenz auftreten. Die Stärke muss in Schritt 5 aus dem Bewegungsprofil kommen, wie in Abschnitt 7 begründet.
 - Offen, nicht untersucht: ob ein größerer Suchbereich oder ein anderer Rundenmix die Richtung verbessert. Ich habe es nicht probiert, weil die Streuung der Scores das Hauptproblem ist und Schritt 5 das Problem anders löst.
 
+## 10. Stand Schritt 5 (Stärke aus dem Bewegungsprofil)
+
+Umgesetzt (`core/.../accel/StrengthDraft.kt`, `draftStrength`):
+- **Schätzung:** gewichtete Regression von (gewünschter Log-Gain minus gelieferter Log-Gain) auf den gelieferten Log-Gain je Geschwindigkeits-Bin. Die Steigung ist "Stärke minus 1" (Stärke wie in `OwnCurveStrength`, 1 = deine Kurve).
+- **Obergrenze und Untergrenze:** Die Änderung des Gains `(Stärke - 1) * Anstieg(v)` bleibt in jedem Bin zwischen dem 5. und 95. Perzentil der Handgeschwindigkeit innerhalb von `BANDWIDTH_Z` (0.5) Streuungen des Erstbewegungsfehlers. Das Ergebnis liegt in 0.5 bis 2.0.
+- **Richtung:** nur dann "gemessen", wenn (a) die 80-%-Spanne der Schätzung auf einer Seite von 1 liegt (schwächer nur unter `FALLING_MAX_HIGH` 0.90) **und** (b) die geschätzte Änderung des Log-Gains über den gemeinsamen Bereich größer ist als `TREND_ALLOWANCE` (0.06). Sonst gilt die Standardrichtung "stärker" (dein Ziel: hoher Gain für schnelle Drehungen, Micro unverändert), mit `DESIGN_SHARE` (25 %) des Wegs bis zur Obergrenze.
+- **Stufe 1** ist die Hälfte des Entwurfs. `AccelRun.draft` / `draftOffer` / `startDraftTest()` testen Stufe 1 blind gegen die eigene Kurve; der Analyse-Bildschirm zeigt eine Karte "Entwurf aus deinem Bewegungsprofil" mit dem Hinweis, dass der Wert nicht gemessen ist (EN/DE).
+- Tests: `StrengthDraftTest` (8), `AccelRunTest` (+2).
+
+**Gate-Ergebnis (DRAFT in `gate-find-redesign-0-{real,default}.txt`, 24 Läufe je Zeile):**
+- Erster Lauf: Die Schätzung lag auch bei Wahrheit "meine Kurve" bei 2.2 und war in 100 % der Läufe "stärker, gemessen". Ursache: Das Profil steigt im Bereich der Hand um nur etwa 0.03 im Log; ein kleiner Geschwindigkeitstrend im Fehler (Range-Bias, M14) wird durch diese kleine Spanne um das 30-Fache aufgeblasen. Die Messung dieser Familie hat deshalb schon in Schritt 0 nicht getragen.
+- Gegenmaßnahme `TREND_ALLOWANCE`. Danach ist die Basis für alle sechs Wahrheiten Standardrichtung (kein falsches "gemessen"): Entwurf 1.25, Stufe 1 = **x1.125** des Anstiegs deiner Kurve, Obergrenze 2.0 (deine Kurve wirkt im Bereich deiner Bewegungen kaum, das Fehlerband lässt die ganze Spanne zu).
+- Wert von Stufe 1 gegen deine Kurve (20 Paare, mittlerer Score-Unterschied; Hand real / Standardhand): OWN +0.57 / -0.90, CAP x0.5 +0.80 / -0.35, CAP x2.0 +1.61 / -0.38, TRANS x2.0 +0.84 / -0.96, natural +0.88 / -0.15, linear +1.13 / -0.96. Anteil Läufe mit Unterschied <= -2: 17-25 % (real) und 25-42 % (Standard). Das ist von Null nicht zu unterscheiden (Streuung eines 20-Paare-Mittels etwa ±1). **Stufe 1 schadet im Mittel nicht, ein Nutzen ist in der Simulation nicht nachweisbar.**
+
+Was das für die Aussage der App heißt: Der Entwurf ist ein kleiner, begründeter Schritt in die Richtung deines Ziels, mit dem Hinweis "nicht als dein bester Wert gemessen". Er sagt nichts über eine Präferenz, die sich in 15 Runden nicht messen lässt. Ob ein Stufenplan (Schritt 4) über mehrere Sessions mit echten Runden mehr zeigt, ist der nächste Test.
+
+Nicht umgesetzt in Schritt 5: die Gewichte aus Micro-Anteil und Konstanz (Schritt 6 definiert Konstanz erst), und der Export von Stufe 1 als gepatchte Kopie deiner Datei (Schritt 7). Der Blindtest-Ergebnisbildschirm kann bisher nur nach `ACCEL_BETTER` exportieren.
+
 ## Regeln dieser Session
 Kein Code, keine Commits, kein Push, kein Merge nach `main`, `user-rawaccel-settings.json` und Datenbanken nur lesend. Der Nutzerprofil-Inhalt gehört in keinen Bericht.
 

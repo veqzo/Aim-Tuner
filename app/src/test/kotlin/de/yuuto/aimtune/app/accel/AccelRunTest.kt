@@ -324,4 +324,29 @@ class AccelRunTest {
         assertEquals(2, configs.count { it.accel == own }, "half of the rounds play the base")
         assertEquals(2, configs.count { it.accel == candidate.curve }, "half play the candidate")
     }
+
+    @Test
+    fun `after a calibration on the own curve the draft of the movement profile can be tested blind against that curve`() {
+        val run = AccelRun(base, MetricWeights.DEFAULT, runKey = 1, seed = 3, baseCurve = own)
+        while (run.phase == AccelPhase.CALIBRATION) play(run, SimulatedPlayer())
+        val draft = assertNotNull(run.draft, "a draft is made for every analysis on the player's own curve")
+        val offer = assertNotNull(run.draftOffer)
+        assertTrue(draft.stage1 > 1.0 && draft.stage1 <= draft.strength, "stage 1 is the first step of the draft: $draft")
+        assertTrue(offer.curve is LookupCurve)
+        run.startDraftTest()
+        assertEquals(AccelPhase.TEST, run.phase)
+        assertTrue(run.isDraft && !run.isTrial && !run.isSearch)
+        assertEquals(offer, run.candidate)
+        val configs = (0 until 2).map { run.nextRoundConfig().also { _ -> play(run, SimulatedPlayer()) } }
+        assertEquals(setOf<Any?>(own, offer.curve), configs.map { it.accel }.toSet(), "the draft against the player's curve")
+    }
+
+    @Test
+    fun `a plain mouse has no draft to make`() {
+        val run = newRun()
+        while (run.phase == AccelPhase.CALIBRATION) play(run, SimulatedPlayer())
+        assertNull(run.draft)
+        assertNull(run.draftOffer)
+        assertFailsWith<IllegalStateException> { run.startDraftTest() }
+    }
 }
