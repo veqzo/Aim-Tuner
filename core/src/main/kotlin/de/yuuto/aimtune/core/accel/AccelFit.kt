@@ -166,6 +166,22 @@ fun AccelFit.boundedTo(low: Double, high: Double, points: Int = LOOKUP_POINTS): 
 }
 
 /**
+ * This fit on top of a curve the rounds were played with (docs/FIND-CURVE-REDESIGN.md step 1). The analysis divides that curve out
+ * and keeps only the wanted shape, centred at the median speed, so the fit starts at gain 1 there; [level] is the gain the base
+ * delivers at that speed, and the player's sensitivity is taken to be right at the typical speed. The level goes into a lookup
+ * table (a family cannot start above 1), over the speeds of a table fit or, for a family, a log grid from [FROM] to [TO] in/s.
+ */
+fun AccelFit.scaledBy(level: Double): AccelFit {
+    require(level > 0.0 && level.isFinite()) { "level must be positive" }
+    val table = curve as? LookupCurve
+    val speeds = table?.speeds ?: (0 until LOOKUP_POINTS).map { LEVEL_GRID_FROM * exp(ln(LEVEL_GRID_TO / LEVEL_GRID_FROM) * it / (LOOKUP_POINTS - 1)) }
+    return copy(family = "$family (on your curve)", curve = LookupCurve(speeds, speeds.map { curve.multiplier(it) * level }))
+}
+
+private const val LEVEL_GRID_FROM = 0.5
+private const val LEVEL_GRID_TO = 200.0
+
+/**
  * The recommendation of [result] bounded to the middle [BOUND_SHARE] of the measured speeds of [analysis]
  * (5th to 95th percentile), or null when there is none. The detection itself is unchanged. A curve is only recommended
  * for a speed range of at least 1.5 between the bins, so the percentiles are always apart; should they not be (under

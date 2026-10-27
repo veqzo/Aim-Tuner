@@ -1,5 +1,7 @@
 package de.yuuto.aimtune.app
 
+import de.yuuto.aimtune.core.accel.RawAccelProfile
+
 /** What the sensitivity finder (the blind test) found, with how sure it is. */
 data class FinderResult(
     val cm360: Double,
@@ -29,6 +31,13 @@ data class AccelBaseline(
     val gameName: String,
     val finder: FinderResult? = null,
     val gameSearchRounds: Int = 0,
+    /** The Raw Accel profile imported in the hub, when the trainer can play it exactly at the DPI of the settings; the analysis path may calibrate against it. */
+    val ownCurve: RawAccelProfile? = null,
+    /** File and profile name of the imported curve, for the intro line; null without an import. */
+    val ownCurveLabel: String? = null,
+    /** The imported file's device DPI when it differs from [settingsDpi] (0: none set), so the curve is not used; null when it fits or there is no import. */
+    val ownCurveFileDpi: Int? = null,
+    val settingsDpi: Double = 0.0,
 ) {
     /** Whether the finder's result may be chosen at all. */
     val canUseFinder: Boolean get() = finder?.confident == true

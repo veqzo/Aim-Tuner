@@ -6,6 +6,11 @@ import de.yuuto.aimtune.core.accel.AccelAnalysis
 import de.yuuto.aimtune.core.accel.AccelFit
 import de.yuuto.aimtune.core.accel.AccelScenarios
 import de.yuuto.aimtune.core.accel.LookupCurve
+import de.yuuto.aimtune.core.accel.NaturalCurve
+import de.yuuto.aimtune.core.accel.RawAccelArgs
+import de.yuuto.aimtune.core.accel.RawAccelCapMode
+import de.yuuto.aimtune.core.accel.RawAccelMode
+import de.yuuto.aimtune.core.accel.RawAccelProfile
 import de.yuuto.aimtune.core.accel.trialAccel
 import de.yuuto.aimtune.core.scenario.ScenarioKind
 import de.yuuto.aimtune.core.score.MetricWeights
@@ -279,5 +284,44 @@ class AccelRunTest {
     @Test
     fun `tracking is never part of the acceleration rounds`() {
         assertTrue(ScenarioKind.TRACKING !in AccelRun.CLICK_SCENARIOS)
+    }
+
+    // --- a base curve of the player's own (docs/FIND-CURVE-REDESIGN.md step 1)
+
+    private val own = RawAccelProfile(
+        "default", RawAccelArgs(RawAccelMode.CLASSIC, gain = true, inputOffset = 10.0, capX = 62.5, capY = 1.6, capMode = RawAccelCapMode.IN_OUT), 600.0, 800.0,
+    )
+
+    @Test
+    fun `calibration rounds are played with the base curve when there is one`() {
+        val run = AccelRun(base, MetricWeights.DEFAULT, runKey = 1, seed = 3, baseCurve = own)
+        val configs = (0 until run.calibrationRounds).map { run.nextRoundConfig().also { _ -> play(run, SimulatedPlayer()) } }
+        assertTrue(configs.all { it.accel == own && it.cm360 == 55.0 }, "the player's curve at the game sensitivity, nothing plain")
+        assertEquals(AccelPhase.ANALYSIS, run.phase)
+    }
+
+    @Test
+    fun `a wish that rises more than the own curve is found on top of it and keeps the level of the base`() {
+        val wish = NaturalCurve(0.05, 1.3)
+        val player = SimulatedPlayer(gainPreference = { v -> own.planningGain(v, base.dpi) * wish.multiplier(v) })
+        val run = AccelRun(base, MetricWeights.DEFAULT, runKey = 1, seed = 3, baseCurve = own)
+        while (run.phase == AccelPhase.CALIBRATION) play(run, player)
+        val candidate = checkNotNull(run.fit?.recommended) { "the correction is a clear rise" }
+        val speeds = run.calibrationSamples.map { it.speed }.sorted()
+        val low = speeds[speeds.size / 20]
+        val mid = speeds[speeds.size / 2]
+        val high = speeds[speeds.size * 19 / 20]
+        assertTrue(kotlin.math.abs(candidate.totalGain(mid) / own.planningGain(mid, base.dpi) - 1.0) < 0.10, "the level at the typical speed stays the base's")
+        val baseRise = own.planningGain(high, base.dpi) / own.planningGain(low, base.dpi)
+        assertTrue(candidate.totalGain(high) / candidate.totalGain(low) > baseRise * 1.05, "it rises more than the base does")
+    }
+
+    @Test
+    fun `the control arm of the blind test is the base curve, not plain`() {
+        val candidate = checkNotNull(sampleAccelRun(base, AccelPhase.ANALYSIS).candidate)
+        val run = AccelRun(base, MetricWeights.DEFAULT, runKey = 9, seed = 9, startWithTest = candidate, baseCurve = own)
+        val configs = (0 until 4).map { run.nextRoundConfig().also { _ -> play(run, SimulatedPlayer()) } }
+        assertEquals(2, configs.count { it.accel == own }, "half of the rounds play the base")
+        assertEquals(2, configs.count { it.accel == candidate.curve }, "half play the candidate")
     }
 }

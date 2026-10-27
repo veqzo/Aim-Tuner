@@ -43,6 +43,7 @@ class AccelIntroScreen(ctx: AppContext, private val baseline: AccelBaseline? = c
         right.add(ctx.runsUseCard(ctx.runsUse(baseline), CARD_WIDTH) { ctx.showAccel() }).left().width(CARD_WIDTH).padBottom(24f).row()
         right.add(rawAccelCheck()).left().row()
         if (baseline != null && baseline.canUseFinder) right.add(finderCheck(baseline)).left().padTop(24f).row()
+        if (baseline?.ownCurveLabel != null) right.add(ownCurveBlock(baseline)).left().padTop(24f).row()
         val searchRounds = baseline?.searchRounds(ctx.useFinderResult) ?: 0
         if (searchRounds > 0) right.add(priorSearchCheck(searchRounds)).left().padTop(24f).row()
         if (!ctx.source.hasReportTimestamps) {
@@ -100,6 +101,31 @@ class AccelIntroScreen(ctx: AppContext, private val baseline: AccelBaseline? = c
         }
         block.add(box).left().row()
         block.add(ui.label(t("accel.use_finder_help", FinderResult.MIN_CONFIDENCE), Styles.CAPTION_MUTED, wrap = true)).left().width(CARD_WIDTH).padTop(8f)
+        return block
+    }
+
+    /**
+     * The curve imported in the hub: a checkbox to calibrate against it when the trainer can play it at the DPI of the settings,
+     * otherwise the reason it is not used.
+     */
+    private fun ownCurveBlock(baseline: AccelBaseline): Table {
+        val block = Table()
+        val label = checkNotNull(baseline.ownCurveLabel)
+        val fileDpi = baseline.ownCurveFileDpi
+        if (baseline.ownCurve == null || fileDpi != null) {
+            val reason = when (fileDpi) {
+                null -> t("accel.own_refused", label)
+                0 -> t("accel.own_dpi_unset", label)
+                else -> t("accel.own_dpi_mismatch", label, fileDpi, "%.0f".format(Locale.ROOT, baseline.settingsDpi))
+            }
+            block.add(ui.label(reason, Styles.CAPTION_MUTED, wrap = true)).left().width(CARD_WIDTH)
+            return block
+        }
+        val box = CheckBox("  " + t("accel.use_own", label), ui.skin)
+        box.isChecked = ctx.useOwnCurve
+        box.onChange { ctx.useOwnCurve = box.isChecked }
+        block.add(box).left().row()
+        block.add(ui.label(t("accel.use_own_help"), Styles.CAPTION_MUTED, wrap = true)).left().width(CARD_WIDTH).padTop(8f)
         return block
     }
 

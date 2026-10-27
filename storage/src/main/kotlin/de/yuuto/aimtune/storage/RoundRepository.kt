@@ -127,20 +127,32 @@ class RoundRepository(private val database: Database) {
      * [tolerance] (a share, 0.03 = 3 %) of [cm360], in one of [scenarios], newest first and at most [limit]. They are plain-sensitivity
      * movements like the calibration rounds, so a later run can analyse them together with the rounds it plays itself.
      */
-    fun plainAccelRoundIds(dpi: Double, cm360: Double, scenarios: List<String>, tolerance: Double, limit: Int): List<Long> {
+    fun plainAccelRoundIds(dpi: Double, cm360: Double, scenarios: List<String>, tolerance: Double, limit: Int): List<Long> =
+        accelRoundIds(null, dpi, cm360, scenarios, tolerance, limit)
+
+    /**
+     * Like [plainAccelRoundIds], but for rounds played with one exact curve: [spec] is the stored curve text
+     * ([AccelSpec.encodeModel]), null for plain. Refine sessions count for a curve (their warm-up and test rounds play the imported
+     * profile as it is), not for plain. A different curve, even one field apart, is a different base and never matches.
+     */
+    fun accelRoundIds(spec: String?, dpi: Double, cm360: Double, scenarios: List<String>, tolerance: Double, limit: Int): List<Long> {
         if (scenarios.isEmpty()) return emptyList()
         val marks = scenarios.joinToString(",") { "?" }
+        val kinds = if (spec == null) ACCEL_KINDS else "$ACCEL_KINDS, '${SessionKind.ACCEL_REFINE.id}'"
+        val curve = if (spec == null) "r.accel IS NULL" else "r.accel = ?"
         return database.transaction { c ->
             c.prepareStatement(
                 "SELECT r.id FROM round r JOIN session s ON s.id = r.session_id " +
-                    "WHERE s.kind IN ($ACCEL_KINDS) AND r.accel IS NULL AND ABS(r.dpi - ?) < 0.5 AND r.cm360 BETWEEN ? AND ? AND r.scenario IN ($marks) " +
+                    "WHERE s.kind IN ($kinds) AND $curve AND ABS(r.dpi - ?) < 0.5 AND r.cm360 BETWEEN ? AND ? AND r.scenario IN ($marks) " +
                     "ORDER BY r.started_at_ms DESC, r.id DESC LIMIT ?",
             ).use { s ->
-                s.setDouble(1, dpi)
-                s.setDouble(2, cm360 * (1 - tolerance))
-                s.setDouble(3, cm360 * (1 + tolerance))
-                scenarios.forEachIndexed { i, id -> s.setString(4 + i, id) }
-                s.setInt(4 + scenarios.size, limit)
+                var i = 1
+                if (spec != null) s.setString(i++, spec)
+                s.setDouble(i++, dpi)
+                s.setDouble(i++, cm360 * (1 - tolerance))
+                s.setDouble(i++, cm360 * (1 + tolerance))
+                scenarios.forEach { s.setString(i++, it) }
+                s.setInt(i, limit)
                 s.executeQuery().use { rs -> buildList { while (rs.next()) add(rs.getLong(1)) } }
             }
         }

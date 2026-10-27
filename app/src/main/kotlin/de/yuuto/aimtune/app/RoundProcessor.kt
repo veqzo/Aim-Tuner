@@ -9,6 +9,8 @@ import de.yuuto.aimtune.app.accel.SettingsAnalyses
 import de.yuuto.aimtune.app.accel.StoredSearches
 import de.yuuto.aimtune.app.blind.AxisErrors
 import de.yuuto.aimtune.app.blind.PastRound
+import de.yuuto.aimtune.core.accel.AccelSpec
+import de.yuuto.aimtune.core.accel.RawAccelProfile
 import de.yuuto.aimtune.core.accel.movementSamples
 import de.yuuto.aimtune.core.metrics.RoundMetrics
 import de.yuuto.aimtune.core.metrics.computeRoundMetrics
@@ -123,13 +125,14 @@ class RoundProcessor(private val database: Database?, private val exportDir: Pat
     }
 
     /**
-     * The plain-sensitivity movements of earlier acceleration runs at this DPI and sensitivity, read on the storage thread
-     * and analysed again from the stored raw events; nothing without a database or if reading fails.
+     * The movements of earlier acceleration runs at this DPI and sensitivity, plain ones or, with a [baseCurve], those played with
+     * exactly that curve (a different base would need a different analysis), read on the storage thread and analysed again from
+     * the stored raw events; nothing without a database or if reading fails.
      */
-    fun priorCalibration(dpi: Double, cm360: Double): PriorCalibration {
+    fun priorCalibration(dpi: Double, cm360: Double, baseCurve: RawAccelProfile? = null): PriorCalibration {
         val repo = repository ?: return PriorCalibration.NONE
         return try {
-            executor.submit<PriorCalibration> { readPriorCalibration(repo, dpi, cm360) }.get()
+            executor.submit<PriorCalibration> { readPriorCalibration(repo, dpi, cm360, baseCurve?.let(AccelSpec::encodeModel)) }.get()
         } catch (e: Exception) {
             log.log(System.Logger.Level.ERROR, "reading earlier calibration rounds failed: ${e.message}", e)
             PriorCalibration.NONE
@@ -187,8 +190,8 @@ class RoundProcessor(private val database: Database?, private val exportDir: Pat
         }
     }
 
-    private fun readPriorCalibration(repo: RoundRepository, dpi: Double, cm360: Double): PriorCalibration {
-        val ids = repo.plainAccelRoundIds(dpi, cm360, AccelRun.CLICK_SCENARIOS.map { it.id }, PriorCalibration.CM360_TOLERANCE, PriorCalibration.MAX_ROUNDS)
+    private fun readPriorCalibration(repo: RoundRepository, dpi: Double, cm360: Double, spec: String? = null): PriorCalibration {
+        val ids = repo.accelRoundIds(spec, dpi, cm360, AccelRun.CLICK_SCENARIOS.map { it.id }, PriorCalibration.CM360_TOLERANCE, PriorCalibration.MAX_ROUNDS)
         val metrics = ids.mapNotNull { id ->
             val recording = repo.loadRecording(id) ?: return@mapNotNull null
             try {

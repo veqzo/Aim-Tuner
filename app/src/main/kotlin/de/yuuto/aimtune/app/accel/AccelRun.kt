@@ -15,6 +15,8 @@ import de.yuuto.aimtune.core.accel.bounded
 import de.yuuto.aimtune.core.accel.evaluateAb
 import de.yuuto.aimtune.core.accel.CurveStrength
 import de.yuuto.aimtune.core.accel.MovementSample
+import de.yuuto.aimtune.core.accel.RawAccelProfile
+import de.yuuto.aimtune.core.accel.scaledBy
 import de.yuuto.aimtune.core.accel.fitAccel
 import de.yuuto.aimtune.core.accel.strengthAccel
 import de.yuuto.aimtune.core.accel.trialAccel
@@ -77,6 +79,12 @@ class AccelRun(
     priorSearch: List<PriorSearchRound> = emptyList(),
     /** Bound the recommended curve to the measured speeds as a lookup table (curve finder v2); false keeps the fitted family. */
     private val boundedCurves: Boolean = true,
+    /**
+     * The player's own Raw Accel curve, when they play one: the calibration and the control arm of the blind test are played with it,
+     * and the analysis divides it out (docs/FIND-CURVE-REDESIGN.md step 1). Null is a plain mouse. The strength search still plays
+     * natural curves over plain until step 2.
+     */
+    val baseCurve: RawAccelProfile? = null,
 ) {
     var phase = when {
         startWithTest != null -> AccelPhase.TEST
@@ -176,7 +184,7 @@ class AccelRun(
         AccelPhase.CALIBRATION -> baseConfig.copy(
             scenario = CLICK_SCENARIOS[calibration.size % CLICK_SCENARIOS.size],
             seed = seed * CALIBRATION_SEED_MIX + calibration.size,
-            accel = null,
+            accel = baseCurve,
         )
         AccelPhase.TEST -> {
             val round = plan.round(outcomes.size)
@@ -186,7 +194,7 @@ class AccelRun(
                 cm360 = if (accelerated) baseConfig.cm360 / candidate.sensitivityFactor else baseConfig.cm360,
                 scenario = round.scenario,
                 seed = round.seed,
-                accel = if (accelerated) candidate.curve else null,
+                accel = if (accelerated) candidate.curve else baseCurve,
             )
         }
         AccelPhase.SEARCH -> {
@@ -282,9 +290,16 @@ class AccelRun(
     }
 
     private fun finishCalibration() {
-        val analysis = AccelAnalysis(calibrationSamples + prior.samples)
+        val base = baseCurve
+        val analysis = AccelAnalysis(calibrationSamples + prior.samples, delivered = base?.let { b -> { speed: Double -> b.planningGain(speed, dpi) } })
         val result = fitAccel(analysis)
-        fit = if (boundedCurves) result.bounded(analysis) else result
+        // On top of a curve of their own the fit is always a table: the base's level at the typical speed does not fit a family that starts at 1.
+        fit = if (base == null) {
+            if (boundedCurves) result.bounded(analysis) else result
+        } else {
+            val level = base.planningGain(analysis.speedQuantile(0.5), dpi)
+            result.bounded(analysis).let { bounded -> bounded.copy(recommended = bounded.recommended?.scaledBy(level)) }
+        }
         phase = AccelPhase.ANALYSIS
     }
 

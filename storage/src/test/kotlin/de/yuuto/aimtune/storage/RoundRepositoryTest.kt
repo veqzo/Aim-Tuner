@@ -84,6 +84,35 @@ class RoundRepositoryTest {
     }
 
     @Test
+    fun `rounds played with the player's own curve are found by the exact curve, plain ones are not mixed in`() {
+        Database.open(dir.resolve("a.db")).use { db ->
+            val repo = RoundRepository(db)
+            val own = RawAccelProfile("default", RawAccelArgs(RawAccelMode.CLASSIC, gain = true, inputOffset = 10.0, capX = 62.5, capY = 1.6, capMode = RawAccelCapMode.IN_OUT), 600.0, 800.0)
+            val other = RawAccelProfile("default", own.args.copy(capY = 1.8), 600.0, 800.0)
+            val ab = repo.createSession(1_000, "valorant", 800.0, SessionKind.ACCEL_AB)
+            val refine = repo.createSession(1_000, "valorant", 800.0, SessionKind.ACCEL_REFINE)
+            val sensitivity = repo.createSession(1_000, "valorant", 800.0, SessionKind.SENSITIVITY)
+            fun save(session: Long, at: Long, recording: RoundRecording) =
+                repo.saveRound(session, recording, startedAtMs = at, blind = false, metrics = computeRoundMetrics(recording))
+            val base = recording(cm360 = 48.74)
+            val calibration = save(ab, 2_000, base.copy(accel = own))
+            val warmup = save(refine, 3_000, base.copy(accel = own, cm360 = 48.9))
+            save(ab, 4_000, base)
+            save(ab, 5_000, base.copy(accel = other))
+            save(ab, 6_000, base.copy(accel = own, cm360 = 60.0))
+            save(ab, 7_000, base.copy(accel = own, scenarioId = "tracking"))
+            save(sensitivity, 8_000, base.copy(accel = own))
+
+            val spec = AccelSpec.encodeModel(own)
+            assertEquals(listOf(warmup, calibration), repo.accelRoundIds(spec, 800.0, 48.74, listOf("flick"), tolerance = 0.03, limit = 10))
+            assertEquals(listOf(warmup), repo.accelRoundIds(spec, 800.0, 48.74, listOf("flick"), tolerance = 0.03, limit = 1))
+            assertEquals(emptyList(), repo.accelRoundIds(AccelSpec.encodeModel(NaturalCurve(0.05, 1.2)), 800.0, 48.74, listOf("flick"), tolerance = 0.03, limit = 10))
+            assertEquals(emptyList(), repo.accelRoundIds(spec, 800.0, 48.74, emptyList(), tolerance = 0.03, limit = 10))
+            assertEquals(1, repo.plainAccelRoundIds(800.0, 48.74, listOf("flick"), tolerance = 0.03, limit = 10).size, "the plain query still sees only the plain round")
+        }
+    }
+
+    @Test
     fun `a database from a newer version is refused`() {
         val file = dir.resolve("future.db")
         Database.open(file).use { }

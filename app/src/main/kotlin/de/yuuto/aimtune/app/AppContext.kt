@@ -24,6 +24,7 @@ import de.yuuto.aimtune.app.accel.RunsUse
 import de.yuuto.aimtune.app.screens.RawAccelExportScreen
 import de.yuuto.aimtune.app.screens.RawAccelHubScreen
 import de.yuuto.aimtune.app.screens.RawAccelSettingScreen
+import de.yuuto.aimtune.app.accel.RefineImport
 import de.yuuto.aimtune.app.accel.RefineSession
 import de.yuuto.aimtune.app.accel.RefineSource
 import de.yuuto.aimtune.app.screens.RefineBetweenScreen
@@ -158,6 +159,9 @@ class AppContext(
     /** Whether the curve runs are played at the finder's result instead of the game sensitivity; only honoured when that result is confident. */
     var useFinderResult = false
 
+    /** Whether the analysis path calibrates against the curve imported in the hub; honoured only when there is a usable one (docs/FIND-CURVE-REDESIGN.md step 1). */
+    var useOwnCurve = true
+
     val isSetUp: Boolean
         get() = SetupDraft.fromSettings(settings.current).let { draft -> SetupStep.entries.all { draft.issue(it, profiles) == null } }
 
@@ -286,7 +290,12 @@ class AppContext(
                 FinderResult(it.optimumCm360, it.confidencePercent, stored.rounds.size, sensitivity, processor.priorSearch(config.dpi, it.optimumCm360).size)
             }
         }
-        return AccelBaseline(config.cm360, config.profile.formatSensitivity(sensitivity), config.profile.name, finder, processor.priorSearch(config.dpi, config.cm360).size)
+        val imported = hub.restoreImported()
+        val choice = imported?.let { RefineImport.choose(it.source, it.profileName, config.dpi) }
+        return AccelBaseline(
+            config.cm360, config.profile.formatSensitivity(sensitivity), config.profile.name, finder, processor.priorSearch(config.dpi, config.cm360).size,
+            ownCurve = choice?.profile, ownCurveLabel = imported?.let { "${it.fileLabel} · ${it.profileName}" }, ownCurveFileDpi = choice?.dpiMismatch, settingsDpi = config.dpi,
+        )
     }
 
     /** Volume of the flash and hit sounds and the brightness of the flash white-out. */
@@ -357,12 +366,14 @@ class AppContext(
         val config = trainerConfig() ?: return showOnboarding(afterFinish = ::showMenu)
         val base = config.copy(cm360 = baseline.cm360(useFinderResult))
         // A run looks for the earlier rounds of what it starts with: the calibration or the search.
-        val prior = if (search) PriorCalibration.NONE else processor.priorCalibration(base.dpi, base.cm360)
+        // The strength search still plays natural curves over a plain mouse (step 2 changes that), so only the analysis path uses the player's own curve.
+        val own = baseline.ownCurve?.takeIf { useOwnCurve && !search }
+        val prior = if (search) PriorCalibration.NONE else processor.priorCalibration(base.dpi, base.cm360, own)
         val priorSearch = if (search && usePriorSearch) processor.priorSearch(base.dpi, base.cm360) else emptyList()
         val run = AccelRun(
             base, metricWeights(), runKey = System.currentTimeMillis(), seed = nextSeed++, prior = prior, startWithSearch = search,
             flash = settings.current.flashImportance() != FlashImportance.NEVER, priorSearch = priorSearch,
-            boundedCurves = boundedCurves,
+            boundedCurves = boundedCurves, baseCurve = own,
         )
         showAccelStep(run)
     }

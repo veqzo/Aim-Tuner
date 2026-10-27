@@ -1,6 +1,10 @@
 package de.yuuto.aimtune.app
 
 import de.yuuto.aimtune.app.accel.PriorCalibration
+import de.yuuto.aimtune.core.accel.RawAccelArgs
+import de.yuuto.aimtune.core.accel.RawAccelCapMode
+import de.yuuto.aimtune.core.accel.RawAccelMode
+import de.yuuto.aimtune.core.accel.RawAccelProfile
 import de.yuuto.aimtune.core.input.MouseEvent
 import de.yuuto.aimtune.core.math.Vec3
 import de.yuuto.aimtune.core.recording.RoundRecording
@@ -72,6 +76,25 @@ class RoundProcessorTest {
         assertEquals(800.0, last.dpi)
         assertEquals(40.0, last.cm360)
         assertEquals(3, last.data.rounds)
+        processor.close()
+    }
+
+    @Test
+    fun `calibration rounds played with the player's own curve come back only for that curve`() {
+        val processor = RoundProcessor(Database.open(dir.resolve("own.db")))
+        val own = RawAccelProfile("default", RawAccelArgs(RawAccelMode.CLASSIC, gain = true, inputOffset = 10.0, capX = 62.5, capY = 1.6, capMode = RawAccelCapMode.IN_OUT), 600.0, 800.0)
+        val other = RawAccelProfile("default", own.args.copy(capY = 1.8), 600.0, 800.0)
+        val kinds = listOf(ScenarioKind.FLICK, ScenarioKind.SWITCHING, ScenarioKind.MICRO)
+        kinds.forEachIndexed { i, kind ->
+            val ownRound = HeadlessRound.of(kind, SimulatedPlayer(), 800.0, 40.0, 100L + i, 20, accel = own)
+            processor.submit(ownRound, startedAtMs = 10L * (i + 1), blind = false, gameId = "valorant", runKey = 1, kind = SessionKind.ACCEL_AB)
+        }
+        processor.submit(HeadlessRound.of(ScenarioKind.FLICK, SimulatedPlayer(), 800.0, 40.0, 200L, 20, accel = other), startedAtMs = 50, blind = false, gameId = "valorant", runKey = 2, kind = SessionKind.ACCEL_AB)
+        processor.submit(HeadlessRound.of(ScenarioKind.FLICK, SimulatedPlayer(), 800.0, 40.0, 201L, 20), startedAtMs = 60, blind = false, gameId = "valorant", runKey = 3, kind = SessionKind.ACCEL_AB)
+
+        assertEquals(3, processor.priorCalibration(800.0, 40.5, own).rounds, "exactly the rounds played with this curve")
+        assertEquals(1, processor.priorCalibration(800.0, 40.5).rounds, "plain asks for the plain round only")
+        assertEquals(PriorCalibration.NONE, processor.priorCalibration(800.0, 40.5, RawAccelProfile("x", own.args.copy(acceleration = 0.01), 600.0, 800.0)))
         processor.close()
     }
 
