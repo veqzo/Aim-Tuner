@@ -56,3 +56,6 @@ user-rawaccel-settings.json
 
 # LWJGL extracts its natives here when the app runs from Gradle
 .lwjgl/
+
+# Exported Raw Accel test stages (contain the player's own settings)
+stufe-*.json
