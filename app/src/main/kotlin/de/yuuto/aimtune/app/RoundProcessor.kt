@@ -11,6 +11,7 @@ import de.yuuto.aimtune.app.accel.StoredSearches
 import de.yuuto.aimtune.app.blind.AxisErrors
 import de.yuuto.aimtune.app.blind.PastRound
 import de.yuuto.aimtune.core.accel.AccelSpec
+import de.yuuto.aimtune.core.accel.LookupCurve
 import de.yuuto.aimtune.core.accel.RawAccelProfile
 import de.yuuto.aimtune.core.accel.movementSamples
 import de.yuuto.aimtune.core.metrics.RoundMetrics
@@ -130,10 +131,10 @@ class RoundProcessor(private val database: Database?, private val exportDir: Pat
      * exactly that curve (a different base would need a different analysis), read on the storage thread and analysed again from
      * the stored raw events; nothing without a database or if reading fails.
      */
-    fun priorCalibration(dpi: Double, cm360: Double, baseCurve: RawAccelProfile? = null): PriorCalibration {
+    fun priorCalibration(dpi: Double, cm360: Double, baseCurve: RawAccelProfile? = null, stage: LookupCurve? = null): PriorCalibration {
         val repo = repository ?: return PriorCalibration.NONE
         return try {
-            executor.submit<PriorCalibration> { readPriorCalibration(repo, dpi, cm360, baseCurve?.let(AccelSpec::encodeModel)) }.get()
+            executor.submit<PriorCalibration> { readPriorCalibration(repo, dpi, cm360, (stage ?: baseCurve)?.let(AccelSpec::encodeModel)) }.get()
         } catch (e: Exception) {
             log.log(System.Logger.Level.ERROR, "reading earlier calibration rounds failed: ${e.message}", e)
             PriorCalibration.NONE

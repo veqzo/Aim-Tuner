@@ -14,6 +14,7 @@ import de.yuuto.aimtune.core.accel.AccelScenarios
 import de.yuuto.aimtune.core.accel.bounded
 import de.yuuto.aimtune.core.accel.evaluateAb
 import de.yuuto.aimtune.core.accel.CurveStrength
+import de.yuuto.aimtune.core.accel.LookupCurve
 import de.yuuto.aimtune.core.accel.MovementSample
 import de.yuuto.aimtune.core.accel.RawAccelProfile
 import de.yuuto.aimtune.core.accel.StrengthDraft
@@ -87,6 +88,11 @@ class AccelRun(
      * plain mouse: the search then plays natural curves over plain.
      */
     val baseCurve: RawAccelProfile? = null,
+    /**
+     * A stage of the plan on top of [baseCurve] (docs/FIND-CURVE-REDESIGN.md section 13), played word for word as it was stored, so the
+     * anchors stay frozen: the calibration plays it and the analysis divides it out instead of the base. Needs a base.
+     */
+    val stage: LookupCurve? = null,
 ) {
     var phase = when {
         startWithTest != null -> AccelPhase.TEST
@@ -190,7 +196,7 @@ class AccelRun(
         AccelPhase.CALIBRATION -> baseConfig.copy(
             scenario = CLICK_SCENARIOS[calibration.size % CLICK_SCENARIOS.size],
             seed = seed * CALIBRATION_SEED_MIX + calibration.size,
-            accel = baseCurve,
+            accel = stage ?: baseCurve,
         )
         AccelPhase.TEST -> {
             val round = plan.round(outcomes.size)
@@ -259,7 +265,12 @@ class AccelRun(
      * test against the player's curve; null without a draft or when even the smallest step is beyond what the error spread allows.
      */
     val draftOffer: AccelFit?
-        get() = draft?.felt?.let { plan -> plan.steps.firstOrNull()?.let { searchBase?.felt?.offer(it, plan.anchorSlow, plan.anchorFast) } }
+        get() = stageFit ?: draft?.felt?.let { plan -> plan.steps.firstOrNull()?.let { searchBase?.felt?.offer(it, plan.anchorSlow, plan.anchorFast) } }
+
+    /** The stage being played as a candidate (its step and frozen anchors read back from the table); null when it is no stage of this base. */
+    private val stageFit: AccelFit? by lazy {
+        stage?.let { searchBase?.felt?.stageOf(it) }?.let { searchBase?.felt?.offer(it.step, it.anchorSlow, it.anchorFast)?.copy(curve = checkNotNull(stage)) }
+    }
 
     /** Begins the blind test of the draft's first stage against the player's own curve. */
     fun startDraftTest() {
@@ -319,16 +330,19 @@ class AccelRun(
 
     private fun finishCalibration() {
         val base = baseCurve
-        val analysis = AccelAnalysis(calibrationSamples + prior.samples, delivered = base?.let { b -> { speed: Double -> b.planningGain(speed, dpi) } })
+        val delivered: ((Double) -> Double)? = stage?.let { s -> { speed: Double -> s.multiplier(speed) } }
+            ?: base?.let { b -> { speed: Double -> b.planningGain(speed, dpi) } }
+        val analysis = AccelAnalysis(calibrationSamples + prior.samples, delivered = delivered)
         val result = fitAccel(analysis)
         // On top of a curve of their own the fit is always a table: the base's level at the typical speed does not fit a family that starts at 1.
         fit = if (base == null) {
             if (boundedCurves) result.bounded(analysis) else result
         } else {
-            val level = base.planningGain(analysis.speedQuantile(0.5), dpi)
+            val level = checkNotNull(delivered)(analysis.speedQuantile(0.5))
             result.bounded(analysis).let { bounded -> bounded.copy(recommended = bounded.recommended?.scaledBy(level)) }
         }
-        draft = base?.let { b -> draftStrength(analysis, { speed -> b.planningGain(speed, dpi) }) }
+        // A stage that is played has its anchors frozen; a draft would draw new ones from the speeds it was played at.
+        draft = if (stage != null) null else base?.let { b -> draftStrength(analysis, { speed -> b.planningGain(speed, dpi) }) }
         phase = AccelPhase.ANALYSIS
     }
 

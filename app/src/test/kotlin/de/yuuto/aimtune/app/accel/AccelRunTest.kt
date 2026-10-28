@@ -5,7 +5,9 @@ import de.yuuto.aimtune.core.accel.AbStatus
 import de.yuuto.aimtune.core.accel.AccelAnalysis
 import de.yuuto.aimtune.core.accel.AccelFit
 import de.yuuto.aimtune.core.accel.AccelScenarios
+import de.yuuto.aimtune.core.accel.FeltStepFamily
 import de.yuuto.aimtune.core.accel.LookupCurve
+import de.yuuto.aimtune.core.accel.MovementSample
 import de.yuuto.aimtune.core.accel.NaturalCurve
 import de.yuuto.aimtune.core.accel.RawAccelArgs
 import de.yuuto.aimtune.core.accel.RawAccelCapMode
@@ -334,6 +336,41 @@ class AccelRunTest {
         assertNull(draft.felt)
         assertNull(run.draftOffer)
         assertFailsWith<IllegalStateException> { run.startDraftTest() }
+    }
+
+    /** Earlier reaches of a loose hand over a wide band of speeds, which a simulated player does not make. */
+    private fun widePrior(): PriorCalibration {
+        val random = kotlin.random.Random(5)
+        val samples = List(1200) {
+            val v = kotlin.math.exp(random.nextDouble(kotlin.math.ln(3.5), kotlin.math.ln(25.0)))
+            MovementSample(v, kotlin.math.exp(0.45 * (random.nextDouble() + random.nextDouble() + random.nextDouble() - 1.5) * 2.0) - 1.0)
+        }
+        return PriorCalibration(40, samples)
+    }
+
+    @Test
+    fun `a hand with a wide band of speeds is offered a felt step to test blind against the own curve`() {
+        val run = AccelRun(base, MetricWeights.DEFAULT, runKey = 1, seed = 3, prior = widePrior(), baseCurve = own)
+        while (run.phase == AccelPhase.CALIBRATION) play(run, SimulatedPlayer())
+        val plan = assertNotNull(assertNotNull(run.draft).felt, "the speeds span enough")
+        val offer = assertNotNull(run.draftOffer, "steps up to ${plan.maxStep}")
+        assertTrue(offer.curve is LookupCurve)
+        run.startDraftTest()
+        assertTrue(run.isDraft && !run.isTrial && !run.isSearch)
+        val configs = (0 until 2).map { run.nextRoundConfig().also { _ -> play(run, SimulatedPlayer()) } }
+        assertEquals(setOf<Any?>(own, offer.curve), configs.map { it.accel }.toSet(), "the step against the player's curve")
+    }
+
+    @Test
+    fun `a run on a stored stage plays that table word for word and keeps its anchors`() {
+        val table = FeltStepFamily(own, 800.0).table(0.15, 9.0, 22.0)
+        val run = AccelRun(base, MetricWeights.DEFAULT, runKey = 1, seed = 3, prior = widePrior(), baseCurve = own, stage = table)
+        val config = run.nextRoundConfig()
+        assertTrue(config.accel === table, "the calibration plays the stage")
+        while (run.phase == AccelPhase.CALIBRATION) play(run, SimulatedPlayer())
+        assertNull(run.draft, "no new anchors are drawn from the speeds of a stage")
+        val offer = assertNotNull(run.draftOffer, "the stage itself is what is offered")
+        assertTrue(offer.curve === table)
     }
 
     @Test
