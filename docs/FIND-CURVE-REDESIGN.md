@@ -280,6 +280,27 @@ Offen aus Schritt 7: Rest der UI-Texte (Begründung auf der Ergebnisseite), Stuf
 
 **Nicht geprüft:** Die Handgeschwindigkeits-Anker kommen aus Spitzentempi der Erstbewegungen; ob sie die Tempi echter Flicks treffen, ist ungeprüft (Flicks liegen vermutlich über dem 95. Perzentil, dort wirkt nur das Plateau). Die Anker werden bei jeder Analyse neu berechnet und nicht eingefroren; für den Stufenplan (Schritt 4) müssen sie in der Session gespeichert werden. Exportierte Datei nicht in Raw Accel geladen.
 
+## 13. Stufenplan über Sessions (Schritt 4) und A/B als Warnung (Schritt 3)
+
+Entwurf von einem Opus-Agenten (nur gelesen), von mir geprüft und umgesetzt.
+
+**Persistenz ohne Migration:** Die Wahrheit ist der Tabellentext in `round.accel`. Eine Folgesession spielt den gespeicherten Text Wort für Wort (`AccelRun(stage = ...)`), die Anker bleiben so eingefroren. `FeltStepFamily.stageOf` liest Schritt und Anker aus der Tabelle zurück (Glättungsfunktion invertiert, Anker per Regression, Tabelle neu gebaut und auf 1e-4 verglichen; das ist zugleich die Prüfung, dass es dieselbe Basis ist). `RoundProcessor.priorCalibration(..., stage)` holt die Runden genau dieser Stufe.
+
+**Regel (`core/.../accel/StagePlan.kt`, `StageMisfit.kt`):**
+- Fehlermaß je Session: `stageMisfit` = gewichteter Mittelwert von (gewünschter minus gelieferter Log-Gain) an der schnellen Seite minus der an der langsamen Seite, Gewichte aus der Glättungsfunktion der eingefrorenen Anker, nur Bins zwischen 5. und 95. Perzentil. Negativ heißt: die Hand will schnell weniger Gain, als die Stufe liefert.
+- Gültige Session: mindestens 8 Runden und ein Maß.
+- Aufstieg nur, wenn mindestens 2 gültige Sessions mit mindestens 8 h Abstand und mindestens 2 Vergleichssessions (Stufe davor) vorliegen und (i) der späte Pool (letzte 2 Sessions) mindestens 1 SE näher an 0 liegt als die erste Session, oder so angepasst ist wie auf der Stufe davor, und (ii) der mittlere Score nicht mehr als 2 Punkte unter dem Median der letzten 5 Vergleichssessions liegt.
+- Zurück bei zweimal in Folge zu niedrigem Score, oder nach mindestens 3 Sessions, wenn die Hand weiter mehr als 2 SE von der Vorstufe entfernt bleibt und sich nicht nähert. Sonst Halten mit Grund (zu wenig Runden, Sessions, Vergleich oder noch Gewöhnung). Oberste Sprosse oder `maxStep` erreicht: Ende (TOP).
+- `StagePlan.replay` spielt den Verlauf in Zeitfolge ab, damit ein Rückschritt nicht aus alten Sessions wieder aufsteigt. `StagePlanReader` (App) liest Sessions, ordnet Runden Stufen zu, rechnet Fehlermaß und Score (alle Vergleichsrunden gemeinsam, pro Szenario).
+
+**UI:** Startseite zeigt den Plan (Stufe, Schritt, Anker, Sessions, Stand) und "Stufe k spielen"; die Session spielt die Tabelle in der Kalibrierung, die Analyse läuft relativ zu ihr, ohne neue Anker. Test und Export wie beim Entwurf.
+
+**A/B nur als Warnung:** Bei einem Test einer Stufe gibt es den Export als Kopie der eigenen Datei in jedem Ausgang. Bei `ACCEL_WORSE` steht ein Hinweis statt "nichts wird exportiert". `evaluateAb` und `ACCEL_WORSE` sind unverändert; der A/B fließt nicht in die Plan-Regel ein.
+
+**Tests:** `FeltStepTest` (+1), `StageMisfitTest` (3), `StagePlanTest` (11), `AccelRunTest` (+2, breite Vorab-Proben statt `SimulatedPlayer`), `RoundProcessorTest` (+1).
+
+**Nicht geprüft:** Alle Schwellen (1 SE, 2 SE, 2 Punkte, 8 h, 2-3 Sessions) sind Heuristiken ohne echte Sessions. Die Vergleichssessions auf Rung 0 brauchen Runden auf der eigenen Kurve in einem Lauf mit Basis (Kalibrierung oder Kontrollarm); wer nur Stufen spielt, bleibt auf "Vergleich fehlt". Ändert sich das Raster von `OwnCurveStrength`, werden alte Stufen unlesbar. Das Fehlermaß ist gegen den Range-Bias nur über den Vergleich mit der Vorstufe geschützt. Der Start einer Stufen-Session ist nicht mit der echten Oberfläche geprüft.
+
 ## Regeln dieser Session
 Kein Code, keine Commits, kein Push, kein Merge nach `main`, `user-rawaccel-settings.json` und Datenbanken nur lesend. Der Nutzerprofil-Inhalt gehört in keinen Bericht.
 

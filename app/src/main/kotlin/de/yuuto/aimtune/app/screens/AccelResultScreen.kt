@@ -34,12 +34,15 @@ class AccelResultScreen(ctx: AppContext, private val run: AccelRun) : UiScreen(c
         val content = Table()
         content.add(ui.label(heading(), Styles.HEADING)).left().padBottom(32f).row()
         content.add(ui.label(explanation(), Styles.BODY_MUTED, wrap = true)).left().width(TEXT_WIDTH).padBottom(32f).row()
-        if (verdict?.status == AbStatus.ACCEL_BETTER) content.add(exportCard()).left().width(CARD_WIDTH).row()
+        if (verdict?.status == AbStatus.ACCEL_BETTER && !run.isDraft) content.add(exportCard()).left().width(CARD_WIDTH).row()
 
         val footer = Table()
         footer.add(ui.button(t("common.back_to_menu"), Styles.TEXT) { ctx.showMenu() }).left().height(FOOTER_BUTTON_HEIGHT).padLeft(8f)
         footer.add().expandX()
-        if (verdict?.status == AbStatus.ACCEL_BETTER) {
+        if (run.isDraft) {
+            // A test of a draft only warns: whatever the verdict, the stage can be saved as a copy of the player's own file.
+            footer.addButton(ui.button(t("accel.draft.export"), Styles.PRIMARY) { ctx.showDraftExport(run) }, minWidth = 340f)
+        } else if (verdict?.status == AbStatus.ACCEL_BETTER) {
             footer.addButton(ui.button(t("accel.result.copy"), Styles.SECONDARY) { copy() }, minWidth = 260f).padRight(16f)
             footer.addButton(ui.button(t("common.save_as"), Styles.SECONDARY) { saveAs() }, minWidth = 240f).padRight(16f)
             footer.addButton(ui.button(t("accel.result.export"), Styles.PRIMARY) { export() }, minWidth = 300f)
@@ -69,7 +72,7 @@ class AccelResultScreen(ctx: AppContext, private val run: AccelRun) : UiScreen(c
         }
         return when (v.status) {
             AbStatus.ACCEL_BETTER -> "$numbers " + t("accel.result.better_note") + trial
-            AbStatus.ACCEL_WORSE -> "$numbers " + t("accel.result.worse_note")
+            AbStatus.ACCEL_WORSE -> "$numbers " + t(if (run.isDraft) "accel.result.draft_worse_note" else "accel.result.worse_note")
             AbStatus.NO_DIFFERENCE -> "$numbers " + t("accel.result.no_difference_note")
             AbStatus.NEED_MORE_ROUNDS -> numbers
         }

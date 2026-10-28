@@ -17,6 +17,7 @@ import de.yuuto.aimtune.app.accel.HubSession
 import de.yuuto.aimtune.app.accel.ImportedProfile
 import de.yuuto.aimtune.app.accel.DraftStage
 import de.yuuto.aimtune.app.accel.PatchedCopy
+import de.yuuto.aimtune.app.accel.StageProgress
 import de.yuuto.aimtune.app.accel.RawAccelSetting
 import de.yuuto.aimtune.app.accel.RefineOutcome
 import de.yuuto.aimtune.app.accel.RefineRun
@@ -362,6 +363,27 @@ class AppContext(
     /** Whether curves are bounded to the measured speeds (curve finder v2); the launch option overrides the setting. */
     val boundedCurves: Boolean get() = (options.curveFinder ?: settings.current.curveFinder) == CurveFinder.V2
 
+    /** Where the stage plan on top of the player's own curve stands at the setup of the next run; null without a plan or a curve in use. */
+    fun stagePlan(baseline: AccelBaseline?): StageProgress? {
+        val own = baseline?.ownCurve?.takeIf { useOwnCurve } ?: return null
+        return processor.stagePlan(baseline.settingsDpi, baseline.cm360(useFinderResult), own, metricWeights())
+    }
+
+    /** Starts a session on the stage the plan stands on: the calibration plays that stored table, earlier sessions on it count. */
+    fun startStageRun() {
+        if (!source.hasReportTimestamps) return showAccel()
+        val baseline = accelBaseline() ?: return showOnboarding(afterFinish = ::showMenu)
+        val config = trainerConfig() ?: return showOnboarding(afterFinish = ::showMenu)
+        val own = baseline.ownCurve?.takeIf { useOwnCurve } ?: return showAccel()
+        val base = config.copy(cm360 = baseline.cm360(useFinderResult))
+        val stage = stagePlan(baseline)?.stage ?: return showAccel()
+        val run = AccelRun(
+            base, metricWeights(), runKey = System.currentTimeMillis(), seed = nextSeed++, prior = processor.priorCalibration(base.dpi, base.cm360, own, stage),
+            flash = settings.current.flashImportance() != FlashImportance.NEVER, boundedCurves = boundedCurves, baseCurve = own, stage = stage,
+        )
+        showAccelStep(run)
+    }
+
     /** Starts the acceleration steps at the game sensitivity (or the finder's confident result, if chosen); onboarding until the setup is complete. */
     fun startAccelRun(search: Boolean = false) {
         if (!source.hasReportTimestamps) return showAccel()
@@ -453,8 +475,8 @@ class AppContext(
     fun showDraftExport(run: AccelRun) {
         val table = run.draftOffer?.curve as? LookupCurve ?: return
         val imported = hub.restoreImported() ?: return
-        val plan = checkNotNull(run.draft?.felt)
-        hub.rememberStage(DraftStage(imported.source, imported.profileName, table, plan.steps.first(), plan.anchorSlow, plan.anchorFast))
+        val stage = run.draftStage ?: return
+        hub.rememberStage(DraftStage(imported.source, imported.profileName, table, stage.step, stage.anchorSlow, stage.anchorFast))
         showPatchedExport()
     }
 

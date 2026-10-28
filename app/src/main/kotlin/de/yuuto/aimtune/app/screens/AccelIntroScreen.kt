@@ -7,13 +7,18 @@ import de.yuuto.aimtune.app.AccelBaseline
 import de.yuuto.aimtune.app.AppContext
 import de.yuuto.aimtune.app.FinderResult
 import de.yuuto.aimtune.app.accel.AccelRun
+import de.yuuto.aimtune.app.accel.StageProgress
 import de.yuuto.aimtune.app.accel.StrengthSearch
 import de.yuuto.aimtune.app.ui.Styles
 import de.yuuto.aimtune.app.ui.addButton
 import de.yuuto.aimtune.app.ui.button
+import de.yuuto.aimtune.app.ui.caps
 import de.yuuto.aimtune.app.ui.frame
 import de.yuuto.aimtune.app.ui.label
 import de.yuuto.aimtune.app.ui.onChange
+import de.yuuto.aimtune.core.accel.FeltStep
+import de.yuuto.aimtune.core.accel.HoldReason
+import de.yuuto.aimtune.core.accel.StageAction
 import de.yuuto.aimtune.input.windows.WindowsPointerSettings
 import java.util.Locale
 
@@ -29,6 +34,7 @@ private const val FOOTER_BUTTON_HEIGHT = 64f
  */
 class AccelIntroScreen(ctx: AppContext, private val baseline: AccelBaseline? = ctx.accelBaseline()) : UiScreen(ctx) {
     private val pointerAcceleration = WindowsPointerSettings.readAcceleration()
+    private val plan: StageProgress? = ctx.stagePlan(baseline)
 
     override fun build(): Actor {
         // Two columns, so the screen fits 1080 lines: what the steps are on the left, the setup they start from on the right.
@@ -44,6 +50,7 @@ class AccelIntroScreen(ctx: AppContext, private val baseline: AccelBaseline? = c
         right.add(rawAccelCheck()).left().row()
         if (baseline != null && baseline.canUseFinder) right.add(finderCheck(baseline)).left().padTop(24f).row()
         if (baseline?.ownCurveLabel != null) right.add(ownCurveBlock(baseline)).left().padTop(24f).row()
+        plan?.let { right.add(planBlock(it)).left().padTop(24f).row() }
         val searchRounds = baseline?.searchRounds(ctx.useFinderResult) ?: 0
         if (searchRounds > 0) right.add(priorSearchCheck(searchRounds)).left().padTop(24f).row()
         if (!ctx.source.hasReportTimestamps) {
@@ -59,6 +66,11 @@ class AccelIntroScreen(ctx: AppContext, private val baseline: AccelBaseline? = c
         footer.add().expandX()
         val calibrate = ui.button(t("accel.start_calibration"), Styles.SECONDARY) { if (canStart()) ctx.startAccelRun() }
         calibrate.isDisabled = !canStart()
+        if (plan != null && plan.state.rung > 0) {
+            val stage = ui.button(t("accel.plan.play", plan.state.rung), Styles.PRIMARY) { if (canStart()) ctx.startStageRun() }
+            stage.isDisabled = !canStart()
+            footer.addButton(stage, minWidth = 340f).padRight(16f)
+        }
         footer.addButton(calibrate, minWidth = 340f).padRight(16f)
         val search = ui.button(t("accel.start_search"), Styles.PRIMARY) { if (canStart()) ctx.startAccelRun(search = true) }
         search.isDisabled = !canStart()
@@ -126,6 +138,39 @@ class AccelIntroScreen(ctx: AppContext, private val baseline: AccelBaseline? = c
         box.onChange { ctx.useOwnCurve = box.isChecked }
         block.add(box).left().row()
         block.add(ui.label(t("accel.use_own_help"), Styles.CAPTION_MUTED, wrap = true)).left().width(CARD_WIDTH).padTop(8f)
+        return block
+    }
+
+    /** Where the stage plan stands: the rung, its step and anchors, the sessions played and what the evidence says so far. */
+    private fun planBlock(plan: StageProgress): Table {
+        val block = Table()
+        block.add(ui.caps(t("accel.plan.title"))).left().row()
+        val rung = plan.state.rung
+        val anchors = plan.anchors
+        if (rung == 0 || anchors == null) {
+            block.add(ui.label(t("accel.plan.ended"), Styles.CAPTION_MUTED, wrap = true)).left().width(CARD_WIDTH).padTop(8f)
+            return block
+        }
+        fun n(value: Double) = "%.0f".format(Locale.ROOT, value)
+        block.add(ui.label(t("accel.plan.stage", rung, FeltStep.LADDER.size, n(anchors.step * 100.0), n(anchors.anchorSlow), n(anchors.anchorFast)), Styles.TITLE, wrap = true))
+            .left().width(CARD_WIDTH).padTop(8f).row()
+        block.add(ui.label(t("accel.plan.sessions", plan.sessionsByRung[0] ?: 0, plan.sessionsByRung[rung] ?: 0), Styles.CAPTION_MUTED, wrap = true))
+            .left().width(CARD_WIDTH).padTop(8f).row()
+        val decision = plan.state.decision
+        val status = when {
+            decision == null -> "accel.plan.start"
+            decision.action == StageAction.ADVANCE -> "accel.plan.advance"
+            decision.action == StageAction.BACK -> "accel.plan.back"
+            decision.action == StageAction.TOP -> "accel.plan.top"
+            else -> when (decision.reason ?: HoldReason.ADAPTING) {
+                HoldReason.ROUNDS -> "accel.plan.hold.rounds"
+                HoldReason.SESSIONS -> "accel.plan.hold.sessions"
+                HoldReason.BASELINE -> "accel.plan.hold.baseline"
+                HoldReason.ADAPTING -> "accel.plan.hold.adapting"
+            }
+        }
+        block.add(ui.label(t(status), Styles.CAPTION_MUTED, wrap = true)).left().width(CARD_WIDTH).padTop(8f).row()
+        block.add(ui.label(t("accel.plan.hint"), Styles.CAUTION, wrap = true)).left().width(CARD_WIDTH).padTop(8f)
         return block
     }
 

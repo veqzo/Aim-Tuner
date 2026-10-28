@@ -14,6 +14,7 @@ import de.yuuto.aimtune.core.accel.AccelScenarios
 import de.yuuto.aimtune.core.accel.bounded
 import de.yuuto.aimtune.core.accel.evaluateAb
 import de.yuuto.aimtune.core.accel.CurveStrength
+import de.yuuto.aimtune.core.accel.FeltStage
 import de.yuuto.aimtune.core.accel.LookupCurve
 import de.yuuto.aimtune.core.accel.MovementSample
 import de.yuuto.aimtune.core.accel.RawAccelProfile
@@ -266,6 +267,10 @@ class AccelRun(
      */
     val draftOffer: AccelFit?
         get() = stageFit ?: draft?.felt?.let { plan -> plan.steps.firstOrNull()?.let { searchBase?.felt?.offer(it, plan.anchorSlow, plan.anchorFast) } }
+
+    /** The step and frozen anchors of the stage the draft offers: the stage being played, or the first step of a new draft; null without one. */
+    val draftStage: FeltStage?
+        get() = stage?.let { searchBase?.felt?.stageOf(it) } ?: draft?.felt?.let { plan -> plan.steps.firstOrNull()?.let { FeltStage(it, plan.anchorSlow, plan.anchorFast) } }
 
     /** The stage being played as a candidate (its step and frozen anchors read back from the table); null when it is no stage of this base. */
     private val stageFit: AccelFit? by lazy {
