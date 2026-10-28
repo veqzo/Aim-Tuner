@@ -72,4 +72,19 @@ class FeltStepTest {
         val d = assertNotNull(draftStrength(analysis(0.45), ::b))
         assertNotNull(d.felt)
     }
+
+    @Test
+    fun `a stored stage gives back its step and anchors, and nothing else is taken for a stage`() {
+        for ((x, a, c) in listOf(Triple(0.08, 9.0, 22.0), Triple(0.15, 6.0, 30.0), Triple(0.25, 12.0, 20.0))) {
+            val stage = assertNotNull(family.stageOf(family.table(x, a, c)), "step $x")
+            assertEquals(x, stage.step, 1e-3)
+            assertEquals(a, stage.anchorSlow, a * 0.02)
+            assertEquals(c, stage.anchorFast, c * 0.02)
+            val decoded = AccelSpec.decodeModel(AccelSpec.encodeModel(family.table(x, a, c))) as AccelCurve
+            assertNotNull(family.stageOf(decoded), "after encode and decode")
+        }
+        assertNull(family.stageOf(own.model(1.3) as AccelCurve))
+        val other = FeltStepFamily(RawAccelProfile("o", RawAccelArgs(RawAccelMode.CLASSIC, gain = true, inputOffset = 4.0, capX = 40.0, capY = 1.4, capMode = RawAccelCapMode.IN_OUT), 600.0, 800.0), 800.0)
+        assertNull(other.stageOf(family.table(0.15, slow, fast)), "another base")
+    }
 }

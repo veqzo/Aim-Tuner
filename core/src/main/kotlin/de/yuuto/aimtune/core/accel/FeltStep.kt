@@ -16,6 +16,9 @@ import kotlin.math.ln
  */
 data class FeltPlan(val anchorSlow: Double, val anchorFast: Double, val maxStep: Double, val steps: List<Double>)
 
+/** A felt step with the anchors it was built with: what a stored stage table stands for. */
+data class FeltStage(val step: Double, val anchorSlow: Double, val anchorFast: Double)
+
 object FeltStep {
     /** Gain steps at the fast end of the hand's speeds; about 8 % is taken as the smallest change a player notices (an assumption, not measured). */
     val LADDER = listOf(0.08, 0.15, 0.25)
@@ -79,7 +82,49 @@ class FeltStepFamily(base: RawAccelProfile, dpi: Double) {
         return plateau.takeIf { it > TOLERANCE && abs(ratio[ratio.size - 2] - ratio.last()) < TOLERANCE }
     }
 
+    /**
+     * The step and the anchors a played table was built with, read back from the table (the stage plan plays stored tables word for
+     * word and needs the anchors to build the next rung and to show them). The anchors are fitted on the ramp, where the smoothstep is
+     * inverted, and the table is rebuilt from them with this base; null unless it matches within [REBUILD_TOLERANCE], which also rules
+     * out another base, another grid and tables of other kinds. A change of the grid of [OwnCurveStrength] makes old stages unreadable.
+     */
+    fun stageOf(curve: AccelCurve): FeltStage? {
+        val step = stepOf(curve) ?: return null
+        curve as LookupCurve
+        val total = ln(1.0 + step)
+        val ramp = curve.speeds.indices.mapNotNull { i ->
+            val h = ln(curve.multipliers[i] / grid.gains[i]) / total
+            if (h > RAMP_FROM && h < RAMP_TO) ln(curve.speeds[i]) to invertSmoothstep(h) else null
+        }
+        if (ramp.size < MIN_RAMP_POINTS) return null
+        val meanU = ramp.sumOf { it.second } / ramp.size
+        val meanLn = ramp.sumOf { it.first } / ramp.size
+        val sxx = ramp.sumOf { (it.second - meanU) * (it.second - meanU) }
+        if (sxx < 1e-9) return null
+        val slope = ramp.sumOf { (it.second - meanU) * (it.first - meanLn) } / sxx
+        val slow = exp(meanLn - slope * meanU)
+        val fast = exp(meanLn + slope * (1.0 - meanU))
+        if (!(slow > 0.0 && fast / slow > 1.0)) return null
+        val rebuilt = table(step, slow, fast)
+        val fits = curve.multipliers.indices.all { abs(rebuilt.multipliers[it] / curve.multipliers[it] - 1.0) < REBUILD_TOLERANCE }
+        return if (fits) FeltStage(step, slow, fast) else null
+    }
+
+    private fun invertSmoothstep(h: Double): Double {
+        var low = 0.0
+        var high = 1.0
+        repeat(60) {
+            val mid = (low + high) / 2.0
+            if (mid * mid * (3.0 - 2.0 * mid) < h) low = mid else high = mid
+        }
+        return (low + high) / 2.0
+    }
+
     private companion object {
         const val TOLERANCE = 1e-4
+        const val REBUILD_TOLERANCE = 1e-4
+        const val RAMP_FROM = 0.05
+        const val RAMP_TO = 0.95
+        const val MIN_RAMP_POINTS = 4
     }
 }
