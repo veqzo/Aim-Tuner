@@ -88,7 +88,7 @@ class MainMenuScreen(ctx: AppContext) : UiScreen(ctx) {
     private fun pendingUpdate() = ctx.availableUpdate?.takeIf { ctx.settings.current.checkForUpdates }
 
     private fun openUpdate() {
-        pendingUpdate()?.let { Gdx.net.openURI(it.url) }
+        pendingUpdate()?.let { ctx.openUrl(it.url) }
     }
 
     private val storedRounds by lazy { ctx.storedRoundCount() }

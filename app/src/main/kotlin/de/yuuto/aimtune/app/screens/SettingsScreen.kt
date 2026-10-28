@@ -8,6 +8,7 @@ import com.badlogic.gdx.scenes.scene2d.ui.Table
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton
 import com.badlogic.gdx.scenes.scene2d.ui.TextField
 import de.yuuto.aimtune.app.AppContext
+import de.yuuto.aimtune.app.update.AppVersion
 import de.yuuto.aimtune.app.i18n.Language
 import de.yuuto.aimtune.app.i18n.scenarioName
 import de.yuuto.aimtune.app.setup.GAME_CUSTOM
@@ -109,6 +110,7 @@ class SettingsScreen(ctx: AppContext, private val returnTo: (() -> Unit)? = null
         // Next to the sound switches it would widen the left column; the footer has room.
         footer.add(ui.button(t("settings.sound_levels"), Styles.SECONDARY) { ctx.showSoundSettings() }).left().height(FOOTER_BUTTON_HEIGHT).padLeft(16f)
         footer.add(updateToggle()).left().height(FOOTER_BUTTON_HEIGHT).padLeft(16f)
+        footer.add(ui.button(t("settings.update_now"), Styles.SECONDARY) { checkUpdateNow() }).left().height(FOOTER_BUTTON_HEIGHT).padLeft(16f)
         footer.add().expandX()
         message?.let { (text, ok) -> footer.add(ui.label(text, if (ok) Styles.OK else Styles.CAUTION)).right().padRight(32f) }
         footer.add(ui.button(t("settings.reset"), Styles.TEXT) { reset() }).height(FOOTER_BUTTON_HEIGHT).padRight(16f)
@@ -219,6 +221,20 @@ class SettingsScreen(ctx: AppContext, private val returnTo: (() -> Unit)? = null
         }
         row.add(slider).growX().colspan(2).padTop(12f)
         return row
+    }
+
+    /** Asks GitHub now and says in the footer what came back; a new version is then also offered on the main menu. */
+    private fun checkUpdateNow() {
+        message = t("settings.update_checking") to true
+        rebuild()
+        ctx.checkForUpdateNow { release ->
+            message = when {
+                release == null -> t("settings.update_failed") to false
+                release.version > AppVersion.version -> t("settings.update_found", release.version.toString()) to true
+                else -> t("settings.update_none", AppVersion.current) to true
+            }
+            if (ctx.currentScreen === this) rebuild()
+        }
     }
 
     /** The switch for the daily update check, in the footer: both columns are as tall as the window. */

@@ -27,11 +27,15 @@ class UpdateServiceTest {
     }
 
     @Test
-    fun `at most one check a day, also after a failed one`() {
+    fun `at most one check a day, a failed one is tried again after an hour`() {
         assertNull(check(service(), AppSettings(lastUpdateCheckEpochSeconds = now - 3_600)))
         assertEquals(0, calls)
-        // A failed check (null release) still reports its time, so the caller stores it and a private repository is not asked at every start.
-        assertEquals(now to null, check(service(release = null), AppSettings(lastUpdateCheckEpochSeconds = now - UpdateService.CHECK_INTERVAL_SECONDS)))
+        // A failed check (null release) is stored as if it was made early, so a missing network or a repository that was private is asked again soon, not tomorrow.
+        val failed = check(service(release = null), AppSettings(lastUpdateCheckEpochSeconds = now - UpdateService.CHECK_INTERVAL_SECONDS))
+        assertEquals(UpdateService.stampOf(now, null) to null, failed)
+        val stored = AppSettings(lastUpdateCheckEpochSeconds = checkNotNull(failed).first)
+        assertEquals(false, service().isDue(stored), "not due right after")
+        assertEquals(true, UpdateService(latest = { null }, current = Version(0, 1, 0), nowEpochSeconds = { now + UpdateService.RETRY_AFTER_FAILURE_SECONDS }).isDue(stored), "due after the retry time")
     }
 
     @Test
@@ -45,7 +49,7 @@ class UpdateServiceTest {
     @Test
     fun `a failing check function never escapes`() {
         val broken = UpdateService(latest = { error("boom") }, current = Version(0, 1, 0), nowEpochSeconds = { now }, background = Runnable::run)
-        assertEquals(now to null, check(broken, AppSettings()))
+        assertEquals(UpdateService.stampOf(now, null) to null, check(broken, AppSettings()))
     }
 
     @Test

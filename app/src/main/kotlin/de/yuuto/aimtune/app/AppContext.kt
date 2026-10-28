@@ -7,6 +7,8 @@ import de.yuuto.aimtune.app.accel.AccelPhase
 import de.yuuto.aimtune.app.accel.AccelRun
 import de.yuuto.aimtune.app.audio.FlashSounds
 import de.yuuto.aimtune.app.update.AppVersion
+import de.yuuto.aimtune.app.update.UpdateChecker
+import de.yuuto.aimtune.app.update.UpdateService
 import de.yuuto.aimtune.app.update.ReleaseInfo
 import de.yuuto.aimtune.app.audio.HitSounds
 import de.yuuto.aimtune.app.accel.AccelSession
@@ -118,6 +120,41 @@ class AppContext(
     /** A newer release than this build, found by the update check; null when none is known. Set on the render thread. */
     @Volatile
     var availableUpdate: ReleaseInfo? = null
+
+    /**
+     * Keeps the result of an update check in the settings (not over a damaged settings file) and updates the hint of the menu.
+     * Call on the UI thread. [release] is null when the check failed; the stored time then lets it come due again soon.
+     */
+    fun recordUpdateCheck(checkedAtEpochSeconds: Long, release: ReleaseInfo?) {
+        val before = settings.current
+        val after = before.copy(
+            lastUpdateCheckEpochSeconds = UpdateService.stampOf(checkedAtEpochSeconds, release),
+            latestKnownVersion = release?.version?.toString() ?: before.latestKnownVersion,
+            latestKnownUrl = release?.url ?: before.latestKnownUrl,
+        )
+        if (startupProblems.isEmpty()) settings.save(after)
+        availableUpdate = UpdateService(latest = { null }, current = AppVersion.version).known(after)
+    }
+
+    /**
+     * Asks GitHub now, whatever the day's limit says, in the background; [onResult] runs on the UI thread with the release found
+     * (null when GitHub could not be reached). Works with the daily check switched off: the player asked for it.
+     */
+    fun checkForUpdateNow(onResult: (ReleaseInfo?) -> Unit) {
+        Thread({
+            val release = runCatching { UpdateChecker().latest() }.getOrNull()
+            Gdx.app.postRunnable {
+                recordUpdateCheck(java.time.Instant.now().epochSecond, release)
+                onResult(release)
+            }
+        }, "aimtune-update-check").apply { isDaemon = true }.start()
+    }
+
+    /** Opens [url] in the browser; false when neither libGDX nor the Windows shell could. Only pages of the repository are ever passed. */
+    fun openUrl(url: String): Boolean {
+        if (runCatching { Gdx.net.openURI(url) }.getOrDefault(false)) return true
+        return runCatching { ProcessBuilder("rundll32", "url.dll,FileProtocolHandler", url).start() }.isSuccess
+    }
 
     /** What the Raw Accel hub keeps: the imported profile, the last refine result, the ticked recommendations and the analyses. */
     val hub = HubSession(settings, processor::settingsAnalyses, { processor.storedCount })

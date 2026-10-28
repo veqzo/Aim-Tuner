@@ -108,14 +108,7 @@ class AimTuneApp(private val options: LaunchOptions) : Game() {
         ctx.availableUpdate = service.known(ctx.settings.current)
         service.checkIfDue(ctx.settings.current) { checkedAt, release ->
             Gdx.app.postRunnable {
-                val before = ctx.settings.current
-                val after = before.copy(
-                    lastUpdateCheckEpochSeconds = checkedAt,
-                    latestKnownVersion = release?.version?.toString() ?: before.latestKnownVersion,
-                    latestKnownUrl = release?.url ?: before.latestKnownUrl,
-                )
-                if (ctx.startupProblems.isEmpty()) ctx.settings.save(after)
-                ctx.availableUpdate = service.known(after)
+                ctx.recordUpdateCheck(checkedAt, release)
                 (screen as? MainMenuScreen)?.rebuild()
             }
         }
