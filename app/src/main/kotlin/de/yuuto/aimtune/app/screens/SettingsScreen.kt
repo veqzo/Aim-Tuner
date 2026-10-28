@@ -45,7 +45,8 @@ private val ROUND_LENGTHS = listOf(30, 45, 60, 90)
 private const val FLASH_SEGMENT_WIDTH = 150f
 private const val FLASH_HELP_WIDTH = 760f
 private const val SOUND_TILE_WIDTH = 200f
-private const val UPDATE_TILE_WIDTH = 340f
+private const val UPDATE_TILE_WIDTH = 440f
+private const val UPDATE_BUTTON_WIDTH = 440f
 private const val RANGE_SELECT_WIDTH = 170f
 private const val RANGE_SEGMENT_HEIGHT = 44f
 
@@ -74,6 +75,7 @@ class SettingsScreen(ctx: AppContext, private val returnTo: (() -> Unit)? = null
     private var hitSound = ctx.settings.current.hitSound
     private var checkForUpdates = ctx.settings.current.checkForUpdates
     private var message: Pair<String, Boolean>? = null
+    private var updateStatus: String? = null
     private var liveCm: Label? = null
     private var totalLabel: Label? = null
 
@@ -110,7 +112,8 @@ class SettingsScreen(ctx: AppContext, private val returnTo: (() -> Unit)? = null
         // Next to the sound switches it would widen the left column; the footer has room.
         footer.add(ui.button(t("settings.sound_levels"), Styles.SECONDARY) { ctx.showSoundSettings() }).left().height(FOOTER_BUTTON_HEIGHT).padLeft(16f)
         footer.add(updateToggle()).left().height(FOOTER_BUTTON_HEIGHT).padLeft(16f)
-        footer.add(ui.button(t("settings.update_now"), Styles.SECONDARY) { checkUpdateNow() }).left().height(FOOTER_BUTTON_HEIGHT).padLeft(16f)
+        // The result is the label of the button, not a footer message: a longer footer would be wider than the window.
+        footer.add(ui.button(updateStatus ?: t("settings.update_now"), Styles.SECONDARY) { checkUpdateNow() }).left().width(UPDATE_BUTTON_WIDTH).height(FOOTER_BUTTON_HEIGHT).padLeft(16f)
         footer.add().expandX()
         message?.let { (text, ok) -> footer.add(ui.label(text, if (ok) Styles.OK else Styles.CAUTION)).right().padRight(32f) }
         footer.add(ui.button(t("settings.reset"), Styles.TEXT) { reset() }).height(FOOTER_BUTTON_HEIGHT).padRight(16f)
@@ -225,13 +228,13 @@ class SettingsScreen(ctx: AppContext, private val returnTo: (() -> Unit)? = null
 
     /** Asks GitHub now and says in the footer what came back; a new version is then also offered on the main menu. */
     private fun checkUpdateNow() {
-        message = t("settings.update_checking") to true
+        updateStatus = t("settings.update_checking")
         rebuild()
         ctx.checkForUpdateNow { release ->
-            message = when {
-                release == null -> t("settings.update_failed") to false
-                release.version > AppVersion.version -> t("settings.update_found", release.version.toString()) to true
-                else -> t("settings.update_none", AppVersion.current) to true
+            updateStatus = when {
+                release == null -> t("settings.update_failed")
+                release.version > AppVersion.version -> t("settings.update_found", release.version.toString())
+                else -> t("settings.update_none", AppVersion.current)
             }
             if (ctx.currentScreen === this) rebuild()
         }
@@ -239,7 +242,7 @@ class SettingsScreen(ctx: AppContext, private val returnTo: (() -> Unit)? = null
 
     /** The switch for the daily update check, in the footer: both columns are as tall as the window. */
     private fun updateToggle(): Table {
-        val button: TextButton = ui.button(t("settings.update_check"), Styles.TILE) { checkForUpdates = !checkForUpdates; message = null; rebuild() }
+        val button: TextButton = ui.button(t("settings.update_check", t(if (checkForUpdates) "settings.on" else "settings.off")), Styles.TILE) { checkForUpdates = !checkForUpdates; message = null; rebuild() }
         button.setProgrammaticChangeEvents(false)
         button.isChecked = checkForUpdates
         return Table().also { it.add(button).width(UPDATE_TILE_WIDTH).height(CONTROL_HEIGHT) }
