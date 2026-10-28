@@ -7,6 +7,8 @@ import de.yuuto.aimtune.app.accel.AccelPhase
 import de.yuuto.aimtune.app.accel.AccelRun
 import de.yuuto.aimtune.app.audio.FlashSounds
 import de.yuuto.aimtune.app.update.AppVersion
+import de.yuuto.aimtune.app.update.InstallKind
+import de.yuuto.aimtune.app.update.UpdateApplier
 import de.yuuto.aimtune.app.update.UpdateChecker
 import de.yuuto.aimtune.app.update.UpdateService
 import de.yuuto.aimtune.app.update.ReleaseInfo
@@ -67,6 +69,7 @@ import de.yuuto.aimtune.app.screens.ResultsData
 import de.yuuto.aimtune.app.screens.ResultsScreen
 import de.yuuto.aimtune.app.screens.SettingsScreen
 import de.yuuto.aimtune.app.screens.TrainerScreen
+import de.yuuto.aimtune.app.screens.UpdateScreen
 import de.yuuto.aimtune.app.screens.UiScreen
 import de.yuuto.aimtune.app.setup.SetupDraft
 import de.yuuto.aimtune.app.setup.SetupStep
@@ -149,6 +152,17 @@ class AppContext(
             }
         }, "aimtune-update-check").apply { isDaemon = true }.start()
     }
+
+    /** The folder the update files go to, inside the data folder; null without one. */
+    val updateDir: Path? get() = exportDir?.parent?.parent?.resolve("update")
+
+    /** How this copy is installed, which decides how an update is put in place. */
+    fun installKind(): InstallKind = UpdateApplier.kindOf(UpdateApplier.runningLauncher(), UpdateApplier.installRoots())
+
+    fun launcher(): Path? = UpdateApplier.runningLauncher()
+
+    /** The screen that offers to install [release] from inside the app. */
+    fun showUpdate(release: ReleaseInfo) = switchTo(UpdateScreen(this, release))
 
     /** Opens [url] in the browser; false when neither libGDX nor the Windows shell could. Only pages of the repository are ever passed. */
     fun openUrl(url: String): Boolean {
