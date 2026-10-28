@@ -59,4 +59,38 @@ class StagePlanTest {
     fun `a score within the margin of the baseline does not block`() {
         assertEquals(StageAction.ADVANCE, decide(listOf(session(0.0, score = 48.5, at = 0), session(0.0, score = 48.5, at = 10))).action)
     }
+
+    private fun at(rung: Int, s: StageSession) = RungSession(rung, s)
+
+    private val own = listOf(at(0, session(0.0, at = -50)), at(0, session(0.0, at = -40)))
+
+    @Test
+    fun `a replay moves up a rung when the evidence passes and starts the next window empty`() {
+        val history = own + listOf(at(1, session(0.0, at = 0)), at(1, session(0.0, at = 10)))
+        val state = StagePlan.replay(history) { true }
+        assertEquals(2, state.rung)
+        assertEquals(emptyList(), state.window)
+    }
+
+    @Test
+    fun `a replay stays on a rung that holds and keeps the sessions of its window`() {
+        val state = StagePlan.replay(own + at(1, session(0.0, at = 0))) { true }
+        assertEquals(1, state.rung)
+        assertEquals(1, state.window.size)
+        assertEquals(HoldReason.SESSIONS, state.decision?.reason)
+    }
+
+    @Test
+    fun `a replay that goes back ends the plan on the own curve and does not climb again from old sessions`() {
+        val bad = own + listOf(at(1, session(0.0, score = 40.0, at = 0)), at(1, session(0.0, score = 40.0, at = 10)), at(0, session(0.0, at = 20)), at(1, session(0.0, at = 30)))
+        val state = StagePlan.replay(bad) { true }
+        assertEquals(0, state.rung)
+    }
+
+    @Test
+    fun `the top rung is kept`() {
+        val state = StagePlan.replay(own + listOf(at(1, session(0.0, at = 0)), at(1, session(0.0, at = 10)))) { false }
+        assertEquals(1, state.rung)
+        assertEquals(StageAction.TOP, state.decision?.action)
+    }
 }

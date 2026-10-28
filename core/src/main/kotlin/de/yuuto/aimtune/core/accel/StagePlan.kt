@@ -22,6 +22,12 @@ enum class StageAction {
     TOP,
 }
 
+/** A session in time order and the rung it was played on: 0 is the player's own curve, 1 the first rung of the ladder and so on. */
+data class RungSession(val rung: Int, val session: StageSession)
+
+/** Where a plan stands after its history: the rung to play next, the sessions on it since it was entered, and what the evidence says. */
+data class PlanState(val rung: Int, val window: List<StageSession>, val decision: StageDecision?)
+
 /** Why a plan holds, for the text shown to the player. */
 enum class HoldReason { ROUNDS, SESSIONS, BASELINE, ADAPTING }
 
@@ -44,6 +50,7 @@ object StagePlan {
     const val SCORE_MARGIN = 2.0
     const val APPROACH_SE = 1.0
     const val BACK_SE = 2.0
+    const val BASELINE_SESSIONS = 5
 
     /**
      * [current] are the sessions on the stage in time order, [reference] those on the stage before it (the player's own curve for the
@@ -74,6 +81,31 @@ object StagePlan {
         val scoreHolds = late.map { it.score }.average() >= baseline - SCORE_MARGIN
         if (!(approached || asUsed) || !scoreHolds) return StageDecision(StageAction.HOLD, HoldReason.ADAPTING)
         return StageDecision(if (hasNext) StageAction.ADVANCE else StageAction.TOP)
+    }
+
+    /**
+     * Replays the [history] in time order: the plan starts on rung 1 and every session on the current rung is weighed by [decide]; a
+     * rung that passes moves the plan up, one that goes back moves it down (to rung 0, the player's own curve, which ends the plan).
+     * Sessions on other rungs only serve as reference and baseline. [hasNext] says whether a rung above the given one may be offered.
+     */
+    fun replay(history: List<RungSession>, hasNext: (Int) -> Boolean): PlanState {
+        var rung = 1
+        var window = emptyList<StageSession>()
+        var decision: StageDecision? = null
+        for (entry in history.sortedBy { it.session.atMillis }) {
+            if (rung == 0) break
+            if (entry.rung != rung) continue
+            window = window + entry.session
+            val seen = history.filter { it.session.atMillis <= entry.session.atMillis }
+            val reference = seen.filter { it.rung == rung - 1 }.map { it.session }
+            decision = decide(window, reference, reference.takeLast(BASELINE_SESSIONS).map { it.score }, hasNext(rung))
+            when (decision.action) {
+                StageAction.ADVANCE -> { rung += 1; window = emptyList() }
+                StageAction.BACK -> { rung -= 1; window = emptyList() }
+                StageAction.HOLD, StageAction.TOP -> Unit
+            }
+        }
+        return PlanState(rung, window, decision)
     }
 
     private fun combined(a: StageMisfit, b: StageMisfit) = sqrt(a.standardError * a.standardError + b.standardError * b.standardError)
