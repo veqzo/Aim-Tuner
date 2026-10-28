@@ -53,7 +53,7 @@ data class StrengthDraft(
 }
 
 private const val CENTRAL_Z = 1.2816 // the 80 % central range the other searches report
-private const val TRUST_FLOOR = 0.005 // as in the fit: no bin is trusted better than this
+internal const val TRUST_FLOOR = 0.005 // as in the fit: no bin is trusted better than this
 private const val MIN_RISE = 1e-4
 private const val MIN_SPREAD = 1e-9
 private val MEDIAN_SE_FACTOR = sqrt(Math.PI / 2.0)
