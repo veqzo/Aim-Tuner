@@ -10,7 +10,19 @@ import de.yuuto.aimtune.app.accel.LastCalibration
 import de.yuuto.aimtune.app.accel.LastSearch
 import de.yuuto.aimtune.app.accel.PriorCalibration
 import de.yuuto.aimtune.app.accel.SettingsAnalyses
+import de.yuuto.aimtune.app.accel.StageProgress
 import de.yuuto.aimtune.app.accel.sampleAccelRun
+import de.yuuto.aimtune.app.accel.sampleDraftRun
+import de.yuuto.aimtune.app.accel.sampleOwnCurve
+import de.yuuto.aimtune.app.screens.AccelIntroScreen
+import de.yuuto.aimtune.core.accel.FeltStage
+import de.yuuto.aimtune.core.accel.FeltStepFamily
+import de.yuuto.aimtune.core.accel.HoldReason
+import de.yuuto.aimtune.core.accel.PlanState
+import de.yuuto.aimtune.core.accel.StageAction
+import de.yuuto.aimtune.core.accel.StageDecision
+import de.yuuto.aimtune.core.accel.StageMisfit
+import de.yuuto.aimtune.core.accel.StageSession
 import de.yuuto.aimtune.app.blind.sampleBlindRun
 import de.yuuto.aimtune.app.history.HistoryEntry
 import de.yuuto.aimtune.app.accel.sampleRefineRun
@@ -73,6 +85,13 @@ class ScreenshotTour(private val ctx: AppContext, private val dir: Path, private
         Step("hub-export") { showHub { ctx.hub.setTicked(RawAccelSetting.ROTATION, true); ctx.showPatchedExport(it) } },
         Step("accel-intro") { ctx.showAccel() },
         Step("accel-intro-prior") { ctx.showAccel(AccelBaseline(48.7, "0.335", "Valorant", FinderResult(34.4, 61, 40, "0.474", searchRounds = 50), gameSearchRounds = 12)) },
+        Step("accel-intro-plan") {
+            val stage = FeltStepFamily(sampleOwnCurve, 800.0).table(0.08, 9.0, 22.0)
+            val state = PlanState(1, listOf(StageSession(StageMisfit(-0.02, 0.01), 50.0, 15, 0L)), StageDecision(StageAction.HOLD, HoldReason.SESSIONS))
+            val baseline = AccelBaseline(48.7, "0.335", "Valorant", gameSearchRounds = 0, ownCurve = sampleOwnCurve, ownCurveLabel = "settings.json: default", settingsDpi = 800.0)
+            ctx.switchTo(AccelIntroScreen(ctx, baseline, StageProgress(state, stage, FeltStage(0.08, 9.0, 22.0), mapOf(0 to 3, 1 to 1))))
+        },
+        Step("accel-draft") { ctx.trainerConfig()?.let(::sampleDraftRun)?.let(ctx::showAccelStep) },
         Step("accel-last") { accelSample(AccelPhase.ANALYSIS)?.let { ctx.showLastAccelAnalysis(LastCalibration(it.dpi, it.baseCm360, PriorCalibration(it.calibrationDone, it.calibrationSamples))) } },
         Step("accel-last-search") { accelSample(AccelPhase.SEARCH_RESULT)?.let { ctx.showLastSearch(LastSearch(it.dpi, it.baseCm360, it.searchRounds, 2, it.searchResult)) } },
         Step("accel-calibration") { accelSample(AccelPhase.CALIBRATION)?.let(ctx::showAccelStep) },

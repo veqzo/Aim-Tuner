@@ -32,9 +32,12 @@ private const val FOOTER_BUTTON_HEIGHT = 64f
  * the finder's result when it is confident and switched on), and the check that Raw Accel is off, since the calibration
  * needs a plain mouse.
  */
-class AccelIntroScreen(ctx: AppContext, private val baseline: AccelBaseline? = ctx.accelBaseline()) : UiScreen(ctx) {
+class AccelIntroScreen(
+    ctx: AppContext,
+    private val baseline: AccelBaseline? = ctx.accelBaseline(),
+    private val plan: StageProgress? = ctx.stagePlan(baseline),
+) : UiScreen(ctx) {
     private val pointerAcceleration = WindowsPointerSettings.readAcceleration()
-    private val plan: StageProgress? = ctx.stagePlan(baseline)
 
     override fun build(): Actor {
         // Two columns, so the screen fits 1080 lines: what the steps are on the left, the setup they start from on the right.
