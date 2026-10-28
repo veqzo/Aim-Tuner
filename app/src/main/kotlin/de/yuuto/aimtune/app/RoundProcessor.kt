@@ -10,6 +10,8 @@ import de.yuuto.aimtune.app.accel.SettingsAnalyses
 import de.yuuto.aimtune.app.accel.StoredSearches
 import de.yuuto.aimtune.app.blind.AxisErrors
 import de.yuuto.aimtune.app.blind.PastRound
+import de.yuuto.aimtune.app.accel.StagePlanReader
+import de.yuuto.aimtune.app.accel.StageProgress
 import de.yuuto.aimtune.core.accel.AccelSpec
 import de.yuuto.aimtune.core.accel.LookupCurve
 import de.yuuto.aimtune.core.accel.RawAccelProfile
@@ -138,6 +140,20 @@ class RoundProcessor(private val database: Database?, private val exportDir: Pat
         } catch (e: Exception) {
             log.log(System.Logger.Level.ERROR, "reading earlier calibration rounds failed: ${e.message}", e)
             PriorCalibration.NONE
+        }
+    }
+
+    /**
+     * Where the stage plan on top of [baseCurve] stands at this DPI and sensitivity (docs/FIND-CURVE-REDESIGN.md section 13), read on the
+     * storage thread from the stored rounds; null without a stage ever played, without a database or if reading fails.
+     */
+    fun stagePlan(dpi: Double, cm360: Double, baseCurve: RawAccelProfile, weights: MetricWeights, maxStep: Double = Double.POSITIVE_INFINITY): StageProgress? {
+        val repo = repository ?: return null
+        return try {
+            executor.submit<StageProgress?> { StagePlanReader.read(repo, baseCurve, dpi, cm360, weights, maxStep) }.get()
+        } catch (e: Exception) {
+            log.log(System.Logger.Level.ERROR, "reading the stage plan failed: ${e.message}", e)
+            null
         }
     }
 

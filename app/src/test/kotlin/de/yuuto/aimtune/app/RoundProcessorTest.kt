@@ -1,6 +1,7 @@
 package de.yuuto.aimtune.app
 
 import de.yuuto.aimtune.app.accel.PriorCalibration
+import de.yuuto.aimtune.core.accel.FeltStepFamily
 import de.yuuto.aimtune.core.accel.RawAccelArgs
 import de.yuuto.aimtune.core.accel.RawAccelCapMode
 import de.yuuto.aimtune.core.accel.RawAccelMode
@@ -11,6 +12,7 @@ import de.yuuto.aimtune.core.recording.RoundRecording
 import de.yuuto.aimtune.core.scenario.ScenarioKind
 import de.yuuto.aimtune.core.scenario.Target
 import de.yuuto.aimtune.core.scenario.TargetEvent
+import de.yuuto.aimtune.core.score.MetricWeights
 import de.yuuto.aimtune.core.sim.HeadlessRound
 import de.yuuto.aimtune.core.sim.SimulatedPlayer
 import de.yuuto.aimtune.storage.Database
@@ -76,6 +78,31 @@ class RoundProcessorTest {
         assertEquals(800.0, last.dpi)
         assertEquals(40.0, last.cm360)
         assertEquals(3, last.data.rounds)
+        processor.close()
+    }
+
+    @Test
+    fun `the stage plan is read from rounds of the player's curve and of its stored stages, and nothing else`() {
+        val processor = RoundProcessor(Database.open(dir.resolve("plan.db")))
+        val own = RawAccelProfile("default", RawAccelArgs(RawAccelMode.CLASSIC, gain = true, inputOffset = 10.0, capX = 62.5, capY = 1.6, capMode = RawAccelCapMode.IN_OUT), 600.0, 800.0)
+        val family = FeltStepFamily(own, 800.0)
+        val stage = family.table(0.08, 9.0, 22.0)
+        val other = family.table(0.11, 9.0, 22.0)
+        val kinds = listOf(ScenarioKind.FLICK, ScenarioKind.SWITCHING, ScenarioKind.MICRO)
+        fun play(accel: de.yuuto.aimtune.core.accel.AccelModel?, run: Long, startedAt: Long) = (0 until 9).forEach { i ->
+            val kind = kinds[i % kinds.size]
+            processor.submit(HeadlessRound.of(kind, SimulatedPlayer(), 800.0, 40.0, run * 100 + i, 20, accel = accel), startedAtMs = startedAt + i, blind = false, gameId = "valorant", runKey = run, kind = SessionKind.ACCEL_AB)
+        }
+        play(own, 1, 1_000)
+        assertNull(processor.stagePlan(800.0, 40.0, own, MetricWeights.DEFAULT), "no stage was played yet")
+        play(stage, 2, 100_000_000)
+        play(other, 3, 200_000_000)
+        val progress = checkNotNull(processor.stagePlan(800.0, 40.0, own, MetricWeights.DEFAULT))
+        assertEquals(1, progress.state.rung, "the plan is on its first rung")
+        assertEquals(mapOf(0 to 1, 1 to 1), progress.sessionsByRung, "a table that is no rung of the ladder is not part of the plan")
+        assertEquals(0.08, checkNotNull(progress.anchors).step, 1e-3)
+        assertTrue(progress.stage != null)
+        assertNull(processor.stagePlan(800.0, 55.0, own, MetricWeights.DEFAULT), "another sensitivity has no plan")
         processor.close()
     }
 
