@@ -11,10 +11,10 @@ import kotlinx.serialization.json.JsonObject
 data class PatchedChange(val field: String, val old: String, val new: String, val passive: Boolean)
 
 /**
- * Stage 1 of the draft from the movement profile (docs/FIND-CURVE-REDESIGN.md step 5): the [table] the trainer played (total gain, the
- * player's curve with its rise scaled to [strength]) for [profileName] of [source]. The copy plays this table instead of the profile's curve.
+ * Stage 1 of the draft from the movement profile (docs/FIND-CURVE-REDESIGN.md section 12): the [table] the trainer played (total gain, the
+ * player's curve with a rise of [step] in the gain between [anchorSlow] and [anchorFast] in/s) for [profileName] of [source]. The copy plays this table instead of the profile's curve.
  */
-class DraftStage(val source: RefineSource, val profileName: String, val table: LookupCurve, val strength: Double)
+class DraftStage(val source: RefineSource, val profileName: String, val table: LookupCurve, val step: Double, val anchorSlow: Double, val anchorFast: Double)
 
 /**
  * The patched copy of the player's `settings.json`: the profile [imported] is copied under [exportName] with the curve of
@@ -45,7 +45,7 @@ class PatchedCopy(
     /** The blind-tested changes first, then the passive ones. */
     fun changes(): List<PatchedChange> = buildList {
         if (stage != null) {
-            add(PatchedChange("curve", imported.args.mode.json, "table of ${stage.table.speeds.size} points: your curve with its rise at x%.2f (stage 1 of the draft)".format(java.util.Locale.ROOT, stage.strength), passive = false))
+            add(PatchedChange("curve", imported.args.mode.json, "table of ${stage.table.speeds.size} points: your curve with +%.0f %% gain from %.0f in/s (whole step from %.0f in/s)".format(java.util.Locale.ROOT, stage.step * 100.0, stage.anchorSlow, stage.anchorFast), passive = false))
         } else {
             refined?.let { addAll(RefineDiff.changes(imported, it).map { c -> PatchedChange(c.field, c.old, c.new, passive = false) }) }
         }

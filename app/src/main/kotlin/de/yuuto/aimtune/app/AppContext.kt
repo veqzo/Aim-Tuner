@@ -453,7 +453,8 @@ class AppContext(
     fun showDraftExport(run: AccelRun) {
         val table = run.draftOffer?.curve as? LookupCurve ?: return
         val imported = hub.restoreImported() ?: return
-        hub.rememberStage(DraftStage(imported.source, imported.profileName, table, checkNotNull(run.draft).stage1))
+        val plan = checkNotNull(run.draft?.felt)
+        hub.rememberStage(DraftStage(imported.source, imported.profileName, table, plan.steps.first(), plan.anchorSlow, plan.anchorFast))
         showPatchedExport()
     }
 

@@ -1,6 +1,7 @@
 package de.yuuto.aimtune.app.accel
 
 import de.yuuto.aimtune.core.accel.AccelSpec
+import de.yuuto.aimtune.core.accel.FeltStepFamily
 import de.yuuto.aimtune.core.accel.OwnCurveStrength
 import de.yuuto.aimtune.core.accel.RawAccelProfile
 
@@ -11,5 +12,6 @@ import de.yuuto.aimtune.core.accel.RawAccelProfile
  */
 class SearchBase(val profile: RawAccelProfile, dpi: Double) {
     val strengths = OwnCurveStrength(profile, dpi)
+    val felt = FeltStepFamily(profile, dpi)
     val spec: String = AccelSpec.encodeModel(profile)
 }

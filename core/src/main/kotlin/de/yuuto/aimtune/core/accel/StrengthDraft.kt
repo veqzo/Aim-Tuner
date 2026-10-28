@@ -32,6 +32,8 @@ data class StrengthDraft(
     val strength: Double,
     val stage1: Double,
     val basis: DraftBasis,
+    /** Felt steps on top of the curve at the hand's own speeds; null when the speeds do not span enough to tell fast from slow. */
+    val felt: FeltPlan? = null,
 ) {
     companion object {
         /** How many error standard deviations the gain may change by at any speed in the common range. */
@@ -55,6 +57,9 @@ private const val TRUST_FLOOR = 0.005 // as in the fit: no bin is trusted better
 private const val MIN_RISE = 1e-4
 private const val MIN_SPREAD = 1e-9
 private val MEDIAN_SE_FACTOR = sqrt(Math.PI / 2.0)
+
+/** The spread of the first-reach error behind a bin's standard error (the error of a median is the spread over sqrt(n) times this factor). */
+internal fun binSpread(point: GainPoint): Double = point.standardError * sqrt(point.count.toDouble()) / MEDIAN_SE_FACTOR
 
 /**
  * The draft for a player whose rounds were played with [delivered] (the total gain of the curve at a hand speed in in/s) and
@@ -86,7 +91,7 @@ fun draftStrength(analysis: AccelAnalysis, delivered: (Double) -> Double, z: Dou
     val common = points.filter { it.speed in low..high }.ifEmpty { points }
     val room = common.mapNotNull { point ->
         val rise = abs(ln(delivered(point.speed) / slowGain))
-        val spread = point.standardError * sqrt(point.count.toDouble()) / MEDIAN_SE_FACTOR
+        val spread = binSpread(point)
         if (rise < MIN_RISE) null else z * spread / rise
     }.minOrNull() ?: Double.POSITIVE_INFINITY
     val ceiling = min(OwnCurveStrength.MAX, 1.0 + room)
@@ -101,5 +106,6 @@ fun draftStrength(analysis: AccelAnalysis, delivered: (Double) -> Double, z: Dou
         weaker -> maxOf(estimate, floor) to DraftBasis.MEASURED_WEAKER
         else -> 1.0 + StrengthDraft.DESIGN_SHARE * (ceiling - 1.0) to DraftBasis.DESIGN
     }
-    return StrengthDraft(estimate, standardError, ceiling, floor, strength, 1.0 + (strength - 1.0) / 2.0, basis)
+    return StrengthDraft(estimate, standardError, ceiling, floor, strength, 1.0 + (strength - 1.0) / 2.0, basis,
+        feltPlan(analysis, z).takeIf { basis != DraftBasis.MEASURED_WEAKER })
 }

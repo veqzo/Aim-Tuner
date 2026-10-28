@@ -254,9 +254,12 @@ class AccelRun(
     var draft: StrengthDraft? = null
         private set
 
-    /** The first stage of the [draft] as a table to test against the player's curve; null without a draft or when stage 1 is the curve itself. */
+    /**
+     * The first felt step of the [draft] (a gain rise at the player's fast speeds, docs/FIND-CURVE-REDESIGN.md section 12) as a table to
+     * test against the player's curve; null without a draft or when even the smallest step is beyond what the error spread allows.
+     */
     val draftOffer: AccelFit?
-        get() = draft?.takeIf { CurveStrength.isCurve(it.stage1) }?.let { searchBase?.strengths?.offer(it.stage1) }
+        get() = draft?.felt?.let { plan -> plan.steps.firstOrNull()?.let { searchBase?.felt?.offer(it, plan.anchorSlow, plan.anchorFast) } }
 
     /** Begins the blind test of the draft's first stage against the player's own curve. */
     fun startDraftTest() {

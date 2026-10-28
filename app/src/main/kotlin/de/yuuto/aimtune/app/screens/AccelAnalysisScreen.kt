@@ -36,7 +36,7 @@ class AccelAnalysisScreen(ctx: AppContext, private val run: AccelRun) : AccelFit
         content.add(ui.label(reasonText(fit), Styles.BODY_MUTED, wrap = true)).left().width(TEXT_WIDTH).padBottom(16f).row()
         content.add(ui.label(t("accel.experimental"), Styles.CAPTION_MUTED, wrap = true)).left().width(TEXT_WIDTH).padBottom(32f).row()
         if (candidate != null) content.add(curveCard(candidate, fit.points)).left().width(CARD_WIDTH).padBottom(24f).row()
-        if (run.draftOffer != null) content.add(draftCard()).left().width(CARD_WIDTH).padBottom(24f).row()
+        if (run.draft != null) content.add(draftCard()).left().width(CARD_WIDTH).padBottom(24f).row()
         if (candidate == null && fit.points.size >= 2) {
             content.add(ui.caps(t("accel.analysis.chart_plain"))).left().padBottom(8f).row()
             content.add(ChartActor(ui, accelChart(ui.tokens, fit.points, null))).left().width(CARD_WIDTH).height(CHART_HEIGHT).padBottom(16f).row()
@@ -79,15 +79,15 @@ class AccelAnalysisScreen(ctx: AppContext, private val run: AccelRun) : AccelFit
         card.background(ui.skin.getDrawable(Styles.CARD))
         card.pad(DRAFT_CARD_PADDING)
         card.add(ui.caps(t("accel.draft.title"))).left().row()
-        card.add(ui.label(t("accel.draft.stage1", x(draft.stage1)), Styles.TITLE, wrap = true)).left().width(CARD_WIDTH - 2 * DRAFT_CARD_PADDING).padTop(8f).row()
-        val basis = when (draft.basis) {
-            DraftBasis.MEASURED_STRONGER -> t("accel.draft.basis_stronger", x(draft.estimate))
-            DraftBasis.MEASURED_WEAKER -> t("accel.draft.basis_weaker", x(draft.estimate))
-            DraftBasis.DESIGN -> t("accel.draft.basis_design", x(draft.estimate))
+        val plan = draft.felt
+        val step = plan?.steps?.firstOrNull()
+        val (text, style) = when {
+            draft.basis == DraftBasis.MEASURED_WEAKER -> t("accel.draft.basis_weaker", x(draft.estimate)) to Styles.CAPTION_MUTED
+            plan == null -> t("accel.draft.felt_span") to Styles.CAPTION_MUTED
+            step == null -> t("accel.draft.felt_none", "%.0f".format(Locale.ROOT, plan.maxStep * 100.0)) to Styles.CAPTION_MUTED
+            else -> t("accel.draft.felt", "%.0f".format(Locale.ROOT, step * 100.0), "%.0f".format(Locale.ROOT, plan.anchorSlow), "%.0f".format(Locale.ROOT, plan.anchorFast)) to Styles.TITLE
         }
-        card.add(ui.label(basis, Styles.CAPTION_MUTED, wrap = true)).left().width(CARD_WIDTH - 2 * DRAFT_CARD_PADDING).padTop(12f).row()
-        card.add(ui.label(t("accel.draft.goal", x(draft.strength), x(draft.floor), x(draft.ceiling)), Styles.CAPTION_MUTED, wrap = true))
-            .left().width(CARD_WIDTH - 2 * DRAFT_CARD_PADDING).padTop(8f).row()
+        card.add(ui.label(text, style, wrap = true)).left().width(CARD_WIDTH - 2 * DRAFT_CARD_PADDING).padTop(8f).row()
         card.add(ui.label(t("accel.draft.hint"), Styles.CAUTION, wrap = true)).left().width(CARD_WIDTH - 2 * DRAFT_CARD_PADDING).padTop(12f)
         return card
     }

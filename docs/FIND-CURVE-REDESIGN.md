@@ -261,6 +261,25 @@ Umgesetzt:
 
 Offen aus Schritt 7: Rest der UI-Texte (Begründung auf der Ergebnisseite), Stufenplan-Anzeige (hängt an Schritt 4).
 
+## 12. Stufen nach spürbarem Effekt (Folge aus dem ersten echten Test von Stufe 1)
+
+**Anlass:** Der Spieler hat Stufe 1 (Anstieg x1,125) gespielt und exportiert; die Kurve ist "quasi die gleiche". Das ist erwartet: Die eigene Kurve steigt über die Handgeschwindigkeit im Log nur um etwa 0,03, auch x2 bewegt den Gain um wenige Prozent. Das Skalieren des Anstiegs (Abschnitt 8-11) ist für diesen Spieler kein Hebel, den man spüren oder testen kann.
+
+**Umgesetzt (`core/.../accel/FeltStep.kt`, Entwurf von einem Opus-Agenten, von mir geprüft und eingebaut):**
+- Stufe = Gain-Aufschlag `X` für die schnellen Bewegungen auf der eigenen Kurve: `C(v) = B(v) * (1+X)^h(u)`, `h` = Smoothstep über die Log-Position `u` zwischen dem Median (`anchorSlow`) und dem 95. Perzentil (`anchorFast`) der Erstbewegungs-Geschwindigkeiten. Unter `anchorSlow` ist die Kurve exakt unverändert (Micro, Basis-Sensi), über `anchorFast` bleibt der Aufschlag bei `1+X`.
+- Leiter `X` in {0,08; 0,15; 0,25}. **Annahme, nicht belegt:** etwa 8 % Gain sind die Schwelle, ab der man einen Unterschied spürt.
+- Obergrenze `maxStep`: `ln(1+X) * h(u_i) <= BANDWIDTH_Z * Streuung_i` in jedem Bin zwischen 5. und 95. Perzentil mit `h > 0,05`. Es werden nur Leitersprossen bis dahin angeboten. Liegt schon 8 % darüber, gibt es **keinen Schritt**, und die Karte sagt das (mit dem erlaubten Höchstwert). Ein unspürbarer Schritt wird nicht angeboten.
+- Liegt `anchorFast / anchorSlow` unter 1,5 (`MIN_SPAN`), gibt es keinen Schritt ("schnell" lässt sich nicht von "langsam" trennen). Bei `MEASURED_WEAKER` gibt es nur den Hinweis, keinen steigenden Schritt.
+- `FeltStepFamily(base, dpi)`: Tabelle auf dem Raster von `OwnCurveStrength`, `offer`, `stepOf` (liest den Plateau-Wert zurück; `OwnCurveStrength.strengthOf` liefert für solche Tabellen null, also bleiben gespeicherte Suchen total).
+- UI: Karte "Entwurf" zeigt jetzt den Schritt (oder den Grund, warum keiner kommt); `DraftStage` trägt Schritt und Anker, der Export-Bildschirm nennt "+X % Gain ab a in/s (voll ab b in/s)". Die alten Stärke-Texte sind entfernt.
+- Tests: `FeltStepTest` (5), angepasst `PatchedCopyTest`, `HubSessionTest`, `AccelRunTest`.
+
+**Befund aus den Tests:**
+- Die Streuungsgrenze ist streng: mit z = 0,5 braucht ein Schritt von 8 % an der schnellen Seite eine Streuung der Erstbewegungen von mindestens etwa 0,15 im Log (Test: Streuung 0,05 erlaubt keinen, 0,17 ein bis zwei, 0,45 alle drei Sprossen). Eine ruhige Hand bekommt also keinen Schritt. Ob das für echte Daten zu streng ist, ist offen (z ist eine Heuristik).
+- Die simulierte Hand bewegt sich in einem engen Geschwindigkeitsband (`MIN_SPAN` verfehlt), also zeigt der Lauf mit `SimulatedPlayer` keinen Schritt. Der Pfad "Schritt wird angeboten und getestet" ist deshalb nur im Kern getestet, nicht über `AccelRun`.
+
+**Nicht geprüft:** Die Handgeschwindigkeits-Anker kommen aus Spitzentempi der Erstbewegungen; ob sie die Tempi echter Flicks treffen, ist ungeprüft (Flicks liegen vermutlich über dem 95. Perzentil, dort wirkt nur das Plateau). Die Anker werden bei jeder Analyse neu berechnet und nicht eingefroren; für den Stufenplan (Schritt 4) müssen sie in der Session gespeichert werden. Exportierte Datei nicht in Raw Accel geladen.
+
 ## Regeln dieser Session
 Kein Code, keine Commits, kein Push, kein Merge nach `main`, `user-rawaccel-settings.json` und Datenbanken nur lesend. Der Nutzerprofil-Inhalt gehört in keinen Bericht.
 

@@ -1,6 +1,6 @@
 package de.yuuto.aimtune.app.accel
 
-import de.yuuto.aimtune.core.accel.OwnCurveStrength
+import de.yuuto.aimtune.core.accel.FeltStepFamily
 import de.yuuto.aimtune.core.accel.LookupCurve
 import de.yuuto.aimtune.core.accel.RawAccelProfile
 import de.yuuto.aimtune.storage.PassiveChanges
@@ -60,14 +60,14 @@ class PatchedCopyTest {
 
     @Test
     fun `a draft stage makes a copy that plays the table, listed as one blind-testable change`() {
-        val table = OwnCurveStrength(profile, 800.0).model(1.3) as LookupCurve
-        val stage = DraftStage(imported.source, imported.profileName, table, 1.3)
+        val table = FeltStepFamily(profile, 800.0).table(0.15, 9.0, 22.0)
+        val stage = DraftStage(imported.source, imported.profileName, table, 0.15, 9.0, 22.0)
         val copy = PatchedCopy(imported.source, profile, null, PassiveChanges(), stage)
         assertTrue(copy.hasChanges)
         val change = copy.changes().single()
         assertEquals("curve", change.field)
         assertFalse(change.passive)
-        assertTrue("x1.30" in change.new, change.new)
+        assertTrue("+15 %" in change.new, change.new)
         val patched = profiles(copy.root())
         assertEquals(profiles(imported.source.file.root), patched.dropLast(1), "the user's profiles are as they were")
         assertEquals(copy.exportName, patched.last().getValue("name").jsonPrimitive.content)

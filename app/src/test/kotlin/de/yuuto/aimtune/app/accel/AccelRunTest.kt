@@ -326,19 +326,14 @@ class AccelRunTest {
     }
 
     @Test
-    fun `after a calibration on the own curve the draft of the movement profile can be tested blind against that curve`() {
+    fun `a simulated hand that moves at about one speed gets a draft but no felt step to test`() {
         val run = AccelRun(base, MetricWeights.DEFAULT, runKey = 1, seed = 3, baseCurve = own)
         while (run.phase == AccelPhase.CALIBRATION) play(run, SimulatedPlayer())
         val draft = assertNotNull(run.draft, "a draft is made for every analysis on the player's own curve")
-        val offer = assertNotNull(run.draftOffer)
-        assertTrue(draft.stage1 > 1.0 && draft.stage1 <= draft.strength, "stage 1 is the first step of the draft: $draft")
-        assertTrue(offer.curve is LookupCurve)
-        run.startDraftTest()
-        assertEquals(AccelPhase.TEST, run.phase)
-        assertTrue(run.isDraft && !run.isTrial && !run.isSearch)
-        assertEquals(offer, run.candidate)
-        val configs = (0 until 2).map { run.nextRoundConfig().also { _ -> play(run, SimulatedPlayer()) } }
-        assertEquals(setOf<Any?>(own, offer.curve), configs.map { it.accel }.toSet(), "the draft against the player's curve")
+        // The simulated hand's first reaches are all within a narrow band of speeds, so fast cannot be told from slow (FeltStep.MIN_SPAN).
+        assertNull(draft.felt)
+        assertNull(run.draftOffer)
+        assertFailsWith<IllegalStateException> { run.startDraftTest() }
     }
 
     @Test

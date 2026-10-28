@@ -16,8 +16,8 @@ import kotlin.math.ln
  * another device DPI would act at other speeds and is refused before it gets here.
  */
 class OwnCurveStrength(private val base: RawAccelProfile, private val dpi: Double) {
-    private val speeds = List(GRID_POINTS) { GRID_FROM * exp(ln(GRID_TO / GRID_FROM) * it / (GRID_POINTS - 1)) }
-    private val gains = speeds.map { base.planningGain(it, dpi) }
+    internal val speeds = List(GRID_POINTS) { GRID_FROM * exp(ln(GRID_TO / GRID_FROM) * it / (GRID_POINTS - 1)) }
+    internal val gains = speeds.map { base.planningGain(it, dpi) }
     private val slowGain = gains.first()
     private val logRise = gains.map { ln(it / slowGain) }
 
