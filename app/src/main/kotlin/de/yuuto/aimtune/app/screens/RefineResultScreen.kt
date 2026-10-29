@@ -41,7 +41,9 @@ class RefineResultScreen(ctx: AppContext, private val run: RefineRun) : UiScreen
         val content = Table()
         content.add(ui.label(heading(), Styles.HEADING)).left().padBottom(24f).row()
         content.add(ui.label(explanation(), Styles.BODY_MUTED, wrap = true)).left().width(TEXT_WIDTH).padBottom(24f).row()
-        if (better) content.add(diffCard()).left().width(CARD_WIDTH).row()
+        if (better) content.add(diffCard()).left().width(CARD_WIDTH).padBottom(24f).row()
+        if (run.engine.rounds.lastOrNull()?.phase == de.yuuto.aimtune.core.accel.RefinePhase.TEST) content.add(refineFeelPanel(ctx, run) { rebuild() }).left().padBottom(16f).row()
+        content.add(refineFeelTestCard(ctx, run, CARD_WIDTH)).left().row()
 
         val footer = Table()
         footer.add(ui.button(t("common.back_to_menu"), Styles.TEXT) { ctx.showMenu() }).left().height(FOOTER_BUTTON_HEIGHT).padLeft(8f)

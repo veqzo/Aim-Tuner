@@ -71,6 +71,7 @@ class RefineEngine(
     private var stageIndex = 0
     private var search: RefineSearch? = null
     private var currentValue = RefineParameter.NEUTRAL
+    private val roundLog = mutableListOf<RefineRoundLog>()
 
     var phase = RefinePhase.WARMUP
         private set
@@ -80,6 +81,18 @@ class RefineEngine(
 
     /** The results of the finished stages. */
     val stageResults: List<RefineResult> get() = results.toList()
+
+    /** The rounds played so far with what was blind about each and the player's rating, if given. */
+    val rounds: List<RefineRoundLog> get() = roundLog.toList()
+
+    /** True while the last played round has no rating yet. */
+    val canVote: Boolean get() = roundLog.lastOrNull()?.vote == null && roundLog.isNotEmpty()
+
+    /** Rates the round that was played last. The rating is kept next to the score and never changes what the search or the test decides. */
+    fun vote(vote: FeelVote) {
+        check(canVote) { "there is no round to rate" }
+        roundLog[roundLog.lastIndex] = roundLog.last().copy(vote = vote)
+    }
 
     /** The stage being searched, or the one just finished while its result is shown. */
     val stage: RefineParameter? get() = if (phase == RefinePhase.SEARCH || phase == RefinePhase.STAGE_RESULT) stages.getOrNull(stageIndex) else null
@@ -132,16 +145,19 @@ class RefineEngine(
     fun record(scoreInputs: Map<ScoreMetric, Double>) {
         when (phase) {
             RefinePhase.WARMUP -> {
+                roundLog += RefineRoundLog(RefinePhase.WARMUP, null, null, null)
                 warmupDone++
                 if (warmupDone >= warmupRounds) beginStage(0)
             }
             RefinePhase.SEARCH -> {
                 val active = checkNotNull(search)
+                roundLog += RefineRoundLog(RefinePhase.SEARCH, active.parameter, currentValue, null)
                 active.record(currentValue, scenarios[active.roundsPlayed % scenarios.size].id, scoreInputs)
                 if (active.roundsPlayed >= active.plannedRounds) finishStage()
             }
             RefinePhase.TEST -> {
                 val round = plan.round(outcomes.size)
+                roundLog += RefineRoundLog(RefinePhase.TEST, null, null, round.condition == AbCondition.ACCEL)
                 outcomes += AbOutcome(round.pair, round.condition, scoreInputs, round.scenario.id)
                 if (outcomes.size % 2 == 0) decide()
             }

@@ -107,6 +107,23 @@ class RoundProcessorTest {
     }
 
     @Test
+    fun `a rating goes to the round just saved and only if its seed matches`() {
+        val file = dir.resolve("feel.db")
+        val processor = RoundProcessor(Database.open(file))
+        processor.submit(recording(11), startedAtMs = 10, blind = false, gameId = "valorant", runKey = 1, kind = SessionKind.ACCEL_REFINE)
+        processor.recordFeel(seed = 11, vote = -1)
+        processor.submit(recording(12), startedAtMs = 20, blind = false, gameId = "valorant", runKey = 1, kind = SessionKind.ACCEL_REFINE)
+        processor.recordFeel(seed = 999, vote = 1)
+        processor.close()
+        Database.open(file).use { db ->
+            val repo = RoundRepository(db)
+            val ids = repo.rounds().associate { it.seed to it.id }
+            assertEquals(-1, repo.feelOf(ids.getValue(11)))
+            assertNull(repo.feelOf(ids.getValue(12)), "a rating for another seed is dropped")
+        }
+    }
+
+    @Test
     fun `calibration rounds played with the player's own curve come back only for that curve`() {
         val processor = RoundProcessor(Database.open(dir.resolve("own.db")))
         val own = RawAccelProfile("default", RawAccelArgs(RawAccelMode.CLASSIC, gain = true, inputOffset = 10.0, capX = 62.5, capY = 1.6, capMode = RawAccelCapMode.IN_OUT), 600.0, 800.0)

@@ -39,7 +39,8 @@ class RefineBetweenScreen(ctx: AppContext, private val run: RefineRun) : UiScree
         content.add(ui.caps(phaseName())).left().padBottom(12f).row()
         content.add(ui.progressBar(done.toFloat() / total, BAR_WIDTH)).left().padBottom(12f).row()
         content.add(ui.label(t("refine.between.progress", done, total), Styles.BODY_MUTED)).left().padBottom(40f).row()
-        content.add(ui.label(explanation(), Styles.CAPTION_MUTED, wrap = true)).left().width(TEXT_WIDTH)
+        content.add(ui.label(explanation(), Styles.CAPTION_MUTED, wrap = true)).left().width(TEXT_WIDTH).padBottom(32f).row()
+        if (done > 0) content.add(refineFeelPanel(ctx, run) { rebuild() }).left()
 
         val footer = Table()
         footer.add(ui.button(t("common.stop"), Styles.SECONDARY) { ctx.showMenu() }).left().height(FOOTER_BUTTON_HEIGHT).padLeft(8f)

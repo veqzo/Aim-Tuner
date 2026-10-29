@@ -24,7 +24,7 @@ import kotlin.math.abs
  * Power and noaccel have no stage. By-component profiles apply the factor to both axes.
  */
 enum class RefineParameter(val min: Double, val max: Double) {
-    HIGH_GAIN(0.75, 1.33),
+    HIGH_GAIN(0.5, 2.0),
     TRANSITION(0.5, 2.0),
     ;
 

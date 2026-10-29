@@ -134,6 +134,22 @@ class RoundRepositoryTest {
     }
 
     @Test
+    fun `a rating of a round is kept, replaced by a new one and removed with the round`() {
+        Database.open(dir.resolve("a.db")).use { db ->
+            val repo = RoundRepository(db)
+            val session = repo.createSession(1, "valorant", 800.0, SessionKind.ACCEL_REFINE)
+            val original = recording()
+            val id = repo.saveRound(session, original, startedAtMs = 2, blind = false, metrics = computeRoundMetrics(original))
+            assertEquals(null, repo.feelOf(id))
+            repo.setFeel(id, -1)
+            assertEquals(-1, repo.feelOf(id))
+            repo.setFeel(id, 1)
+            assertEquals(1, repo.feelOf(id))
+            assertFailsWith<IllegalArgumentException> { repo.setFeel(id, 2) }
+        }
+    }
+
+    @Test
     fun `the acceleration of a round is stored and loaded`() {
         Database.open(dir.resolve("a.db")).use { db ->
             val repo = RoundRepository(db)

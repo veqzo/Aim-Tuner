@@ -47,8 +47,13 @@ class RefineRun(
             else -> UiText("")
         }
 
+    /** The seed of the round played last, which a rating belongs to. */
+    var lastSeed: Long = 0L
+        private set
+
     fun nextRoundConfig(): TrainerConfig {
         val round = engine.nextRound()
+        lastSeed = round.seed
         return baseConfig.copy(cm360 = round.cm360, scenario = round.scenario, seed = round.seed, accel = round.profile)
     }
 

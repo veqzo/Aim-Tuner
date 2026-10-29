@@ -55,6 +55,8 @@ private val MIGRATIONS = listOf(
     """.trimIndent(),
     // Version 2: the acceleration curve a round was played with (AccelSpec text), null for none.
     "ALTER TABLE round ADD COLUMN accel TEXT;",
+    // Version 3: how the player rated a refine round after playing it (-1 worse, 0 same, 1 better); a note next to the score, not a metric.
+    "CREATE TABLE round_feel (round_id INTEGER PRIMARY KEY REFERENCES round(id) ON DELETE CASCADE, vote INTEGER NOT NULL);",
 )
 
 /** One SQLite connection guarded by a lock; the app is single-user so one writer is enough. */

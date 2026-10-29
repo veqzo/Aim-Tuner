@@ -90,6 +90,26 @@ class RoundRepository(private val database: Database) {
             roundId
         }
 
+    /** Keeps the player's rating of a round: -1 worse, 0 same, 1 better. A new rating replaces the old one. */
+    fun setFeel(roundId: Long, vote: Int) {
+        require(vote in -1..1) { "a rating is -1, 0 or 1" }
+        database.transaction { c ->
+            c.prepareStatement("INSERT OR REPLACE INTO round_feel (round_id, vote) VALUES (?, ?)").use { s ->
+                s.setLong(1, roundId)
+                s.setInt(2, vote)
+                s.executeUpdate()
+            }
+        }
+    }
+
+    /** The rating of a round, or null when the player gave none. */
+    fun feelOf(roundId: Long): Int? = database.transaction { c ->
+        c.prepareStatement("SELECT vote FROM round_feel WHERE round_id = ?").use { s ->
+            s.setLong(1, roundId)
+            s.executeQuery().use { rs -> if (rs.next()) rs.getInt(1) else null }
+        }
+    }
+
     fun loadRecording(roundId: Long): RoundRecording? = database.transaction { c ->
         c.prepareStatement(
             "SELECT scenario, seed, dpi, cm360, start_nanos, duration_nanos, mouse_event_count, mouse_events, accel FROM round WHERE id = ?",

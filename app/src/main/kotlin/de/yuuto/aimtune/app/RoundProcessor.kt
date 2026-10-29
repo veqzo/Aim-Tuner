@@ -285,12 +285,33 @@ class RoundProcessor(private val database: Database?, private val exportDir: Pat
                     sessionId = it
                     sessionKey = key
                 }
-            repo.saveRound(session, recording, startedAtMs, blind, metrics)
+            lastSaved = recording.seed to repo.saveRound(session, recording, startedAtMs, blind, metrics)
             storedCounter.incrementAndGet()
             null
         } catch (e: Exception) {
             log.log(System.Logger.Level.ERROR, "saving round failed", e)
             e.message ?: e.javaClass.simpleName
+        }
+    }
+
+    /** The seed and id of the round saved last; only the storage thread touches it. */
+    private var lastSaved: Pair<Long, Long>? = null
+
+    /**
+     * Keeps the player's rating of the round with this [seed], queued behind the saving of that round. Only the round saved last can
+     * be rated, and only if its seed matches, so a failed save never gives its rating to another round.
+     */
+    fun recordFeel(seed: Long, vote: Int) {
+        val repo = repository ?: return
+        executor.execute {
+            val last = lastSaved
+            if (last != null && last.first == seed) {
+                try {
+                    repo.setFeel(last.second, vote)
+                } catch (e: Exception) {
+                    log.log(System.Logger.Level.ERROR, "saving a rating failed: ${e.message}", e)
+                }
+            }
         }
     }
 
