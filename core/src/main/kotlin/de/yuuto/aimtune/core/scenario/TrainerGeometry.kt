@@ -70,9 +70,12 @@ data class TrainerGeometry(
     val range: RangeGeometry? = null,
     /** Size and speed of a player of the game; null when the profile has no `body` block. */
     val body: AgentBody? = null,
+    /** Ground acceleration and friction of a player of the game; null when the profile has no `movement` block. */
+    val movement: GroundMovement? = null,
     val verified: Boolean = false,
 ) {
     init {
+        require(movement == null || body != null) { "a movement block needs a body block for the top speeds" }
         require(fieldYawDegrees in 5.0..90.0 && fieldPitchDegrees in 3.0..60.0) { "field must be 5-90 x 3-60 degrees" }
         require(flickAngles.isNotEmpty() && flickAngles.sumOf { it.weight } > 0.0) { "flick angles need a positive weight" }
         require(flickAngles.zipWithNext().all { (a, b) -> a.maxDegrees < b.maxDegrees }) { "flick angle buckets must be increasing" }
@@ -81,6 +84,9 @@ data class TrainerGeometry(
         require(eyeHeightMeters in 0.5..3.0 && headHeightMeters in 0.5..3.0) { "eye and head height must be in 0.5..3 m" }
         require(clickTargetDiameterDegrees.max < 30.0 && trackingDiameterDegrees.max < 30.0) { "target diameters over 30 degrees are not targets" }
     }
+
+    /** How a player of the game moves on the ground; null without a `body` and a `movement` block. */
+    val locomotion: Locomotion? get() = if (body != null && movement != null) Locomotion(body, movement) else null
 
     /** Pitch in degrees at which the head of an enemy standing on the player's level at [distance] meters appears (negative: below the crosshair). */
     fun levelPitchDegrees(distance: Double): Double = Math.toDegrees(atan((headHeightMeters - eyeHeightMeters) / distance))

@@ -222,6 +222,60 @@
         }
       }
     },
+    "movement": {
+      "accel": 18,
+      "friction": 3.3,
+      "brakingFriction": 21.5,
+      "frictionMin": 11,
+      "aboveMaxSpeedDecay": 13,
+      "walkAccelFactor": 0.55,
+      "walkBrakingFactor": 0.55,
+      "crouchAccelFactor": 0.4,
+      "crouchFrictionFactor": 0.8,
+      "crouchFrictionMinFactor": 0.85,
+      "valueNotes": {
+        "accel": {
+          "verified": false,
+          "source": "open-aim commit 807f557 (github.com/unkwsr/open-aim, read only, no code copied): ground acceleration 18 m/s^2 while a movement key is held. Riot publishes no movement constants."
+        },
+        "friction": {
+          "verified": false,
+          "source": "open-aim commit 807f557 (github.com/unkwsr/open-aim, read only, no code copied): friction 3.3 per second on the velocity part against the key (turning, counter-strafe). Riot publishes no movement constants."
+        },
+        "brakingFriction": {
+          "verified": false,
+          "source": "open-aim commit 807f557 (github.com/unkwsr/open-aim, read only, no code copied): braking friction 21.5 per second without a movement key. Riot publishes no movement constants."
+        },
+        "frictionMin": {
+          "verified": false,
+          "source": "open-aim commit 807f557 (github.com/unkwsr/open-aim, read only, no code copied): minimum braking deceleration 11 m/s^2 without a movement key. Riot publishes no movement constants."
+        },
+        "aboveMaxSpeedDecay": {
+          "verified": false,
+          "source": "open-aim commit 807f557 (github.com/unkwsr/open-aim, read only, no code copied): a speed above the top speed decays at 13 m/s^2. Riot publishes no movement constants."
+        },
+        "walkAccelFactor": {
+          "verified": false,
+          "source": "open-aim commit 807f557 (github.com/unkwsr/open-aim, read only, no code copied): walk state scales the acceleration by 0.55. Riot publishes no movement constants."
+        },
+        "walkBrakingFactor": {
+          "verified": false,
+          "source": "open-aim commit 807f557 (github.com/unkwsr/open-aim, read only, no code copied): walk state scales the braking friction by 0.55. Riot publishes no movement constants."
+        },
+        "crouchAccelFactor": {
+          "verified": false,
+          "source": "open-aim commit 807f557 (github.com/unkwsr/open-aim, read only, no code copied): crouch state scales the acceleration by 0.4. Riot publishes no movement constants."
+        },
+        "crouchFrictionFactor": {
+          "verified": false,
+          "source": "open-aim commit 807f557 (github.com/unkwsr/open-aim, read only, no code copied): crouch state scales the friction by 0.8. Riot publishes no movement constants."
+        },
+        "crouchFrictionMinFactor": {
+          "verified": false,
+          "source": "open-aim commit 807f557 (github.com/unkwsr/open-aim, read only, no code copied): crouch state scales the minimum braking deceleration by 0.85. Riot publishes no movement constants."
+        }
+      }
+    },
     "verified": false
   }
 }

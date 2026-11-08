@@ -1,6 +1,7 @@
 package de.yuuto.aimtune.games
 
 import de.yuuto.aimtune.core.scenario.AgentBody
+import de.yuuto.aimtune.core.scenario.GroundMovement
 import de.yuuto.aimtune.core.scenario.AngleBucket
 import de.yuuto.aimtune.core.scenario.ArenaFeature
 import de.yuuto.aimtune.core.scenario.ArenaFeatureKind
@@ -241,6 +242,51 @@ private data class BodyBlockDto(
     }
 }
 
+/**
+ * The `movement` block of the `trainer` block: ground acceleration and friction of a player (M23). It needs a `body` block
+ * for the top speeds. Every field is required, and [valueNotes] names the source of each value, as in the `body` block.
+ */
+@Serializable
+private data class MovementBlockDto(
+    val accel: Double,
+    val friction: Double,
+    val brakingFriction: Double,
+    val frictionMin: Double,
+    val aboveMaxSpeedDecay: Double,
+    val walkAccelFactor: Double,
+    val walkBrakingFactor: Double,
+    val crouchAccelFactor: Double,
+    val crouchFrictionFactor: Double,
+    val crouchFrictionMinFactor: Double,
+    val valueNotes: Map<String, RangeValueNoteDto>,
+) {
+    fun toMovement(): GroundMovement {
+        val missing = REQUIRED_NOTES - valueNotes.keys
+        require(missing.isEmpty()) { "movement.valueNotes is missing a source for ${missing.joinToString()}" }
+        require(valueNotes.values.all { it.source.isNotBlank() }) { "every movement.valueNotes entry needs a source" }
+        return GroundMovement(
+            accel = accel,
+            friction = friction,
+            brakingFriction = brakingFriction,
+            frictionMin = frictionMin,
+            aboveMaxSpeedDecay = aboveMaxSpeedDecay,
+            walkAccelFactor = walkAccelFactor,
+            walkBrakingFactor = walkBrakingFactor,
+            crouchAccelFactor = crouchAccelFactor,
+            crouchFrictionFactor = crouchFrictionFactor,
+            crouchFrictionMinFactor = crouchFrictionMinFactor,
+            verified = valueNotes.values.all { it.verified },
+        )
+    }
+
+    companion object {
+        val REQUIRED_NOTES = setOf(
+            "accel", "friction", "brakingFriction", "frictionMin", "aboveMaxSpeedDecay",
+            "walkAccelFactor", "walkBrakingFactor", "crouchAccelFactor", "crouchFrictionFactor", "crouchFrictionMinFactor",
+        )
+    }
+}
+
 /** The `trainer` block of a profile; every field is optional and falls back to [TrainerGeometry.DEFAULT]. */
 @Serializable
 private data class TrainerDto(
@@ -262,6 +308,7 @@ private data class TrainerDto(
     val arena: ArenaDto? = null,
     val range: RangeBlockDto? = null,
     val body: BodyBlockDto? = null,
+    val movement: MovementBlockDto? = null,
     val verified: Boolean = false,
 ) {
     fun toGeometry(horizontalFovDegrees: Double): TrainerGeometry {
@@ -286,6 +333,7 @@ private data class TrainerDto(
             arena = arena?.toLayout() ?: d.arena,
             range = range?.toGeometry(),
             body = body?.toBody(),
+            movement = movement?.toMovement(),
             verified = verified,
         )
     }

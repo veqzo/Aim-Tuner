@@ -1,5 +1,6 @@
 package de.yuuto.aimtune.games
 
+import de.yuuto.aimtune.core.scenario.Gait
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
@@ -240,5 +241,38 @@ class GameProfilesTest {
         val error = assertFailsWith<GameProfileException> { parseGameProfile(withBody(bodyNotes - "walkSpeedMetersPerSecond")) }
         assertTrue("walkSpeedMetersPerSecond" in error.message.orEmpty())
         assertFailsWith<GameProfileException> { parseGameProfile(withBody(bodyNotes).replace("\"walkSpeedMetersPerSecond\":2.5", "\"walkSpeedMetersPerSecond\":6.0")) }
+    }
+
+    private val movementKeys = listOf(
+        "accel", "friction", "brakingFriction", "frictionMin", "aboveMaxSpeedDecay",
+        "walkAccelFactor", "walkBrakingFactor", "crouchAccelFactor", "crouchFrictionFactor", "crouchFrictionMinFactor",
+    )
+
+    private fun withMovement(notes: List<String>, body: Boolean = true): String {
+        val values = movementKeys.joinToString(",") { "\"$it\":${if (it.endsWith("Factor")) 0.5 else 10.0}" }
+        val entries = notes.joinToString(",") { "\"$it\":{\"verified\":false,\"source\":\"test\"}" }
+        val bodyEntries = bodyNotes.joinToString(",") { "\"$it\":{\"verified\":false,\"source\":\"test\"}" }
+        val bodyPart = if (body) bodyBlock.replace("{NOTES}", "{$bodyEntries}") + "," else ""
+        return valid.replace("\"sensitivity\"", "\"trainer\":{$bodyPart\"movement\":{$values,\"valueNotes\":{$entries}}},\"sensitivity\"")
+    }
+
+    @Test
+    fun `valorant has open-aim's ground movement, and a runner reaches its top speed in about 0,3 s`() {
+        val geometry = assertNotNull(bundled.find("valorant")).geometry
+        val movement = assertNotNull(geometry.movement)
+        assertEquals(18.0, movement.accel)
+        assertEquals(21.5, movement.brakingFriction)
+        assertEquals(false, movement.verified)
+        val motion = assertNotNull(geometry.locomotion)
+        assertEquals(0.3, motion.ticksToTopSpeed(Gait.RUN) * motion.tickSeconds, 0.01)
+    }
+
+    @Test
+    fun `a movement block needs a body block and a source for every value`() {
+        assertNull(parseGameProfile(valid).geometry.locomotion)
+        assertNotNull(parseGameProfile(withMovement(movementKeys)).geometry.locomotion)
+        val error = assertFailsWith<GameProfileException> { parseGameProfile(withMovement(movementKeys - "frictionMin")) }
+        assertTrue("frictionMin" in error.message.orEmpty())
+        assertFailsWith<GameProfileException> { parseGameProfile(withMovement(movementKeys, body = false)) }
     }
 }
