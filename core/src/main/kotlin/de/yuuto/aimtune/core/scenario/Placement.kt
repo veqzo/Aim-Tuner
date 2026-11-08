@@ -70,7 +70,7 @@ internal fun snapToFeature(g: TrainerGeometry, random: Random, spot: Spot): Spot
     val arena = g.arena
     if (arena.featureShare <= 0.0 || g.elevation.uniform || random.nextDouble() >= arena.featureShare) return spot
     val feature = arena.featureNear(spot.yaw) ?: return spot
-    val distance = feature.distanceMeters.coerceIn(g.clickTargetDistanceMeters.min, g.clickTargetDistanceMeters.max)
+    val distance = feature.distanceMeters.coerceIn(g.clickDistanceBounds.min, g.clickDistanceBounds.max)
     val pitch = spot.pitch - g.levelPitchDegrees(spot.distance) + g.levelPitchDegrees(distance)
     return Spot(feature.yawDegrees, pitch.coerceIn(-g.fieldPitchDegrees, g.fieldPitchDegrees), distance)
 }
@@ -86,8 +86,8 @@ internal fun ensureVisible(g: TrainerGeometry, random: Random, spot: Spot, margi
     repeat(MAX_VISIBILITY_TRIES) {
         val blocker = g.arena.occluderFor(current.yaw, current.distance, marginDegrees) ?: return current
         val nearest = blocker.distance - VISIBLE_GAP_METERS
-        current = if (nearest >= g.clickTargetDistanceMeters.min) {
-            val distance = random.nextDouble(g.clickTargetDistanceMeters.min, nearest)
+        current = if (nearest >= g.clickDistanceBounds.min) {
+            val distance = random.nextDouble(g.clickDistanceBounds.min, nearest)
             current.copy(pitch = current.pitch - g.levelPitchDegrees(current.distance) + g.levelPitchDegrees(distance), distance = distance)
         } else {
             val toward = if (current.yaw >= (blocker.yawLow + blocker.yawHigh) / 2) 1.0 else -1.0

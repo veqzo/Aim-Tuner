@@ -44,6 +44,12 @@ data class TrainerGeometry(
     val clickTargetDiameterDegrees: PositiveRange = PositiveRange(0.4, 1.9),
     /** Distance the click targets are drawn at; only the depth of the scene, the angular size is what counts. */
     val clickTargetDistanceMeters: PositiveRange = PositiveRange(6.0, 30.0),
+    /**
+     * Measured engagement distances (M23). When set, together with [body], a click target is drawn at a distance from
+     * this curve and is a head of [AgentBody.headDiameterMeters]: its angular size follows from the distance
+     * (2 atan(r / d)), and [clickTargetDiameterDegrees] and [clickTargetDistanceMeters] are not used.
+     */
+    val clickTargetDistanceQuantiles: QuantileCurve? = null,
     /** Angle from the previous target (where the crosshair is after a hit) for flick targets. */
     val flickAngles: List<AngleBucket> = DEFAULT_FLICK_ANGLES,
     /** Angle from the previous target for micro-adjust targets. */
@@ -76,6 +82,8 @@ data class TrainerGeometry(
 ) {
     init {
         require(movement == null || body != null) { "a movement block needs a body block for the top speeds" }
+        require(clickTargetDistanceQuantiles == null || body != null) { "distance quantiles need a body block for the head size" }
+        require(clickDistanceBounds.max < arena.wallDistanceMeters) { "click targets must stand in front of the wall (${arena.wallDistanceMeters} m)" }
         require(fieldYawDegrees in 5.0..90.0 && fieldPitchDegrees in 3.0..60.0) { "field must be 5-90 x 3-60 degrees" }
         require(flickAngles.isNotEmpty() && flickAngles.sumOf { it.weight } > 0.0) { "flick angles need a positive weight" }
         require(flickAngles.zipWithNext().all { (a, b) -> a.maxDegrees < b.maxDegrees }) { "flick angle buckets must be increasing" }
@@ -84,6 +92,19 @@ data class TrainerGeometry(
         require(eyeHeightMeters in 0.5..3.0 && headHeightMeters in 0.5..3.0) { "eye and head height must be in 0.5..3 m" }
         require(clickTargetDiameterDegrees.max < 30.0 && trackingDiameterDegrees.max < 30.0) { "target diameters over 30 degrees are not targets" }
     }
+
+    /** True when click targets are heads drawn from measured distances instead of angular sizes. */
+    val headsFromDistance: Boolean get() = clickTargetDistanceQuantiles != null && body != null
+
+    /** The distances a click target may stand at; placement keeps moved targets inside them. */
+    val clickDistanceBounds: PositiveRange get() = clickTargetDistanceQuantiles?.range ?: clickTargetDistanceMeters
+
+    /** The distance of a new click target. */
+    fun drawClickDistance(random: Random): Double = clickTargetDistanceQuantiles?.draw(random) ?: clickTargetDistanceMeters.uniform(random)
+
+    /** World radius of a click target at [distance]: a head of the game's player, or a drawn angular size at that distance. */
+    fun clickTargetRadius(random: Random, distance: Double): Double =
+        if (headsFromDistance) checkNotNull(body).headDiameterMeters / 2.0 else radiusFor(clickTargetDiameterDegrees.logUniform(random), distance)
 
     /** How a player of the game moves on the ground; null without a `body` and a `movement` block. */
     val locomotion: Locomotion? get() = if (body != null && movement != null) Locomotion(body, movement) else null

@@ -4,7 +4,7 @@ from __future__ import annotations
 import random
 from collections.abc import Sequence
 
-QUANTILES = (0.10, 0.25, 0.50, 0.75, 0.90)
+QUANTILES = (0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95)
 
 
 def weighted_quantile(values: Sequence[float], weights: Sequence[float], q: float) -> float:
@@ -36,6 +36,8 @@ def summary(groups: Sequence[Sequence[float]], seed: int = 23, resamples: int = 
         "n_scenes": len(groups),
         "n_points": len(values),
         "mean": sum(v * w for v, w in zip(values, weights)) / sum(weights),
+        "min": min(values),
+        "max": max(values),
     }
     for q in QUANTILES:
         out[f"p{int(q * 100)}"] = weighted_quantile(values, weights, q)

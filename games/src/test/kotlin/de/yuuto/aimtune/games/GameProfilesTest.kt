@@ -115,10 +115,28 @@ class GameProfilesTest {
     }
 
     @Test
+    fun `valorant click targets are heads at the distances of open-aim's flash drills`() {
+        val g = assertNotNull(bundled.find("valorant")).geometry
+        val curve = assertNotNull(g.clickTargetDistanceQuantiles)
+        assertTrue(g.headsFromDistance)
+        assertEquals(18.253, curve.valueAt(0.5), 1e-9)
+        // VALORANT-WEIGHTS.md section 6: 33 / 45 / 23 percent at 0-15 / 15-30 / 30+ m; the straight lines between the quantiles keep that within 2 points.
+        assertEquals(0.33, curve.shareBelow(15.0), 0.02)
+        assertEquals(0.45, curve.shareBelow(30.0) - curve.shareBelow(15.0), 0.03)
+        assertEquals(listOf(0.18, 0.21, 0.24, 0.18, 0.19), g.flickAngles.map { it.weight })
+        assertTrue(g.clickDistanceBounds.max < g.arena.wallDistanceMeters)
+        val noSource = valid.replace(
+            "\"sensitivity\"",
+            "\"trainer\":{\"clickTargetDistanceQuantiles\":{\"points\":[{\"share\":0.0,\"meters\":5.0},{\"share\":1.0,\"meters\":20.0}],\"source\":\" \"}},\"sensitivity\"",
+        )
+        assertFailsWith<GameProfileException> { parseGameProfile(noSource) }
+    }
+
+    @Test
     fun `the vertical distribution comes from the profile and can be switched back to the old uniform field`() {
         val valorant = assertNotNull(bundled.find("valorant"))
         assertEquals(1.5, valorant.geometry.elevation.spreadDegrees)
-        assertEquals(0.12, valorant.geometry.elevation.offLevelShare)
+        assertEquals(0.27, valorant.geometry.elevation.offLevelShare)
         assertEquals(false, valorant.geometry.elevation.uniform)
         assertEquals(1.75, valorant.geometry.eyeHeightMeters)
         assertEquals(1.75, valorant.geometry.headHeightMeters)

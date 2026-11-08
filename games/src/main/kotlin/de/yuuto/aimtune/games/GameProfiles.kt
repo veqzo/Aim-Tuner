@@ -1,14 +1,16 @@
 package de.yuuto.aimtune.games
 
 import de.yuuto.aimtune.core.scenario.AgentBody
-import de.yuuto.aimtune.core.scenario.GroundMovement
 import de.yuuto.aimtune.core.scenario.AngleBucket
 import de.yuuto.aimtune.core.scenario.ArenaFeature
 import de.yuuto.aimtune.core.scenario.ArenaFeatureKind
 import de.yuuto.aimtune.core.scenario.ArenaLayout
 import de.yuuto.aimtune.core.scenario.ElevationMix
 import de.yuuto.aimtune.core.scenario.FlashGeometry
+import de.yuuto.aimtune.core.scenario.GroundMovement
 import de.yuuto.aimtune.core.scenario.PositiveRange
+import de.yuuto.aimtune.core.scenario.QuantileCurve
+import de.yuuto.aimtune.core.scenario.QuantilePoint
 import de.yuuto.aimtune.core.scenario.RangeGeometry
 import de.yuuto.aimtune.core.scenario.TrainerGeometry
 import de.yuuto.aimtune.core.units.Fov
@@ -91,6 +93,19 @@ private data class ArenaDto(
             featureShare = featureShare ?: d.featureShare,
             snapDegrees = snapDegrees ?: d.snapDegrees,
         )
+    }
+}
+
+/** One quantile of a measured distance: [share] of the engagements are at most [meters] away. */
+@Serializable
+private data class QuantilePointDto(val share: Double, val meters: Double)
+
+/** The `clickTargetDistanceQuantiles` block: measured engagement distances; [source] is required because the values are data, not guesses. */
+@Serializable
+private data class DistanceQuantilesDto(val points: List<QuantilePointDto>, val source: String, val verified: Boolean = false) {
+    fun toCurve(): QuantileCurve {
+        require(source.isNotBlank()) { "clickTargetDistanceQuantiles needs a source" }
+        return QuantileCurve(points.map { QuantilePoint(it.share, it.meters) })
     }
 }
 
@@ -294,6 +309,7 @@ private data class TrainerDto(
     val fieldPitchDegrees: Double? = null,
     val clickTargetDiameterDegrees: RangeDto? = null,
     val clickTargetDistanceMeters: RangeDto? = null,
+    val clickTargetDistanceQuantiles: DistanceQuantilesDto? = null,
     val flickAngles: List<AngleBucketDto>? = null,
     val microStepDegrees: RangeDto? = null,
     val switchingSeparationDegrees: Double? = null,
@@ -319,6 +335,7 @@ private data class TrainerDto(
             fieldPitchDegrees = fieldPitchDegrees ?: d.fieldPitchDegrees,
             clickTargetDiameterDegrees = clickTargetDiameterDegrees?.range() ?: d.clickTargetDiameterDegrees,
             clickTargetDistanceMeters = clickTargetDistanceMeters?.range() ?: d.clickTargetDistanceMeters,
+            clickTargetDistanceQuantiles = clickTargetDistanceQuantiles?.toCurve(),
             flickAngles = flickAngles?.map { AngleBucket(it.maxDegrees, it.weight) } ?: d.flickAngles,
             microStepDegrees = microStepDegrees?.range() ?: d.microStepDegrees,
             switchingSeparationDegrees = switchingSeparationDegrees ?: d.switchingSeparationDegrees,

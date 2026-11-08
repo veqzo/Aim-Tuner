@@ -18,7 +18,7 @@
     "https://csdb.gg/sensitivity-converter/valorant-to-cs2/",
     "https://fovcalculatorpro.com/games/valorant-fov/"
   ],
-  "notes": "Yaw is fixed at 0.07. FOV is 103 horizontal at 16:9 (about 70.5 vertical) with the vertical angle kept for other aspect ratios; these FOV values come from community sources, not Riot documentation. Trainer geometry (the `trainer` block) is an assumption, not a measurement, except the `body` block (player size and speed, taken from open-aim's Valorant model, M23): head about 0.2 m wide seen from 6-30 m (0.4-1.9 degrees), duels mostly under 20 degrees, strafing at 3-6 m/s. Riot publishes no hitbox or speed numbers; measure them in the shooting range (docs/history/REVIEW.md, Realism) and set verified to true.",
+  "notes": "Yaw is fixed at 0.07. FOV is 103 horizontal at 16:9 (about 70.5 vertical) with the vertical angle kept for other aspect ratios; these FOV values come from community sources, not Riot documentation. Trainer geometry (the `trainer` block) is an assumption, not a measurement, except the values taken from open-aim (commit 807f557, M23, docs/VALORANT-WEIGHTS.md): the `body` and `movement` blocks, the click-target distances (`clickTargetDistanceQuantiles`, heads of 0.24 m), the flick angle bins (offsets from the crosshair in open-aim's flash drills: 18 / 21 / 24 / 18 / 19 percent up to 5 / 10 / 20 / 40 / 90 degrees) and the off-level share. Open-aim drills show what players train, not match frequencies. Strafing at 3-6 m/s is still an assumption. Riot publishes no hitbox or speed numbers; measure them in the shooting range (docs/history/REVIEW.md, Realism) and set verified to true.",
   "trainer": {
     "fieldYawDegrees": 50.0,
     "fieldPitchDegrees": 25.0,
@@ -30,26 +30,41 @@
       "min": 6.0,
       "max": 30.0
     },
+    "clickTargetDistanceQuantiles": {
+      "points": [
+        { "share": 0.0, "meters": 4.0 },
+        { "share": 0.05, "meters": 8.584 },
+        { "share": 0.1, "meters": 11.22 },
+        { "share": 0.25, "meters": 13.835 },
+        { "share": 0.5, "meters": 18.253 },
+        { "share": 0.75, "meters": 29.14 },
+        { "share": 0.9, "meters": 43.003 },
+        { "share": 0.95, "meters": 44.066 },
+        { "share": 1.0, "meters": 60.297 }
+      ],
+      "verified": false,
+      "source": "open-aim commit 807f557, flash drills (18 scenes, 260 exposure points), extracted by tools/openaim-extract into valorant-engagements.json (groups.flash.metrics.distance, p5-p95 and max). The minimum 4.0 m is an assumption: the measured minimum 1.63 m is a single spawn next to the player, and a head that close (8 degrees) is not a flick target. Drills show what players train, not how often a distance occurs in a match; Riot reports that nearly half of Phantom kills are within 15 m (this curve: 32 percent). With these distances the click targets are heads of the body block (0.24 m), so clickTargetDiameterDegrees and clickTargetDistanceMeters are not used (docs/VALORANT-WEIGHTS.md section 6)."
+    },
     "flickAngles": [
       {
         "maxDegrees": 5,
-        "weight": 0.3
+        "weight": 0.18
       },
       {
         "maxDegrees": 10,
-        "weight": 0.3
+        "weight": 0.21
       },
       {
         "maxDegrees": 20,
-        "weight": 0.2
+        "weight": 0.24
       },
       {
         "maxDegrees": 40,
-        "weight": 0.15
+        "weight": 0.18
       },
       {
         "maxDegrees": 90,
-        "weight": 0.05
+        "weight": 0.19
       }
     ],
     "microStepDegrees": {
@@ -71,13 +86,17 @@
     "headHeightMeters": 1.75,
     "elevation": {
       "spreadDegrees": 1.5,
-      "offLevelShare": 0.12,
+      "offLevelShare": 0.27,
       "offLevelDegrees": {
         "min": 3.0,
         "max": 10.0
       },
       "loweredShare": 0.4,
-      "notes": "Assumption, not a measurement. Valorant maps are mostly flat and players place the crosshair at head height, so most enemies are within about 1.5 degrees of the crosshair level; about 12 percent are on a different level (heaven positions, ramps, stairs, crouching players), 3-10 degrees up or down, more of them above. Riot publishes no eye height, head height or map elevation statistics (secondary sources only say all agents are about 2 m tall); eye and head centre are both 1.75 m (the `body` block), so level targets are exactly level. Measure in the shooting range (docs/history/REVIEW.md, Realism) and set verified to true."
+      "notes": "Assumption, not a measurement. Valorant maps are mostly flat and players place the crosshair at head height, so most enemies are within about 1.5 degrees of the crosshair level; about 12 percent are on a different level (heaven positions, ramps, stairs, crouching players), 3-10 degrees up or down, more of them above. M23: offLevelShare 0.27 is the share of open-aim flash-drill exposures (commit 807f557, valorant-engagements.json) with more than 1.5 degrees of elevation (bootstrap CI 13-42 percent); the other values are still assumptions. Riot publishes no eye height, head height or map elevation statistics (secondary sources only say all agents are about 2 m tall); eye and head centre are both 1.75 m (the `body` block), so level targets are exactly level. Measure in the shooting range (docs/history/REVIEW.md, Realism) and set verified to true."
+    },
+    "arena": {
+      "wallDistanceMeters": 64.0,
+      "notes": "The far wall stands behind the farthest click target (60.3 m, clickTargetDistanceQuantiles). Corners and doorways keep the defaults."
     },
     "flash": {
       "popDelaySeconds": {

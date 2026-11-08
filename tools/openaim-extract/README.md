@@ -14,7 +14,7 @@ players set up engagements.
 ## Rules
 
 - Read only. The tool never writes into the open-aim folder.
-- Only aggregated numbers enter this repo: counts, means, quantiles, bootstrap intervals.
+- Only aggregated numbers enter this repo: counts, means, minimum and maximum, quantiles (p5-p95), bootstrap intervals.
   No scene text, names, coordinates, map layouts, code or assets from open-aim.
 - open-aim's MIT license covers only its wrapper. The maps are Riot assets. We use none of them.
 
