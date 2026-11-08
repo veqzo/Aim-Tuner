@@ -28,6 +28,8 @@ import de.yuuto.aimtune.storage.ResearchExportResult
 import de.yuuto.aimtune.storage.RoundRow
 import de.yuuto.aimtune.storage.SessionKind
 import de.yuuto.aimtune.storage.SessionRow
+import de.yuuto.aimtune.storage.StartOverResult
+import de.yuuto.aimtune.storage.startOver
 import de.yuuto.aimtune.storage.scoreInputs
 import java.nio.file.Path
 import java.util.concurrent.CompletableFuture
@@ -262,6 +264,31 @@ class RoundProcessor(private val database: Database?, private val exportDir: Pat
         val future = CompletableFuture<Result<ResearchExportResult>>()
         executor.execute {
             future.complete(runCatching { ResearchExport.write(dir, repo, appVersion) }.onFailure { log.log(System.Logger.Level.ERROR, "research export failed: ${it.message}", it) })
+        }
+        return future
+    }
+
+    /**
+     * Settings "Start over": backs up the database into [backupDir] and clears all rounds, on the storage thread so it never overlaps
+     * a save. The open session is forgotten, so the next round starts a new one. Settings are not touched.
+     */
+    fun startOver(backupDir: Path): CompletableFuture<Result<StartOverResult>> {
+        val repo = repository ?: return CompletableFuture.completedFuture(Result.failure(IllegalStateException("storage unavailable")))
+        val db = checkNotNull(database)
+        val future = CompletableFuture<Result<StartOverResult>>()
+        executor.execute {
+            future.complete(
+                runCatching { repo.startOver(db, backupDir, System.currentTimeMillis()) }
+                    .onSuccess {
+                        sessionId = null
+                        sessionKey = null
+                        lastSaved = null
+                        // The hub reads this to know its analyses of the stored rounds are out of date.
+                        storedCounter.incrementAndGet()
+                        log.log(System.Logger.Level.INFO, "started over: ${it.rounds} rounds in ${it.sessions} sessions backed up to ${it.backup}")
+                    }
+                    .onFailure { log.log(System.Logger.Level.ERROR, "start over failed, nothing deleted: ${it.message}", it) },
+            )
         }
         return future
     }

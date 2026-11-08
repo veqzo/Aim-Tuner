@@ -26,6 +26,7 @@ Kotlin, JDK 21, Gradle Kotlin DSL; LibGDX (LWJGL3) with Scene2D; Raw Input via J
 - DPI, game, current sensitivity → current cm/360° as start point.
 - Aim style: wrist / mixed / arm. Mousepad: small / medium / large or width in cm.
 - Derive a search range in cm/360° from a configurable table; pad width caps the upper bound; the current value is always inside the range.
+- Settings "Start over" deletes all rounds after a verified backup to `%APPDATA%/AimTune/backups/aimtune-<date>-<time>.db`; settings stay. If the backup fails, nothing is deleted.
 - Notice (not enforced) that Windows "Enhance pointer precision" and active Raw Accel curves distort measurements.
 
 ### Scenarios

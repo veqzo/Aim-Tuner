@@ -91,6 +91,7 @@ import de.yuuto.aimtune.app.files.FileDialogs
 import de.yuuto.aimtune.app.files.TinyfdFileDialogs
 import de.yuuto.aimtune.storage.RawAccelExport
 import de.yuuto.aimtune.storage.ResearchExportResult
+import de.yuuto.aimtune.storage.StartOverResult
 import de.yuuto.aimtune.storage.SettingsException
 import java.nio.file.Path
 import java.util.concurrent.CompletableFuture
@@ -155,6 +156,9 @@ class AppContext(
 
     /** The folder the update files go to, inside the data folder; null without one. */
     val updateDir: Path? get() = exportDir?.parent?.parent?.resolve("update")
+
+    /** Where "Start over" puts its database copies (`AppPaths.backupDir`); null without a data folder. */
+    val backupDir: Path? get() = exportDir?.parent?.parent?.resolve("backups")
 
     /** How this copy is installed, which decides how an update is put in place. */
     fun installKind(): InstallKind = UpdateApplier.kindOf(UpdateApplier.runningLauncher(), UpdateApplier.installRoots())
@@ -388,6 +392,20 @@ class AppContext(
     fun showShareData() = switchTo(
         ShareDataScreen(this, CompletableFuture.supplyAsync { processor.storedHistory().let { StoredCounts(it.sessions.size, it.rounds.size) } }),
     )
+
+    /**
+     * Settings "Start over": backs up the database, then clears all rounds; the settings stay. [onResult] runs on the UI thread.
+     * Results the hub kept in memory came from the cleared rounds, so they are dropped too.
+     */
+    fun startOver(onResult: (Result<StartOverResult>) -> Unit) {
+        val dir = backupDir ?: return onResult(Result.failure(IllegalStateException("no data folder to write to")))
+        processor.startOver(dir).thenAccept { result ->
+            Gdx.app.postRunnable {
+                if (result.isSuccess) hub.forgetResults()
+                onResult(result)
+            }
+        }
+    }
 
     /** Writes the research file; fails with the reason when there is no data folder. */
     fun exportResearch(): CompletableFuture<Result<ResearchExportResult>> {

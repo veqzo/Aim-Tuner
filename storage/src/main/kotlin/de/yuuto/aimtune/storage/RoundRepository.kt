@@ -71,6 +71,11 @@ class RoundRepository(private val database: Database) {
         }
     }
 
+    /** Deletes every session; the foreign keys delete their rounds, events, metrics and ratings. Use [startOver], which backs up first. */
+    internal fun clearAll() = database.transaction { c ->
+        c.createStatement().use { it.executeUpdate("DELETE FROM session") }
+    }
+
     fun sessions(): List<SessionRow> = database.transaction { c ->
         c.createStatement().use { s ->
             s.executeQuery("SELECT id, started_at_ms, game_id, dpi, kind FROM session ORDER BY started_at_ms, id").use { rs ->

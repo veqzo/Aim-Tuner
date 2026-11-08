@@ -68,6 +68,12 @@ class HubSession(
         refine = outcome
     }
 
+    /** After "Start over": the refine result and the chosen stage came from rounds that are gone. The imported profile stays. */
+    fun forgetResults() {
+        refine = null
+        stage = null
+    }
+
     /** The analyses of the stored plain rounds; computed in the background, and again only after new rounds were stored. */
     fun analyses(): CompletableFuture<SettingsAnalyses> {
         val rounds = storedRounds()
