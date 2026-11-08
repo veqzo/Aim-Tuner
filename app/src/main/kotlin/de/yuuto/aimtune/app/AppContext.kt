@@ -82,6 +82,7 @@ import de.yuuto.aimtune.core.score.FlashImportance
 import de.yuuto.aimtune.core.scenario.ScenarioMix
 import de.yuuto.aimtune.core.scenario.ScenarioSchedule
 import de.yuuto.aimtune.core.optimizer.OptimizationResult
+import de.yuuto.aimtune.core.score.DuelScorer
 import de.yuuto.aimtune.core.score.MetricWeights
 import de.yuuto.aimtune.core.score.RoundScorer
 import de.yuuto.aimtune.core.units.AimStyle
@@ -394,7 +395,7 @@ class AppContext(
     fun importProfile(profile: ImportedProfile) = hub.setImported(profile)
 
     /** The newest blind strength search, analysed again from its stored rounds. */
-    fun showLastSearch(last: LastSearch? = processor.lastSearch(metricWeights(), accelBaseline()?.ownCurve?.takeIf { useOwnCurve })) = switchTo(AccelLastSearchScreen(this, last))
+    fun showLastSearch(last: LastSearch? = processor.lastSearch(metricWeights(), accelBaseline()?.ownCurve?.takeIf { useOwnCurve }, gameDuel())) = switchTo(AccelLastSearchScreen(this, last))
 
     /** The analysis of the stored calibration rounds, computed again from them. */
     fun showLastAccelAnalysis(last: LastCalibration? = processor.lastCalibration()) = switchTo(AccelLastAnalysisScreen(this, last))
@@ -446,7 +447,7 @@ class AppContext(
     /** Where the stage plan on top of the player's own curve stands at the setup of the next run; null without a plan or a curve in use. */
     fun stagePlan(baseline: AccelBaseline?): StageProgress? {
         val own = baseline?.ownCurve?.takeIf { useOwnCurve } ?: return null
-        return processor.stagePlan(baseline.settingsDpi, baseline.cm360(useFinderResult), own, metricWeights())
+        return processor.stagePlan(baseline.settingsDpi, baseline.cm360(useFinderResult), own, metricWeights(), duel = gameDuel())
     }
 
     /** Starts a session on the stage the plan stands on: the calibration plays that stored table, earlier sessions on it count. */
@@ -460,10 +461,13 @@ class AppContext(
         val run = AccelRun(
             base, metricWeights(), runKey = System.currentTimeMillis(), seed = nextSeed++, prior = processor.priorCalibration(base.dpi, base.cm360, own, stage),
             flash = settings.current.flashImportance() != FlashImportance.NEVER, boundedCurves = boundedCurves, baseCurve = own, stage = stage,
-            scenarios = curveScenarios(base),
+            scenarios = curveScenarios(base), duel = base.profile.geometry.duel?.scorer(),
         )
         showAccelStep(run)
     }
+
+    /** The duel score of the game in the settings (M23g4), for screens that read stored curve rounds; null without duel rules. */
+    private fun gameDuel(): DuelScorer? = SetupDraft.fromSettings(settings.current).profile(profiles)?.geometry?.duel?.scorer()
 
     /** The curve runs' rotation from the game's scenario mix (M23); null keeps the click scenarios with or without flash. */
     private fun curveScenarios(config: TrainerConfig): List<ScenarioKind>? =
@@ -484,6 +488,7 @@ class AppContext(
             base, metricWeights(), runKey = System.currentTimeMillis(), seed = nextSeed++, prior = prior, startWithSearch = search,
             flash = settings.current.flashImportance() != FlashImportance.NEVER, priorSearch = priorSearch,
             boundedCurves = boundedCurves, baseCurve = own, scenarios = curveScenarios(base),
+            duel = base.profile.geometry.duel?.scorer(),
         )
         showAccelStep(run)
     }
@@ -495,7 +500,7 @@ class AppContext(
         val base = stored.config.copy(dpi = last.dpi, cm360 = last.cm360)
         showAccelStep(
             AccelRun(base, stored.scorer.weights, runKey = System.currentTimeMillis(), seed = nextSeed++, flash = settings.current.flashImportance() != FlashImportance.NEVER, startWithTest = curve, boundedCurves = boundedCurves,
-                scenarios = curveScenarios(base),
+                scenarios = curveScenarios(base), duel = base.profile.geometry.duel?.scorer(),
             ),
         )
     }
@@ -537,7 +542,7 @@ class AppContext(
         val config = trainerConfig() ?: return showOnboarding(afterFinish = ::showMenu)
         showRefineStep(
             RefineRun(config, metricWeights(), runKey = System.currentTimeMillis(), seed = nextSeed++, source = source, profile = profile, flash = settings.current.flashImportance() != FlashImportance.NEVER,
-                scenarios = curveScenarios(config),
+                scenarios = curveScenarios(config), duel = config.profile.geometry.duel?.scorer(),
             ),
         )
     }

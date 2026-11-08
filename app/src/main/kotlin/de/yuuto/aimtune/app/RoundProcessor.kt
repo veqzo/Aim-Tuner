@@ -20,6 +20,7 @@ import de.yuuto.aimtune.core.metrics.RoundMetrics
 import de.yuuto.aimtune.core.metrics.computeRoundMetrics
 import de.yuuto.aimtune.core.recording.RoundRecording
 import de.yuuto.aimtune.core.scenario.ScenarioKind
+import de.yuuto.aimtune.core.score.DuelScorer
 import de.yuuto.aimtune.core.score.Engagement
 import de.yuuto.aimtune.core.score.MetricWeights
 import de.yuuto.aimtune.core.score.duelEngagements
@@ -153,10 +154,17 @@ class RoundProcessor(private val database: Database?, private val exportDir: Pat
      * Where the stage plan on top of [baseCurve] stands at this DPI and sensitivity (docs/FIND-CURVE-REDESIGN.md section 13), read on the
      * storage thread from the stored rounds; null without a stage ever played, without a database or if reading fails.
      */
-    fun stagePlan(dpi: Double, cm360: Double, baseCurve: RawAccelProfile, weights: MetricWeights, maxStep: Double = Double.POSITIVE_INFINITY): StageProgress? {
+    fun stagePlan(
+        dpi: Double,
+        cm360: Double,
+        baseCurve: RawAccelProfile,
+        weights: MetricWeights,
+        maxStep: Double = Double.POSITIVE_INFINITY,
+        duel: DuelScorer? = null,
+    ): StageProgress? {
         val repo = repository ?: return null
         return try {
-            executor.submit<StageProgress?> { StagePlanReader.read(repo, baseCurve, dpi, cm360, weights, maxStep) }.get()
+            executor.submit<StageProgress?> { StagePlanReader.read(repo, baseCurve, dpi, cm360, weights, maxStep, duel) }.get()
         } catch (e: Exception) {
             log.log(System.Logger.Level.ERROR, "reading the stage plan failed: ${e.message}", e)
             null
@@ -181,7 +189,7 @@ class RoundProcessor(private val database: Database?, private val exportDir: Pat
      * The stored blind strength searches at the setup of the newest one, analysed again together from their rounds; null when
      * there is none or reading fails. Read on the storage thread.
      */
-    fun lastSearch(weights: MetricWeights, baseCurve: RawAccelProfile? = null): LastSearch? {
+    fun lastSearch(weights: MetricWeights, baseCurve: RawAccelProfile? = null, duel: DuelScorer? = null): LastSearch? {
         val repo = repository ?: return null
         return try {
             executor.submit<LastSearch?> {
@@ -189,7 +197,7 @@ class RoundProcessor(private val database: Database?, private val exportDir: Pat
                     val rounds = StoredSearches.searchRounds(session.kind, repo.rounds(session.id))
                     if (rounds.isEmpty()) null else StoredSearches.SearchSession(session.id, session.dpi, rounds)
                 }
-                StoredSearches.pool(searches, weights, baseCurve?.let { SearchBase(it, searches.first().dpi) })
+                StoredSearches.pool(searches, weights, baseCurve?.let { SearchBase(it, searches.first().dpi) }, duel) { repo.engagementsOf(it) }
             }.get()
         } catch (e: Exception) {
             log.log(System.Logger.Level.ERROR, "reading the last search failed: ${e.message}", e)
@@ -209,7 +217,7 @@ class RoundProcessor(private val database: Database?, private val exportDir: Pat
                     val rounds = StoredSearches.searchRounds(session.kind, repo.rounds(session.id))
                     if (rounds.isEmpty()) null else StoredSearches.SearchSession(session.id, session.dpi, rounds)
                 }
-                StoredSearches.priorRounds(searches, dpi, cm360, baseCurve?.let { SearchBase(it, dpi) })
+                StoredSearches.priorRounds(searches, dpi, cm360, baseCurve?.let { SearchBase(it, dpi) }) { repo.engagementsOf(it) }
             }.get()
         } catch (e: Exception) {
             log.log(System.Logger.Level.ERROR, "reading earlier search rounds failed: ${e.message}", e)

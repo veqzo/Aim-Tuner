@@ -1,5 +1,6 @@
 package de.yuuto.aimtune.app.accel
 
+import de.yuuto.aimtune.app.engagementsOf
 import de.yuuto.aimtune.core.metrics.computeRoundMetrics
 import de.yuuto.aimtune.core.accel.AccelAnalysis
 import de.yuuto.aimtune.core.accel.AccelCurve
@@ -15,8 +16,9 @@ import de.yuuto.aimtune.core.accel.StagePlan
 import de.yuuto.aimtune.core.accel.StageSession
 import de.yuuto.aimtune.core.accel.movementSamples
 import de.yuuto.aimtune.core.accel.stageMisfit
+import de.yuuto.aimtune.core.score.DuelScorer
 import de.yuuto.aimtune.core.score.MetricWeights
-import de.yuuto.aimtune.core.score.ScoreCalculator
+import de.yuuto.aimtune.core.score.RoundScorer
 import de.yuuto.aimtune.storage.RoundRepository
 import de.yuuto.aimtune.storage.RoundRow
 import de.yuuto.aimtune.storage.scoreInputs
@@ -49,6 +51,7 @@ object StagePlanReader {
         cm360: Double,
         weights: MetricWeights,
         maxStep: Double = Double.POSITIVE_INFINITY,
+        duel: DuelScorer? = null,
     ): StageProgress? {
         val family = FeltStepFamily(base, dpi)
         val baseSpec = AccelSpec.encodeModel(base)
@@ -70,7 +73,8 @@ object StagePlanReader {
         val planned = rounds.mapNotNull { row -> classify(checkNotNull(row.accel))?.let { row to it } }
         if (planned.none { it.second.rung > 0 }) return null
 
-        val scores = ScoreCalculator(weights).scoreRounds(planned.map { it.first.scoreInputs() }, planned.map { it.first.scenario })
+        val engagements = if (duel == null) null else planned.map { repo.engagementsOf(it.first) }
+        val scores = RoundScorer(weights, duel).scoreRounds(planned.map { it.first.scoreInputs() }, planned.map { it.first.scenario }, engagements)
         val firstStage = planned.filter { it.second.rung > 0 }.minBy { it.first.startedAtMs }.second
         val anchors = checkNotNull(firstStage.stage)
 

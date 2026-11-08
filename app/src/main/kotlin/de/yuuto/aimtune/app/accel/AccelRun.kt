@@ -29,7 +29,9 @@ import de.yuuto.aimtune.core.metrics.RoundMetrics
 import de.yuuto.aimtune.core.metrics.computeRoundMetrics
 import de.yuuto.aimtune.core.recording.RoundRecording
 import de.yuuto.aimtune.core.scenario.ScenarioKind
+import de.yuuto.aimtune.core.score.DuelScorer
 import de.yuuto.aimtune.core.score.MetricWeights
+import de.yuuto.aimtune.core.score.duelEngagements
 import de.yuuto.aimtune.core.score.scoreInputs
 
 enum class AccelPhase {
@@ -96,6 +98,8 @@ class AccelRun(
     val stage: LookupCurve? = null,
     /** The rotation of the search and the test instead of the [flash] choice, e.g. a game's scenario mix ([AccelScenarios.forMix]). */
     scenarios: List<ScenarioKind>? = null,
+    /** The game's duel score ([de.yuuto.aimtune.core.score.RoundScorer]) for the search and the test; null scores by [weights]. */
+    private val duel: DuelScorer? = null,
 ) {
     var phase = when {
         startWithTest != null -> AccelPhase.TEST
@@ -133,7 +137,7 @@ class AccelRun(
     private var source = Source.ANALYSIS
 
     private val searchBase = baseCurve?.let { SearchBase(it, baseConfig.dpi) }
-    private val search = StrengthSearch(weights, seed, plannedRounds = StrengthSearch.plannedFor(priorSearch.size), prior = priorSearch, flash = flash, base = searchBase)
+    private val search = StrengthSearch(weights, seed, plannedRounds = StrengthSearch.plannedFor(priorSearch.size), prior = priorSearch, flash = flash, base = searchBase, duel = duel)
     private var searchCandidate: AccelFit? = null
     private var currentStrength = CurveStrength.NEUTRAL
 
@@ -233,11 +237,12 @@ class AccelRun(
             }
             AccelPhase.TEST -> {
                 val round = plan.round(outcomes.size)
-                outcomes += AbOutcome(round.pair, round.condition, metrics.scoreInputs(), round.scenario.id)
+                outcomes += AbOutcome(round.pair, round.condition, metrics.scoreInputs(), round.scenario.id, duelEngagements(round.scenario, recording.targetEvents))
                 if (outcomes.size % 2 == 0) decide()
             }
             AccelPhase.SEARCH -> {
-                search.record(currentStrength, testScenarios[search.roundsPlayed % testScenarios.size], metrics)
+                val scenario = testScenarios[search.roundsPlayed % testScenarios.size]
+                search.record(currentStrength, scenario, metrics, duelEngagements(scenario, recording.targetEvents))
                 if (search.roundsPlayed >= search.plannedRounds) finishSearch()
             }
             AccelPhase.ANALYSIS, AccelPhase.SEARCH_RESULT, AccelPhase.DONE -> error("no round is due in phase $phase")
@@ -354,7 +359,7 @@ class AccelRun(
     }
 
     private fun decide() {
-        val result = evaluateAb(outcomes, weights, maxPairs = plan.maxPairs)
+        val result = evaluateAb(outcomes, weights, maxPairs = plan.maxPairs, duel = duel)
         verdict = result
         if (result.status != AbStatus.NEED_MORE_ROUNDS) phase = AccelPhase.DONE
     }
