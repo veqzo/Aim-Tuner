@@ -317,6 +317,12 @@
         "trackingParts": { "verified": false, "source": "docs/VALORANT-WEIGHTS.md section 4, confirmed by the user: a moving shooter is inaccurate in Valorant (walk +3°, run +6° spread), so moving targets are shot from a stop and covered by the strafe click scenarios; tracking gets no rounds." }
       }
     },
+    "duel": {
+      "missFollowUpMs": 308,
+      "valueNotes": {
+        "missFollowUpMs": { "verified": false, "source": "docs/VALORANT-WEIGHTS.md section 4, confirmed by the user (option A): Vandal at 9.75 rounds/s, four body shots kill 150 HP, so a first shot that misses the head kills three shot intervals later (308 ms). The least penalty for a miss over the tested weapons, so the least push toward slow." }
+      }
+    },
     "verified": false
   }
 }

@@ -13,6 +13,7 @@ import de.yuuto.aimtune.core.scenario.QuantileCurve
 import de.yuuto.aimtune.core.scenario.QuantilePoint
 import de.yuuto.aimtune.core.scenario.RangeGeometry
 import de.yuuto.aimtune.core.scenario.ScenarioMix
+import de.yuuto.aimtune.core.score.DuelRules
 import de.yuuto.aimtune.core.scenario.StrafePattern
 import de.yuuto.aimtune.core.scenario.TrainerGeometry
 import de.yuuto.aimtune.core.units.Fov
@@ -354,6 +355,19 @@ private data class MixBlockDto(
     }
 }
 
+/** The `duel` block: how a duel of the game is decided; the value needs a source. */
+@Serializable
+private data class DuelBlockDto(
+    val missFollowUpMs: Double,
+    val valueNotes: Map<String, RangeValueNoteDto>,
+) {
+    fun toRules(): DuelRules {
+        val note = valueNotes["missFollowUpMs"]
+        require(note != null && note.source.isNotBlank()) { "duel.valueNotes needs a source for missFollowUpMs" }
+        return DuelRules((missFollowUpMs * 1_000_000.0).toLong(), verified = note.verified)
+    }
+}
+
 /** The `trainer` block of a profile; every field is optional and falls back to [TrainerGeometry.DEFAULT]. */
 @Serializable
 private data class TrainerDto(
@@ -379,6 +393,7 @@ private data class TrainerDto(
     val movement: MovementBlockDto? = null,
     val strafe: StrafeBlockDto? = null,
     val mix: MixBlockDto? = null,
+    val duel: DuelBlockDto? = null,
     val verified: Boolean = false,
 ) {
     fun toGeometry(horizontalFovDegrees: Double): TrainerGeometry {
@@ -407,6 +422,7 @@ private data class TrainerDto(
             movement = movement?.toMovement(),
             strafe = strafe?.toPattern(),
             mix = mix?.toMix(),
+            duel = duel?.toRules(),
             verified = verified,
         )
     }

@@ -21,6 +21,7 @@ import de.yuuto.aimtune.core.metrics.RoundMetrics
 import de.yuuto.aimtune.core.metrics.computeRoundMetrics
 import de.yuuto.aimtune.core.recording.RoundRecording
 import de.yuuto.aimtune.core.score.MetricWeights
+import de.yuuto.aimtune.core.score.RoundScorer
 import de.yuuto.aimtune.core.score.ScoreCalculator
 import de.yuuto.aimtune.core.units.AimStyle
 import de.yuuto.aimtune.core.units.cm360
@@ -473,7 +474,7 @@ class CurveAuditForensicsTest {
         val range = searchRange(settings.aimStyleOrNull() ?: AimStyle.MIXED, currentCm, settings.padWidthCm!!)
         val past = processor.pastBlindRounds(settings.gameId, dpi)
         line("blind rounds for game=${settings.gameId} dpi=${dpi.roundToInt()}: ${past.size}; search range ${f(range.minCm360)}..${f(range.maxCm360)}")
-        val res = BlindTest.analyzeStored(range, weights, past)
+        val res = BlindTest.analyzeStored(range, RoundScorer(weights), past)
         if (res == null) line("no result") else {
             fun sens(cm: Double) = f(sensitivityFor(dpi, yaw, cm), 3)
             line("optimum cm360=${f(res.optimumCm360)} (Valorant sens ${sens(res.optimumCm360)}) ci=[${f(res.intervalLowCm360)},${f(res.intervalHighCm360)}] cm360 = sens [${sens(res.intervalHighCm360)},${sens(res.intervalLowCm360)}] conf=${res.confidencePercent}% atEdge=${res.atRangeEdge} drift=${res.driftDetected} regret=${f(res.expectedRegret, 2)} moreRounds=${res.recommendMoreRounds}")

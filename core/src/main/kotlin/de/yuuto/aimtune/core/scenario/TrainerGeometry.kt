@@ -1,5 +1,6 @@
 package de.yuuto.aimtune.core.scenario
 
+import de.yuuto.aimtune.core.score.DuelRules
 import kotlin.math.atan
 import kotlin.math.exp
 import kotlin.math.ln
@@ -82,6 +83,8 @@ data class TrainerGeometry(
     val strafe: StrafePattern? = null,
     /** How often the game's engagement types occur; null lets the metric weights decide (see [ScenarioSchedule]). */
     val mix: ScenarioMix? = null,
+    /** How the game's duels are decided; with them both finders score click rounds by duel wins ([de.yuuto.aimtune.core.score.RoundScorer]). */
+    val duel: DuelRules? = null,
     val verified: Boolean = false,
 ) {
     init {

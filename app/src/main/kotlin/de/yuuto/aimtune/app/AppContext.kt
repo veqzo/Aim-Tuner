@@ -83,6 +83,7 @@ import de.yuuto.aimtune.core.scenario.ScenarioMix
 import de.yuuto.aimtune.core.scenario.ScenarioSchedule
 import de.yuuto.aimtune.core.optimizer.OptimizationResult
 import de.yuuto.aimtune.core.score.MetricWeights
+import de.yuuto.aimtune.core.score.RoundScorer
 import de.yuuto.aimtune.core.units.AimStyle
 import de.yuuto.aimtune.core.units.searchRange
 import de.yuuto.aimtune.games.GameProfiles
@@ -287,7 +288,7 @@ class AppContext(
         val playable = if (rangeMode) setOf(ScenarioKind.FLICK, ScenarioKind.RANGE) else if (hasRange) enabled else enabled - ScenarioKind.RANGE
         val past = processor.pastBlindRounds(setup.gameId, config.dpi)
         val seed = nextSeed++
-        val test = BlindTest(range, weights, past, seed)
+        val test = BlindTest(range, roundScorer(config, weights), past, seed)
         val schedule = scheduleFor(playable.ifEmpty { setOf(ScenarioKind.FLICK) }, config.profile.geometry.mix.takeUnless { rangeMode }, weights)
         showBlindRound(BlindRun(test, runKey = System.currentTimeMillis(), baseConfig = config, nextSeed = nextSeed++, schedule = schedule))
     }
@@ -315,7 +316,7 @@ class AppContext(
         val config = stored.config
         val data = ResultsData(
             config.profile, config.dpi, config.cm360, stored.result, stored.rounds.size, stored.rounds.map { it.sessionId }.distinct().size,
-            BlindTest.scoreRounds(stored.weights, stored.rounds),
+            BlindTest.scoreRounds(stored.scorer, stored.rounds),
             AxisSummary.of(stored.rounds.map { it.axes }),
         )
         switchTo(ResultsScreen(this, data))
@@ -327,10 +328,14 @@ class AppContext(
         val setup = settings.current
         val pad = setup.padWidthCm ?: return null
         val range = searchRange(setup.aimStyleOrNull() ?: AimStyle.MIXED, config.cm360, pad)
-        val weights = metricWeights()
+        val scorer = roundScorer(config)
         val rounds = processor.pastBlindRounds(setup.gameId, config.dpi)
-        return StoredAnalysis(config, weights, rounds, BlindTest.analyzeStored(range, weights, rounds))
+        return StoredAnalysis(config, scorer, rounds, BlindTest.analyzeStored(range, scorer, rounds))
     }
+
+    /** The score of both finders: duel wins for the click rounds of a game with duel rules (M23g4), else the metric weights. */
+    private fun roundScorer(config: TrainerConfig, weights: MetricWeights = metricWeights()): RoundScorer =
+        RoundScorer(weights, config.profile.geometry.duel?.scorer())
 
     private fun metricWeights(): MetricWeights = try {
         settings.current.toMetricWeights()
@@ -338,7 +343,7 @@ class AppContext(
         MetricWeights.DEFAULT
     }
 
-    private class StoredAnalysis(val config: TrainerConfig, val weights: MetricWeights, val rounds: List<PastRound>, val result: OptimizationResult?)
+    private class StoredAnalysis(val config: TrainerConfig, val scorer: RoundScorer, val rounds: List<PastRound>, val result: OptimizationResult?)
 
     /**
      * The sensitivity the acceleration steps are played at: the configured game sensitivity, plus the finder's result for
@@ -428,10 +433,10 @@ class AppContext(
         val pad = setup.padWidthCm
         if (config == null || pad == null) return CompletableFuture.completedFuture(emptyList())
         val range = searchRange(setup.aimStyleOrNull() ?: AimStyle.MIXED, config.cm360, pad)
-        val weights = metricWeights()
+        val scorer = roundScorer(config)
         return CompletableFuture.supplyAsync {
             val stored = processor.storedHistory()
-            buildHistory(stored.sessions, stored.rounds, weights, range)
+            buildHistory(stored.sessions, stored.rounds, scorer, range, engagements = stored.engagements)
         }
     }
 
@@ -489,7 +494,7 @@ class AppContext(
         val stored = storedAnalysis() ?: return showOnboarding(afterFinish = ::showMenu)
         val base = stored.config.copy(dpi = last.dpi, cm360 = last.cm360)
         showAccelStep(
-            AccelRun(base, stored.weights, runKey = System.currentTimeMillis(), seed = nextSeed++, flash = settings.current.flashImportance() != FlashImportance.NEVER, startWithTest = curve, boundedCurves = boundedCurves,
+            AccelRun(base, stored.scorer.weights, runKey = System.currentTimeMillis(), seed = nextSeed++, flash = settings.current.flashImportance() != FlashImportance.NEVER, startWithTest = curve, boundedCurves = boundedCurves,
                 scenarios = curveScenarios(base),
             ),
         )

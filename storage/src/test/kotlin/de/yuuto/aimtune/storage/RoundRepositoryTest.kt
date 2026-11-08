@@ -130,6 +130,8 @@ class RoundRepositoryTest {
             val original = recording()
             val id = repo.saveRound(session, original, startedAtMs = 2_000, blind = true, metrics = computeRoundMetrics(original))
             assertEquals(original, repo.loadRecording(id))
+            assertEquals(original.targetEvents, repo.loadTargetEvents(id), "the target events load alone, as in the recording")
+            assertEquals(emptyList(), repo.loadTargetEvents(id + 99), "an unknown round has no events")
         }
     }
 

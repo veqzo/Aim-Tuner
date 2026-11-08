@@ -138,6 +138,14 @@ class RoundRepository(private val database: Database) {
         }
     }
 
+    /** The target events of a round without its mouse events (cheap, for the duel score); empty for an unknown round. */
+    fun loadTargetEvents(roundId: Long): List<TargetEvent> = database.transaction { c ->
+        c.prepareStatement("SELECT start_nanos FROM round WHERE id = ?").use { s ->
+            s.setLong(1, roundId)
+            s.executeQuery().use { rs -> if (rs.next()) loadTargetEvents(c, roundId, rs.getLong(1)) else emptyList() }
+        }
+    }
+
     /**
      * The blind rounds (of any scenario) of every sensitivity session with this game and DPI, oldest
      * first: the data the optimizer merges across sessions. Rounds played without blinding are left out.

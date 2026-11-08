@@ -19,7 +19,10 @@ import de.yuuto.aimtune.core.accel.movementSamples
 import de.yuuto.aimtune.core.metrics.RoundMetrics
 import de.yuuto.aimtune.core.metrics.computeRoundMetrics
 import de.yuuto.aimtune.core.recording.RoundRecording
+import de.yuuto.aimtune.core.scenario.ScenarioKind
+import de.yuuto.aimtune.core.score.Engagement
 import de.yuuto.aimtune.core.score.MetricWeights
+import de.yuuto.aimtune.core.score.duelEngagements
 import de.yuuto.aimtune.storage.Database
 import de.yuuto.aimtune.storage.RoundLogFile
 import de.yuuto.aimtune.storage.RoundRepository
@@ -48,7 +51,8 @@ sealed interface RoundReport {
 }
 
 /** Everything the database holds about played sessions, for the history. */
-data class StoredHistory(val sessions: List<SessionRow>, val rounds: List<RoundRow>)
+/** [engagements] holds the duels of the blind rounds by round id ([PastRound.engagements]). */
+data class StoredHistory(val sessions: List<SessionRow>, val rounds: List<RoundRow>, val engagements: Map<Long, List<Engagement>?> = emptyMap())
 
 /**
  * Computes metrics and stores finished rounds on a background thread so the render thread never
@@ -122,7 +126,7 @@ class RoundProcessor(private val database: Database?, private val exportDir: Pat
         val repo = repository ?: return emptyList()
         return try {
             executor.submit<List<PastRound>> {
-                repo.blindRounds(gameId, dpi).map { PastRound(it.sessionId, it.cm360, it.scoreInputs(), it.scenario, AxisErrors.of(it)) }
+                repo.blindRounds(gameId, dpi).map { PastRound(it.sessionId, it.cm360, it.scoreInputs(), it.scenario, AxisErrors.of(it), repo.engagementsOf(it)) }
             }.get()
         } catch (e: Exception) {
             log.log(System.Logger.Level.ERROR, "reading earlier rounds failed: ${e.message}", e)
@@ -251,7 +255,10 @@ class RoundProcessor(private val database: Database?, private val exportDir: Pat
     fun storedHistory(): StoredHistory {
         val repo = repository ?: return StoredHistory(emptyList(), emptyList())
         return try {
-            executor.submit<StoredHistory> { StoredHistory(repo.sessions(), repo.rounds()) }.get()
+            executor.submit<StoredHistory> {
+                val rounds = repo.rounds()
+                StoredHistory(repo.sessions(), rounds, rounds.filter { it.blind && it.accel == null }.associate { it.id to repo.engagementsOf(it) })
+            }.get()
         } catch (e: Exception) {
             log.log(System.Logger.Level.ERROR, "reading the history failed: ${e.message}", e)
             StoredHistory(emptyList(), emptyList())
@@ -358,3 +365,7 @@ class RoundProcessor(private val database: Database?, private val exportDir: Pat
         const val MAX_ANALYSED_ROUNDS = 120
     }
 }
+
+/** The duels of a stored round for the duel score, read from its target events; null for tracking or an unknown scenario. */
+internal fun RoundRepository.engagementsOf(row: RoundRow): List<Engagement>? =
+    ScenarioKind.fromId(row.scenario)?.let { duelEngagements(it, loadTargetEvents(row.id)) }

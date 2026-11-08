@@ -55,6 +55,18 @@ fun engagements(events: List<TargetEvent>): List<Engagement> {
 }
 
 /**
+ * How a game's duels are decided (M23g4), from the profile's `duel` block: [missFollowUpNanos] is the time the follow-up
+ * shots need to kill after a first shot that missed the head. A game with duel rules scores its click rounds with [DuelScorer].
+ */
+data class DuelRules(val missFollowUpNanos: Long, val verified: Boolean = false) {
+    init {
+        require(missFollowUpNanos in 0..2_000_000_000L) { "the follow-up after a miss must be 0-2 s" }
+    }
+
+    fun scorer(): DuelScorer = DuelScorer(missFollowUpNanos)
+}
+
+/**
  * Duel-win score of rounds: each engagement is a duel against an opponent as fast as the player (kill time normal with the
  * median and spread of the player's own first-shot hits in that scenario). A first-shot hit at t wins with G(t), a first-shot
  * miss at t0 with G(t0 + [missDelayNanos]) (the follow-up body shots), a lost engagement with 0. The round score is

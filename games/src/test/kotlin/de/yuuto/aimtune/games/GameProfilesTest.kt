@@ -336,4 +336,17 @@ class GameProfilesTest {
         assertTrue("movingParts" in error.message.orEmpty())
         assertFailsWith<GameProfileException> { parseGameProfile(withMix(keys, standing = -1.0)) }
     }
+
+    @Test
+    fun `valorant prices a missed first shot at the Vandal follow-up, and a duel block needs a source`() {
+        val duel = assertNotNull(assertNotNull(bundled.find("valorant")).geometry.duel)
+        assertEquals(308_000_000L, duel.missFollowUpNanos)
+        assertEquals(false, duel.verified)
+        assertEquals(null, assertNotNull(bundled.find("cs2")).geometry.duel, "a game without duel rules keeps the metric weights")
+
+        fun withDuel(source: String) =
+            valid.replace("\"sensitivity\"", "\"trainer\":{\"duel\":{\"missFollowUpMs\":300,\"valueNotes\":{\"missFollowUpMs\":{\"source\":\"$source\"}}}},\"sensitivity\"")
+        assertEquals(300_000_000L, parseGameProfile(withDuel("test")).geometry.duel?.missFollowUpNanos)
+        assertFailsWith<GameProfileException> { parseGameProfile(withDuel("")) }
+    }
 }
