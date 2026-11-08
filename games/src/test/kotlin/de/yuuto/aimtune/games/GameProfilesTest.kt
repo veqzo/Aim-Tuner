@@ -1,6 +1,7 @@
 package de.yuuto.aimtune.games
 
 import de.yuuto.aimtune.core.scenario.Gait
+import de.yuuto.aimtune.core.scenario.StrafeConfig
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
@@ -292,5 +293,27 @@ class GameProfilesTest {
         val error = assertFailsWith<GameProfileException> { parseGameProfile(withMovement(movementKeys - "frictionMin")) }
         assertTrue("frictionMin" in error.message.orEmpty())
         assertFailsWith<GameProfileException> { parseGameProfile(withMovement(movementKeys, body = false)) }
+    }
+
+    @Test
+    fun `valorant strafes with open-aim's leg lengths and pauses, and a strafe block needs a source for every value`() {
+        val geometry = assertNotNull(bundled.find("valorant")).geometry
+        val strafe = assertNotNull(geometry.strafe)
+        assertEquals(1.0, strafe.travelMeters.min)
+        assertEquals(1.75, strafe.travelMeters.max)
+        assertEquals(0.65, strafe.dwellSeconds.max)
+        assertEquals(false, strafe.verified)
+        assertNotNull(StrafeConfig.from(geometry).locomotion)
+
+        val keys = listOf("travelMeters", "dwellSeconds", "reverseProbability", "maxOffsetMeters")
+        fun withStrafe(notes: List<String>): String {
+            val entries = notes.joinToString(",") { "\"$it\":{\"verified\":false,\"source\":\"test\"}" }
+            val block = "\"strafe\":{\"travelMeters\":{\"min\":1.0,\"max\":1.5},\"dwellSeconds\":{\"min\":0.2,\"max\":0.5}," +
+                "\"reverseProbability\":0.5,\"maxOffsetMeters\":2.0,\"valueNotes\":{$entries}},"
+            return withMovement(movementKeys).replace("\"movement\":", "$block\"movement\":")
+        }
+        assertNotNull(parseGameProfile(withStrafe(keys)).geometry.strafe)
+        val error = assertFailsWith<GameProfileException> { parseGameProfile(withStrafe(keys - "dwellSeconds")) }
+        assertTrue("dwellSeconds" in error.message.orEmpty())
     }
 }

@@ -12,6 +12,7 @@ import de.yuuto.aimtune.core.scenario.PositiveRange
 import de.yuuto.aimtune.core.scenario.QuantileCurve
 import de.yuuto.aimtune.core.scenario.QuantilePoint
 import de.yuuto.aimtune.core.scenario.RangeGeometry
+import de.yuuto.aimtune.core.scenario.StrafePattern
 import de.yuuto.aimtune.core.scenario.TrainerGeometry
 import de.yuuto.aimtune.core.units.Fov
 import de.yuuto.aimtune.core.units.FovType
@@ -302,6 +303,36 @@ private data class MovementBlockDto(
     }
 }
 
+/**
+ * The `strafe` block of the `trainer` block: how strafing click targets move with the game's movement model (M23). It needs
+ * a `body` and a `movement` block. Every field is required, and [valueNotes] names the source of each value.
+ */
+@Serializable
+private data class StrafeBlockDto(
+    val travelMeters: RangeDto,
+    val dwellSeconds: RangeDto,
+    val reverseProbability: Double,
+    val maxOffsetMeters: Double,
+    val valueNotes: Map<String, RangeValueNoteDto>,
+) {
+    fun toPattern(): StrafePattern {
+        val missing = REQUIRED_NOTES - valueNotes.keys
+        require(missing.isEmpty()) { "strafe.valueNotes is missing a source for ${missing.joinToString()}" }
+        require(valueNotes.values.all { it.source.isNotBlank() }) { "every strafe.valueNotes entry needs a source" }
+        return StrafePattern(
+            travelMeters = PositiveRange(travelMeters.min, travelMeters.max),
+            dwellSeconds = PositiveRange(dwellSeconds.min, dwellSeconds.max),
+            reverseProbability = reverseProbability,
+            maxOffsetMeters = maxOffsetMeters,
+            verified = valueNotes.values.all { it.verified },
+        )
+    }
+
+    companion object {
+        val REQUIRED_NOTES = setOf("travelMeters", "dwellSeconds", "reverseProbability", "maxOffsetMeters")
+    }
+}
+
 /** The `trainer` block of a profile; every field is optional and falls back to [TrainerGeometry.DEFAULT]. */
 @Serializable
 private data class TrainerDto(
@@ -325,6 +356,7 @@ private data class TrainerDto(
     val range: RangeBlockDto? = null,
     val body: BodyBlockDto? = null,
     val movement: MovementBlockDto? = null,
+    val strafe: StrafeBlockDto? = null,
     val verified: Boolean = false,
 ) {
     fun toGeometry(horizontalFovDegrees: Double): TrainerGeometry {
@@ -351,6 +383,7 @@ private data class TrainerDto(
             range = range?.toGeometry(),
             body = body?.toBody(),
             movement = movement?.toMovement(),
+            strafe = strafe?.toPattern(),
             verified = verified,
         )
     }

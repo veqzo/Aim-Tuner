@@ -295,6 +295,18 @@
         }
       }
     },
+    "strafe": {
+      "travelMeters": { "min": 1.0, "max": 1.75 },
+      "dwellSeconds": { "min": 0.2, "max": 0.65 },
+      "reverseProbability": 0.6,
+      "maxOffsetMeters": 2.0,
+      "valueNotes": {
+        "travelMeters": { "verified": false, "source": "open-aim commit 807f557 (github.com/unkwsr/open-aim, read only, no code copied), tools/openaim-extract over 20 scenes with strafing bots (30 bots): way per strafe leg p10 1.0 m, p50 1.5 m, p90 1.75 m (timings.strafe_travel_s in valorant-engagements.json; the key is named _s but open-aim's strafe behaviour treats travel as a width in meters). The speed comes from the movement block." },
+        "dwellSeconds": { "verified": false, "source": "open-aim commit 807f557 (github.com/unkwsr/open-aim, read only, no code copied), tools/openaim-extract over 20 scenes with strafing bots (30 bots): pause between legs p10 0.21 s, p50 0.33 s, max 0.65 s (timings.strafe_dwell_s)." },
+        "reverseProbability": { "verified": false, "source": "Assumption kept from docs/RANGE.md (Behaviour spec): open-aim's bots swing between two sides, so most legs turn around." },
+        "maxOffsetMeters": { "verified": false, "source": "Assumption kept from docs/RANGE.md: the opponent stays within 2 m of its spawn, so a leg of up to 1.75 m always fits." }
+      }
+    },
     "verified": false
   }
 }

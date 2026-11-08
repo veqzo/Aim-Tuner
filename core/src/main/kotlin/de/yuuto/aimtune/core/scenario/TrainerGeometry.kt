@@ -78,10 +78,13 @@ data class TrainerGeometry(
     val body: AgentBody? = null,
     /** Ground acceleration and friction of a player of the game; null when the profile has no `movement` block. */
     val movement: GroundMovement? = null,
+    /** How strafing click targets move with the game's [locomotion]; null keeps the constant-speed strafe of [StrafeConfig]. */
+    val strafe: StrafePattern? = null,
     val verified: Boolean = false,
 ) {
     init {
         require(movement == null || body != null) { "a movement block needs a body block for the top speeds" }
+        require(strafe == null || movement != null) { "a strafe block needs a body and a movement block" }
         require(clickTargetDistanceQuantiles == null || body != null) { "distance quantiles need a body block for the head size" }
         require(clickDistanceBounds.max < arena.wallDistanceMeters) { "click targets must stand in front of the wall (${arena.wallDistanceMeters} m)" }
         require(fieldYawDegrees in 5.0..90.0 && fieldPitchDegrees in 3.0..60.0) { "field must be 5-90 x 3-60 degrees" }
@@ -118,12 +121,15 @@ data class TrainerGeometry(
     /** World radius in meters of a sphere that looks [diameterDegrees] wide from [distance] meters. */
     fun radiusFor(diameterDegrees: Double, distance: Double): Double = distance * sin(Math.toRadians(diameterDegrees / 2.0))
 
-    /** Angular speed range in degrees per second of the tracked target, from the strafe speed at the tracking distance. */
+    /**
+     * Angular speed range in degrees per second of the tracked target at the tracking distance: from walking to running
+     * speed when the game has a movement model, else from [strafeSpeedMetersPerSecond].
+     */
     val trackingSpeedDegreesPerSecond: PositiveRange
-        get() = PositiveRange(
-            Math.toDegrees(strafeSpeedMetersPerSecond.min / trackingDistanceMeters),
-            Math.toDegrees(strafeSpeedMetersPerSecond.max / trackingDistanceMeters),
-        )
+        get() {
+            val speeds = locomotion?.let { PositiveRange(it.topSpeed(Gait.WALK), it.topSpeed(Gait.RUN)) } ?: strafeSpeedMetersPerSecond
+            return PositiveRange(Math.toDegrees(speeds.min / trackingDistanceMeters), Math.toDegrees(speeds.max / trackingDistanceMeters))
+        }
 
     /** Draws an angle from the flick mix: a bucket by weight, then uniformly inside it. */
     fun drawFlickAngle(random: Random): Double {
