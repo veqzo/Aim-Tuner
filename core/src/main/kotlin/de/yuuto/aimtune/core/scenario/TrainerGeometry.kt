@@ -68,6 +68,8 @@ data class TrainerGeometry(
     val arena: ArenaLayout = ArenaLayout(),
     /** Range mode of the game; null when the profile has no `range` block, and the game then has no Range mode. */
     val range: RangeGeometry? = null,
+    /** Size and speed of a player of the game; null when the profile has no `body` block. */
+    val body: AgentBody? = null,
     val verified: Boolean = false,
 ) {
     init {

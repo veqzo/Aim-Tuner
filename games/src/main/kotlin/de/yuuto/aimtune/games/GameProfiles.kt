@@ -1,5 +1,6 @@
 package de.yuuto.aimtune.games
 
+import de.yuuto.aimtune.core.scenario.AgentBody
 import de.yuuto.aimtune.core.scenario.AngleBucket
 import de.yuuto.aimtune.core.scenario.ArenaFeature
 import de.yuuto.aimtune.core.scenario.ArenaFeatureKind
@@ -201,6 +202,45 @@ private data class RangeBlockDto(
     }
 }
 
+/**
+ * The `body` block of the `trainer` block: size and speed of a player of the game (M23). Every field is required, and
+ * [valueNotes] names the source of each value, as in the `range` block.
+ */
+@Serializable
+private data class BodyBlockDto(
+    val headDiameterMeters: Double,
+    val capsuleHeightMeters: Double,
+    val eyeStandMeters: Double,
+    val eyeCrouchMeters: Double,
+    val runSpeedMetersPerSecond: Double,
+    val walkSpeedMetersPerSecond: Double,
+    val crouchSpeedMetersPerSecond: Double,
+    val valueNotes: Map<String, RangeValueNoteDto>,
+) {
+    fun toBody(): AgentBody {
+        val missing = REQUIRED_NOTES - valueNotes.keys
+        require(missing.isEmpty()) { "body.valueNotes is missing a source for ${missing.joinToString()}" }
+        require(valueNotes.values.all { it.source.isNotBlank() }) { "every body.valueNotes entry needs a source" }
+        return AgentBody(
+            headDiameterMeters = headDiameterMeters,
+            capsuleHeightMeters = capsuleHeightMeters,
+            eyeStandMeters = eyeStandMeters,
+            eyeCrouchMeters = eyeCrouchMeters,
+            runSpeedMetersPerSecond = runSpeedMetersPerSecond,
+            walkSpeedMetersPerSecond = walkSpeedMetersPerSecond,
+            crouchSpeedMetersPerSecond = crouchSpeedMetersPerSecond,
+            verified = valueNotes.values.all { it.verified },
+        )
+    }
+
+    companion object {
+        val REQUIRED_NOTES = setOf(
+            "headDiameterMeters", "capsuleHeightMeters", "eyeStandMeters", "eyeCrouchMeters",
+            "runSpeedMetersPerSecond", "walkSpeedMetersPerSecond", "crouchSpeedMetersPerSecond",
+        )
+    }
+}
+
 /** The `trainer` block of a profile; every field is optional and falls back to [TrainerGeometry.DEFAULT]. */
 @Serializable
 private data class TrainerDto(
@@ -221,6 +261,7 @@ private data class TrainerDto(
     val elevation: ElevationDto? = null,
     val arena: ArenaDto? = null,
     val range: RangeBlockDto? = null,
+    val body: BodyBlockDto? = null,
     val verified: Boolean = false,
 ) {
     fun toGeometry(horizontalFovDegrees: Double): TrainerGeometry {
@@ -244,6 +285,7 @@ private data class TrainerDto(
             elevation = elevation?.toMix() ?: d.elevation,
             arena = arena?.toLayout() ?: d.arena,
             range = range?.toGeometry(),
+            body = body?.toBody(),
             verified = verified,
         )
     }

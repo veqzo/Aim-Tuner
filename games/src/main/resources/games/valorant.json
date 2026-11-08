@@ -18,7 +18,7 @@
     "https://csdb.gg/sensitivity-converter/valorant-to-cs2/",
     "https://fovcalculatorpro.com/games/valorant-fov/"
   ],
-  "notes": "Yaw is fixed at 0.07. FOV is 103 horizontal at 16:9 (about 70.5 vertical) with the vertical angle kept for other aspect ratios; these FOV values come from community sources, not Riot documentation. Trainer geometry (the `trainer` block) is an assumption, not a measurement: head about 0.2 m wide seen from 6-30 m (0.4-1.9 degrees), duels mostly under 20 degrees, strafing at 3-6 m/s. Riot publishes no hitbox or speed numbers; measure them in the shooting range (docs/history/REVIEW.md, Realism) and set verified to true.",
+  "notes": "Yaw is fixed at 0.07. FOV is 103 horizontal at 16:9 (about 70.5 vertical) with the vertical angle kept for other aspect ratios; these FOV values come from community sources, not Riot documentation. Trainer geometry (the `trainer` block) is an assumption, not a measurement, except the `body` block (player size and speed, taken from open-aim's Valorant model, M23): head about 0.2 m wide seen from 6-30 m (0.4-1.9 degrees), duels mostly under 20 degrees, strafing at 3-6 m/s. Riot publishes no hitbox or speed numbers; measure them in the shooting range (docs/history/REVIEW.md, Realism) and set verified to true.",
   "trainer": {
     "fieldYawDegrees": 50.0,
     "fieldPitchDegrees": 25.0,
@@ -67,8 +67,8 @@
       "max": 6.0
     },
     "stopProbability": 0.25,
-    "eyeHeightMeters": 1.6,
-    "headHeightMeters": 1.65,
+    "eyeHeightMeters": 1.75,
+    "headHeightMeters": 1.75,
     "elevation": {
       "spreadDegrees": 1.5,
       "offLevelShare": 0.12,
@@ -77,7 +77,7 @@
         "max": 10.0
       },
       "loweredShare": 0.4,
-      "notes": "Assumption, not a measurement. Valorant maps are mostly flat and players place the crosshair at head height, so most enemies are within about 1.5 degrees of the crosshair level; about 12 percent are on a different level (heaven positions, ramps, stairs, crouching players), 3-10 degrees up or down, more of them above. Riot publishes no eye height, head height or map elevation statistics (secondary sources only say all agents are about 2 m tall); 1.6 m eye and 1.65 m head centre only tilt level targets by a fraction of a degree. Measure in the shooting range (docs/history/REVIEW.md, Realism) and set verified to true."
+      "notes": "Assumption, not a measurement. Valorant maps are mostly flat and players place the crosshair at head height, so most enemies are within about 1.5 degrees of the crosshair level; about 12 percent are on a different level (heaven positions, ramps, stairs, crouching players), 3-10 degrees up or down, more of them above. Riot publishes no eye height, head height or map elevation statistics (secondary sources only say all agents are about 2 m tall); eye and head centre are both 1.75 m (the `body` block), so level targets are exactly level. Measure in the shooting range (docs/history/REVIEW.md, Realism) and set verified to true."
     },
     "flash": {
       "popDelaySeconds": {
@@ -128,8 +128,8 @@
         "min": 5.0,
         "max": 20.0
       },
-      "botHeightMeters": 1.8,
-      "headDiameterMeters": 0.25,
+      "botHeightMeters": 1.87,
+      "headDiameterMeters": 0.24,
       "strafe": {
         "speedMetersPerSecond": 2.0,
         "movingSeconds": {
@@ -167,11 +167,11 @@
         },
         "botHeightMeters": {
           "verified": false,
-          "source": "Assumption: agents are about 2 m tall in secondary sources (the eye height of 1.6 m of this profile is also an assumption); 1.8 m for the bot."
+          "source": "Derived from the body block (M23): head centre at the standing eye height 1.75 m plus the head radius 0.12 m, so the top of the head is at 1.87 m. Before M23 an assumed 1.8 m."
         },
         "headDiameterMeters": {
           "verified": false,
-          "source": "Assumption: Riot publishes no hitbox. A generous 0.25 m head sphere; the head hitbox was not measurable in the clips."
+          "source": "From the body block (M23): open-aim's head sphere, r 0.12 m. Riot publishes no hitbox; before M23 an assumed 0.25 m."
         },
         "strafe": {
           "verified": false,
@@ -180,6 +180,45 @@
         "killRule": {
           "verified": false,
           "source": "Assumption: a head hit kills; Vandal damage against 100 health plus 50 armor needs 4 body hits with bot armor on and 3 with it off (Bot Armor is a setting of the range panel). Not observable in the clips."
+        }
+      }
+    },
+    "body": {
+      "headDiameterMeters": 0.24,
+      "capsuleHeightMeters": 1.96,
+      "eyeStandMeters": 1.75,
+      "eyeCrouchMeters": 1.35,
+      "runSpeedMetersPerSecond": 5.4,
+      "walkSpeedMetersPerSecond": 2.97,
+      "crouchSpeedMetersPerSecond": 1.62,
+      "valueNotes": {
+        "headDiameterMeters": {
+          "verified": false,
+          "source": "open-aim commit 807f557 (github.com/unkwsr/open-aim, read only, no code copied): head hit sphere radius 0.12 m (plus two head capsules of radius 0.11 m). Riot publishes no hitbox."
+        },
+        "capsuleHeightMeters": {
+          "verified": false,
+          "source": "open-aim commit 807f557 (github.com/unkwsr/open-aim, read only, no code copied): player capsule halfHeight 0.98 m, radius 0.42 m, so 1.96 m tall. Secondary sources say agents are about 2 m tall."
+        },
+        "eyeStandMeters": {
+          "verified": false,
+          "source": "open-aim commit 807f557 (github.com/unkwsr/open-aim, read only, no code copied): eye height 1.75 m standing; open-aim also puts the head centre of a bot there."
+        },
+        "eyeCrouchMeters": {
+          "verified": false,
+          "source": "open-aim commit 807f557 (github.com/unkwsr/open-aim, read only, no code copied): eye height 1.35 m crouched."
+        },
+        "runSpeedMetersPerSecond": {
+          "verified": false,
+          "source": "open-aim commit 807f557 (github.com/unkwsr/open-aim, read only, no code copied): Vandal base run speed 5.4 m/s; the same value is in https://valorant.fandom.com/wiki/Vandal (docs/VALORANT-WEIGHTS.md section 2)."
+        },
+        "walkSpeedMetersPerSecond": {
+          "verified": false,
+          "source": "open-aim commit 807f557 (github.com/unkwsr/open-aim, read only, no code copied): walk = 0.55 x run speed = 2.97 m/s."
+        },
+        "crouchSpeedMetersPerSecond": {
+          "verified": false,
+          "source": "open-aim commit 807f557 (github.com/unkwsr/open-aim, read only, no code copied): crouch = 0.3 x run speed = 1.62 m/s."
         }
       }
     },

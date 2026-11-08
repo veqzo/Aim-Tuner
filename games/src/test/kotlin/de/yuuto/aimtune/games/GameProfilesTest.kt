@@ -119,7 +119,8 @@ class GameProfilesTest {
         assertEquals(1.5, valorant.geometry.elevation.spreadDegrees)
         assertEquals(0.12, valorant.geometry.elevation.offLevelShare)
         assertEquals(false, valorant.geometry.elevation.uniform)
-        assertEquals(1.6, valorant.geometry.eyeHeightMeters)
+        assertEquals(1.75, valorant.geometry.eyeHeightMeters)
+        assertEquals(1.75, valorant.geometry.headHeightMeters)
         assertEquals(false, parseGameProfile(valid).geometry.elevation.uniform)
         val uniform = parseGameProfile(valid.replace("\"sensitivity\"", "\"trainer\":{\"elevation\":{\"uniform\":true},\"headHeightMeters\":1.7},\"sensitivity\""))
         assertEquals(true, uniform.geometry.elevation.uniform)
@@ -170,7 +171,8 @@ class GameProfilesTest {
         assertNull(range.lifetimeSeconds(de.yuuto.aimtune.core.scenario.RangeSpeed.NONE))
         assertEquals(-50.0, range.bearingMinDegrees)
         assertEquals(80.0, range.bearingMaxDegrees)
-        assertEquals(1.8, range.botHeightMeters)
+        assertEquals(1.87, range.botHeightMeters)
+        assertEquals(0.24, range.headDiameterMeters)
         assertEquals(4, range.bodyHitsToKill(armor = true))
         assertEquals(3, range.bodyHitsToKill(armor = false))
         assertEquals(false, range.verified)
@@ -194,5 +196,49 @@ class GameProfilesTest {
         assertTrue("killRule" in error.message.orEmpty())
         assertFailsWith<GameProfileException> { parseGameProfile(valid.replace("\"sensitivity\"", "\"trainer\":{\"range\":{\"botHeightMeters\":1.8}},\"sensitivity\"")) }
         assertFailsWith<GameProfileException> { parseGameProfile(withRange(allNotes).replace("\"botHeightMeters\":1.7", "\"botHeightMeters\":0.4")) }
+    }
+
+    private val bodyBlock = """
+        "body":{"headDiameterMeters":0.2,"capsuleHeightMeters":1.9,"eyeStandMeters":1.7,"eyeCrouchMeters":1.3,
+         "runSpeedMetersPerSecond":5.0,"walkSpeedMetersPerSecond":2.5,"crouchSpeedMetersPerSecond":1.5,"valueNotes":{NOTES}}
+    """.trimIndent()
+
+    private val bodyNotes = listOf(
+        "headDiameterMeters", "capsuleHeightMeters", "eyeStandMeters", "eyeCrouchMeters",
+        "runSpeedMetersPerSecond", "walkSpeedMetersPerSecond", "crouchSpeedMetersPerSecond",
+    )
+
+    private fun withBody(notes: List<String>, verified: Boolean = false): String {
+        val entries = notes.joinToString(",") { "\"$it\":{\"verified\":$verified,\"source\":\"test\"}" }
+        return valid.replace("\"sensitivity\"", "\"trainer\":{${bodyBlock.replace("{NOTES}", "{$entries}")}},\"sensitivity\"")
+    }
+
+    @Test
+    fun `the body block of valorant has open-aim's player size and speeds, matching the eye and the range bot`() {
+        val geometry = assertNotNull(bundled.find("valorant")).geometry
+        val body = assertNotNull(geometry.body)
+        assertEquals(0.24, body.headDiameterMeters)
+        assertEquals(1.96, body.capsuleHeightMeters)
+        assertEquals(1.75, body.eyeStandMeters)
+        assertEquals(1.35, body.eyeCrouchMeters)
+        assertEquals(5.4, body.runSpeedMetersPerSecond)
+        assertEquals(5.4 * 0.55, body.walkSpeedMetersPerSecond, 1e-9)
+        assertEquals(5.4 * 0.3, body.crouchSpeedMetersPerSecond, 1e-9)
+        assertEquals(false, body.verified)
+        assertEquals(body.eyeStandMeters, geometry.eyeHeightMeters)
+        val range = assertNotNull(geometry.range)
+        assertEquals(body.standingShape, range.shape)
+    }
+
+    @Test
+    fun `a profile without a body block has none, and a body block needs a source for every value`() {
+        assertNull(parseGameProfile(valid).geometry.body)
+        val body = assertNotNull(parseGameProfile(withBody(bodyNotes)).geometry.body)
+        assertEquals(1.3, body.eyeCrouchMeters)
+        assertEquals(false, body.verified)
+        assertEquals(true, assertNotNull(parseGameProfile(withBody(bodyNotes, verified = true)).geometry.body).verified)
+        val error = assertFailsWith<GameProfileException> { parseGameProfile(withBody(bodyNotes - "walkSpeedMetersPerSecond")) }
+        assertTrue("walkSpeedMetersPerSecond" in error.message.orEmpty())
+        assertFailsWith<GameProfileException> { parseGameProfile(withBody(bodyNotes).replace("\"walkSpeedMetersPerSecond\":2.5", "\"walkSpeedMetersPerSecond\":6.0")) }
     }
 }
