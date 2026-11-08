@@ -1,6 +1,6 @@
 # Valorant weights (M23 step b)
 
-Status: **proposal, waiting for user confirmation**. No code uses these values yet.
+Status: **confirmed by the user: option A** (duel-win metric), with TRACKING 0, the mix, the flick bins, the head sizes and offLevelShare 0.27. Step c added `DuelScorer` in `core` and replayed it (section 8); the app does not use it yet (step g).
 
 This document derives the score weights, the scenario mix and the target geometry for Valorant.
 Every number has a source: the open-aim extract (`games/src/main/resources/games/valorant-engagements.json`,
@@ -18,8 +18,9 @@ Every number has a source: the open-aim extract (`games/src/main/resources/games
 
 The key finding: **the current weights do not cause the 1.5x speed bias.** They push toward slow,
 not fast. In the user's rounds, neither accuracy nor time to hit changes with the sensitivity
-(R² ≤ 0.08, section 3). The trainer task does not separate good and bad sensitivities, so noise and
-the search prior decide the result. The main levers are a realistic task (smaller heads, moving
+(R² ≤ 0.13, section 3). But section 3 and the replay (section 8) show that this data cannot tell: almost
+all rounds were played at one sensitivity. A flat fit then says nothing. Noise and the search prior may
+decide the result, but the data cannot prove it. The main levers are a realistic task (smaller heads, moving
 bots, steps e–g) and a score that prices a miss like Valorant does.
 
 ## 2. Valorant facts used
@@ -41,6 +42,11 @@ bots, steps e–g) and a score that prices a miss like Valorant does.
 ## 3. The user's rounds (read-only copy of the database)
 
 Rounds of the current database, all curves included. σ is the spread over rounds.
+
+Correction (step c): the curve rounds (accel_ab, accel_search, accel_refine) all use one sensitivity,
+48.7 cm/360. Only 17 rounds are blind sensitivity rounds, and only the 6 flick rounds span 38–70 cm/360.
+So the R² columns measure noise at almost one point. They do **not** show that the metrics are flat
+over the sensitivity. The σ columns stay valid.
 
 | Scenario | Rounds | σ first-shot acc. | σ time to hit | R² of acc. vs ln(cm/360) | R² of time vs ln(cm/360) |
 |---|---|---|---|---|---|
@@ -185,10 +191,27 @@ Moving bots: median angular speed 10.4°/s (CI 7.8–12.5), p90 22.7°/s. Strafe
 
 - No match data on engagement types; the open-aim drills are a proxy (`"verified": false`).
 - The opponent model assumes an equal opponent with a normal kill time. The price of a miss stays in 160–350 ms over the tested range.
-- The user's database is small (22 flick rounds) and mostly played with a curve.
+- The user's database is small (22 flick rounds) and mostly played with a curve at one sensitivity (48.7 cm/360). It cannot show how the metrics depend on the sensitivity.
 - Weapon: Vandal. With a Phantom past 20 m a head shot does 140 damage and no longer kills 150 HP; that raises the value of a hit, not of speed. The model stays with the Vandal, the rifle with the one-shot head kill at all ranges.
 
-## 8. Next steps
+## 8. Replay of the old rounds (step c)
 
-- c: replay the old rounds with the duel metric (database backup outside the repo) and compare the result with the current score.
+`storage/.../review/RealDataDuelReplayTest.kt` (runs only with `AIMTUNE_REAL_DB` set to a copy of the
+database). Current value 48.7 cm/360, MIXED, search range 30.0–78.0 cm/360, optimizer seed 0.
+Valorant sensitivity at 800 DPI = 16.33 / cm360.
+
+| Variant | Rounds used | Optimum | Valorant @800 | Equivalent stretch | Confidence |
+|---|---|---|---|---|---|
+| Old weights (40/30/20/15), all blind rounds | 11 | 38.3 cm | 0.426 | 36.0–40.6 cm | 44 % |
+| Old weights, click rounds | 6 | 37.2 cm | 0.438 | 34.1–40.0 cm | 23 % |
+| Duel score, click rounds | 6 | 37.4 cm | 0.437 | 34.6–40.0 cm | 31 % |
+
+- The old scheme reproduces the app's result (0.43 against the reported 0.45). The user plays 0.3 (54.4 cm).
+- The duel score moves the optimum by less than 1 %. Only the 6 flick rounds have a baseline: the other click scenarios have one round each, and a baseline needs 3 rounds.
+- The duel scores of the flick rounds are flatter (31.6–48.3) than the old scores (22.8–88.9): the duel score does not reward noise in accuracy so much.
+- Conclusion: the score alone does not remove the bias in this data. The data is too thin to show what does: 6 rounds at 6 sensitivities. The fix must come from the realistic task (steps e–g), and the acceptance test is step i with the friend's data.
+- An earlier draft of `DuelScorer` built a baseline from a single round. That scored the round against itself and pushed the optimum to the range edge (30 cm, 0.54). It now needs 3 rounds per scenario, as `ScoreCalculator` does.
+
+## 9. Next steps
+
 - e–g: geometry and mix from this document.
