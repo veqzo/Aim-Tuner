@@ -384,7 +384,8 @@ class SettingsScreen(ctx: AppContext, private val returnTo: (() -> Unit)? = null
         weights.clear()
         weights.putAll(AppSettings.DEFAULT_WEIGHTS)
         scenarios.clear()
-        scenarios.addAll(AppSettings.defaultScenarios(draft.profile(ctx.profiles)?.geometry?.range != null))
+        val geometry = draft.profile(ctx.profiles)?.geometry
+        scenarios.addAll(AppSettings.defaultScenarios(geometry?.range != null, geometry?.mix != null))
         draft = draft.copy(flashImportance = FlashImportance.SOMETIMES)
         flashSound = true
         hitSound = true

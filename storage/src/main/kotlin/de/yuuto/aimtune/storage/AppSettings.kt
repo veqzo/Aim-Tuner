@@ -158,7 +158,23 @@ data class AppSettings(
         /** The default scenarios of a game with a Range mode (M15d): flick, range and flash. */
         val DEFAULT_SCENARIOS_WITH_RANGE: List<String> = listOf(ScenarioKind.FLICK.id, ScenarioKind.RANGE.id, ScenarioKind.FLASH.id)
 
-        /** The default scenarios for a game that has a Range mode ([hasRange]) or not. */
-        fun defaultScenarios(hasRange: Boolean): List<String> = if (hasRange) DEFAULT_SCENARIOS_WITH_RANGE else DEFAULT_SCENARIOS
+        /** The strafe scenarios a game with a scenario mix adds to its defaults (M23): its moving opponents. */
+        val MIX_STRAFE_SCENARIOS: List<String> = listOf(ScenarioKind.MICRO_STRAFE.id, ScenarioKind.SWITCH_STRAFE.id)
+
+        /**
+         * The default scenarios for a game that has a Range mode ([hasRange]) or not, and a scenario mix ([hasMix]) or not.
+         * A game with a mix also plays its moving opponents in the strafe scenarios, before the flash rounds.
+         */
+        fun defaultScenarios(hasRange: Boolean, hasMix: Boolean = false): List<String> {
+            val base = if (hasRange) DEFAULT_SCENARIOS_WITH_RANGE else DEFAULT_SCENARIOS
+            return if (hasMix) base.filter { it != ScenarioKind.FLASH.id } + MIX_STRAFE_SCENARIOS + ScenarioKind.FLASH.id else base
+        }
+
+        /** True when [scenarios] is one of the default lists, with or without flash: the player did not choose it. */
+        fun isDefaultScenarios(scenarios: List<String>): Boolean {
+            fun withoutFlash(list: List<String>) = list.toSet() - ScenarioKind.FLASH.id
+            val defaults = listOf(true, false).flatMap { range -> listOf(true, false).map { mix -> withoutFlash(defaultScenarios(range, mix)) } }
+            return withoutFlash(scenarios) in defaults
+        }
     }
 }
