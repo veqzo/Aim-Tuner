@@ -316,4 +316,24 @@ class GameProfilesTest {
         val error = assertFailsWith<GameProfileException> { parseGameProfile(withStrafe(keys - "dwellSeconds")) }
         assertTrue("dwellSeconds" in error.message.orEmpty())
     }
+
+    @Test
+    fun `valorant plays flick 4 to strafe 1 and no tracking, and a mix block needs a source for every part`() {
+        val mix = assertNotNull(assertNotNull(bundled.find("valorant")).geometry.mix)
+        assertEquals(4.0, mix.standingParts)
+        assertEquals(1.0, mix.movingParts)
+        assertEquals(0.0, mix.trackingParts)
+        assertEquals(false, mix.verified)
+        assertEquals(null, assertNotNull(bundled.find("cs2")).geometry.mix, "a game without a mix keeps the weight schedule")
+
+        val keys = listOf("standingParts", "movingParts", "trackingParts")
+        fun withMix(notes: List<String>, standing: Double = 4.0): String {
+            val entries = notes.joinToString(",") { "\"$it\":{\"verified\":false,\"source\":\"test\"}" }
+            return valid.replace("\"sensitivity\"", "\"trainer\":{\"mix\":{\"standingParts\":$standing,\"movingParts\":1,\"valueNotes\":{$entries}}},\"sensitivity\"")
+        }
+        assertNotNull(parseGameProfile(withMix(keys)).geometry.mix)
+        val error = assertFailsWith<GameProfileException> { parseGameProfile(withMix(keys - "movingParts")) }
+        assertTrue("movingParts" in error.message.orEmpty())
+        assertFailsWith<GameProfileException> { parseGameProfile(withMix(keys, standing = -1.0)) }
+    }
 }

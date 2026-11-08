@@ -307,6 +307,16 @@
         "maxOffsetMeters": { "verified": false, "source": "Assumption kept from docs/RANGE.md: the opponent stays within 2 m of its spawn, so a leg of up to 1.75 m always fits." }
       }
     },
+    "mix": {
+      "standingParts": 4,
+      "movingParts": 1,
+      "trackingParts": 0,
+      "valueNotes": {
+        "standingParts": { "verified": false, "source": "open-aim commit 807f557 (github.com/unkwsr/open-aim, read only, no code copied), tools/openaim-extract over 110 scenes: standing bots are 56 % of the scenes (static) plus 40 % of the peek scenes (27 %), so 67 % of the engagements (docs/VALORANT-WEIGHTS.md section 5). Drills show what players train, not match frequencies." },
+        "movingParts": { "verified": false, "source": "open-aim commit 807f557 (github.com/unkwsr/open-aim, read only, no code copied), tools/openaim-extract over 110 scenes: 60 % of the exposures in peek scenes (27 %) move, so 16 % of the engagements (docs/VALORANT-WEIGHTS.md section 5). Flash scenes (16 %) are the flash rounds, whose parts the player's flash importance sets." },
+        "trackingParts": { "verified": false, "source": "docs/VALORANT-WEIGHTS.md section 4, confirmed by the user: a moving shooter is inaccurate in Valorant (walk +3°, run +6° spread), so moving targets are shot from a stop and covered by the strafe click scenarios; tracking gets no rounds." }
+      }
+    },
     "verified": false
   }
 }

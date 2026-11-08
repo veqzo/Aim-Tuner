@@ -76,8 +76,10 @@ import de.yuuto.aimtune.app.setup.SetupStep
 import de.yuuto.aimtune.app.ui.UiHolder
 import de.yuuto.aimtune.core.accel.AbStatus
 import de.yuuto.aimtune.core.accel.AccelFit
+import de.yuuto.aimtune.core.accel.AccelScenarios
 import de.yuuto.aimtune.core.scenario.ScenarioKind
 import de.yuuto.aimtune.core.score.FlashImportance
+import de.yuuto.aimtune.core.scenario.ScenarioMix
 import de.yuuto.aimtune.core.scenario.ScenarioSchedule
 import de.yuuto.aimtune.core.optimizer.OptimizationResult
 import de.yuuto.aimtune.core.score.MetricWeights
@@ -286,9 +288,13 @@ class AppContext(
         val past = processor.pastBlindRounds(setup.gameId, config.dpi)
         val seed = nextSeed++
         val test = BlindTest(range, weights, past, seed)
-        val schedule = ScenarioSchedule(playable.ifEmpty { setOf(ScenarioKind.FLICK) }, weights)
+        val schedule = scheduleFor(playable.ifEmpty { setOf(ScenarioKind.FLICK) }, config.profile.geometry.mix.takeUnless { rangeMode }, weights)
         showBlindRound(BlindRun(test, runKey = System.currentTimeMillis(), baseConfig = config, nextSeed = nextSeed++, schedule = schedule))
     }
+
+    /** A game's scenario mix decides the rounds (M23); without one, or in Range mode, the metric weights do. */
+    private fun scheduleFor(playable: Set<ScenarioKind>, mix: ScenarioMix?, weights: MetricWeights): ScenarioSchedule =
+        if (mix == null) ScenarioSchedule(playable, weights) else ScenarioSchedule.forMix(playable, mix, settings.current.flashImportance().mixParts)
 
     /** One blind round at the sensitivity the optimizer picked (hidden from the user). */
     fun showBlindRound(run: BlindRun) = switchTo(TrainerScreen(this, run.nextRoundConfig(), BlindSession(this, run)))
@@ -449,9 +455,14 @@ class AppContext(
         val run = AccelRun(
             base, metricWeights(), runKey = System.currentTimeMillis(), seed = nextSeed++, prior = processor.priorCalibration(base.dpi, base.cm360, own, stage),
             flash = settings.current.flashImportance() != FlashImportance.NEVER, boundedCurves = boundedCurves, baseCurve = own, stage = stage,
+            scenarios = curveScenarios(base),
         )
         showAccelStep(run)
     }
+
+    /** The curve runs' rotation from the game's scenario mix (M23); null keeps the click scenarios with or without flash. */
+    private fun curveScenarios(config: TrainerConfig): List<ScenarioKind>? =
+        config.profile.geometry.mix?.let { AccelScenarios.forMix(it, settings.current.flashImportance().mixParts) }
 
     /** Starts the acceleration steps at the game sensitivity (or the finder's confident result, if chosen); onboarding until the setup is complete. */
     fun startAccelRun(search: Boolean = false) {
@@ -467,7 +478,7 @@ class AppContext(
         val run = AccelRun(
             base, metricWeights(), runKey = System.currentTimeMillis(), seed = nextSeed++, prior = prior, startWithSearch = search,
             flash = settings.current.flashImportance() != FlashImportance.NEVER, priorSearch = priorSearch,
-            boundedCurves = boundedCurves, baseCurve = own,
+            boundedCurves = boundedCurves, baseCurve = own, scenarios = curveScenarios(base),
         )
         showAccelStep(run)
     }
@@ -478,7 +489,9 @@ class AppContext(
         val stored = storedAnalysis() ?: return showOnboarding(afterFinish = ::showMenu)
         val base = stored.config.copy(dpi = last.dpi, cm360 = last.cm360)
         showAccelStep(
-            AccelRun(base, stored.weights, runKey = System.currentTimeMillis(), seed = nextSeed++, flash = settings.current.flashImportance() != FlashImportance.NEVER, startWithTest = curve, boundedCurves = boundedCurves),
+            AccelRun(base, stored.weights, runKey = System.currentTimeMillis(), seed = nextSeed++, flash = settings.current.flashImportance() != FlashImportance.NEVER, startWithTest = curve, boundedCurves = boundedCurves,
+                scenarios = curveScenarios(base),
+            ),
         )
     }
 
@@ -518,7 +531,9 @@ class AppContext(
         if (!this.source.hasReportTimestamps || !rawAccelConfirmed) return showRefine()
         val config = trainerConfig() ?: return showOnboarding(afterFinish = ::showMenu)
         showRefineStep(
-            RefineRun(config, metricWeights(), runKey = System.currentTimeMillis(), seed = nextSeed++, source = source, profile = profile, flash = settings.current.flashImportance() != FlashImportance.NEVER),
+            RefineRun(config, metricWeights(), runKey = System.currentTimeMillis(), seed = nextSeed++, source = source, profile = profile, flash = settings.current.flashImportance() != FlashImportance.NEVER,
+                scenarios = curveScenarios(config),
+            ),
         )
     }
 

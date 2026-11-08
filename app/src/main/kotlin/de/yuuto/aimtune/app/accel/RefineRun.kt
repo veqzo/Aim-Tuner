@@ -7,6 +7,7 @@ import de.yuuto.aimtune.core.accel.RefineEngine
 import de.yuuto.aimtune.core.accel.RefinePhase
 import de.yuuto.aimtune.core.metrics.computeRoundMetrics
 import de.yuuto.aimtune.core.recording.RoundRecording
+import de.yuuto.aimtune.core.scenario.ScenarioKind
 import de.yuuto.aimtune.core.score.MetricWeights
 import de.yuuto.aimtune.core.score.scoreInputs
 
@@ -27,8 +28,10 @@ class RefineRun(
     val profile: RawAccelProfile,
     flash: Boolean,
     stageRounds: Int = 12,
+    /** The rotation of the rounds instead of the [flash] choice, e.g. a game's scenario mix. */
+    scenarios: List<ScenarioKind>? = null,
 ) {
-    val engine = RefineEngine(profile, baseConfig.cm360, weights, seed, flash, stageRounds = stageRounds)
+    val engine = RefineEngine(profile, baseConfig.cm360, weights, seed, flash, stageRounds = stageRounds, scenarioMix = scenarios)
 
     val phase: RefinePhase get() = engine.phase
 

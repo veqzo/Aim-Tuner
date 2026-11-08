@@ -12,6 +12,7 @@ import de.yuuto.aimtune.core.scenario.PositiveRange
 import de.yuuto.aimtune.core.scenario.QuantileCurve
 import de.yuuto.aimtune.core.scenario.QuantilePoint
 import de.yuuto.aimtune.core.scenario.RangeGeometry
+import de.yuuto.aimtune.core.scenario.ScenarioMix
 import de.yuuto.aimtune.core.scenario.StrafePattern
 import de.yuuto.aimtune.core.scenario.TrainerGeometry
 import de.yuuto.aimtune.core.units.Fov
@@ -333,6 +334,26 @@ private data class StrafeBlockDto(
     }
 }
 
+/** The `mix` block: how often the game's engagement types occur, in parts of the rounds; each part needs a source. */
+@Serializable
+private data class MixBlockDto(
+    val standingParts: Double,
+    val movingParts: Double,
+    val trackingParts: Double = 0.0,
+    val valueNotes: Map<String, RangeValueNoteDto>,
+) {
+    fun toMix(): ScenarioMix {
+        val missing = REQUIRED_NOTES - valueNotes.keys
+        require(missing.isEmpty()) { "mix.valueNotes is missing a source for ${missing.joinToString()}" }
+        require(valueNotes.values.all { it.source.isNotBlank() }) { "every mix.valueNotes entry needs a source" }
+        return ScenarioMix(standingParts, movingParts, trackingParts, verified = valueNotes.values.all { it.verified })
+    }
+
+    companion object {
+        val REQUIRED_NOTES = setOf("standingParts", "movingParts", "trackingParts")
+    }
+}
+
 /** The `trainer` block of a profile; every field is optional and falls back to [TrainerGeometry.DEFAULT]. */
 @Serializable
 private data class TrainerDto(
@@ -357,6 +378,7 @@ private data class TrainerDto(
     val body: BodyBlockDto? = null,
     val movement: MovementBlockDto? = null,
     val strafe: StrafeBlockDto? = null,
+    val mix: MixBlockDto? = null,
     val verified: Boolean = false,
 ) {
     fun toGeometry(horizontalFovDegrees: Double): TrainerGeometry {
@@ -384,6 +406,7 @@ private data class TrainerDto(
             body = body?.toBody(),
             movement = movement?.toMovement(),
             strafe = strafe?.toPattern(),
+            mix = mix?.toMix(),
             verified = verified,
         )
     }

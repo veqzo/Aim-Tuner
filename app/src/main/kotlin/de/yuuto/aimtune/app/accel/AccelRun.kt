@@ -94,6 +94,8 @@ class AccelRun(
      * anchors stay frozen: the calibration plays it and the analysis divides it out instead of the base. Needs a base.
      */
     val stage: LookupCurve? = null,
+    /** The rotation of the search and the test instead of the [flash] choice, e.g. a game's scenario mix ([AccelScenarios.forMix]). */
+    scenarios: List<ScenarioKind>? = null,
 ) {
     var phase = when {
         startWithTest != null -> AccelPhase.TEST
@@ -113,7 +115,7 @@ class AccelRun(
         if (prior.rounds == 0) requestedCalibrationRounds else maxOf(requestedCalibrationRounds - prior.rounds, minOf(MIN_NEW_ROUNDS, requestedCalibrationRounds))
 
     private val calibration = mutableListOf<RoundMetrics>()
-    private val testScenarios = if (flash) SCENARIOS_WITH_FLASH else CLICK_SCENARIOS
+    private val testScenarios = scenarios?.also { require(it.isNotEmpty()) { "scenario rotation must not be empty" } } ?: if (flash) SCENARIOS_WITH_FLASH else CLICK_SCENARIOS
     private val plan = AccelAbPlan(testScenarios, seed, maxPairs)
     private val outcomes = mutableListOf<AbOutcome>()
 

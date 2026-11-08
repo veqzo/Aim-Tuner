@@ -80,6 +80,8 @@ data class TrainerGeometry(
     val movement: GroundMovement? = null,
     /** How strafing click targets move with the game's [locomotion]; null keeps the constant-speed strafe of [StrafeConfig]. */
     val strafe: StrafePattern? = null,
+    /** How often the game's engagement types occur; null lets the metric weights decide (see [ScenarioSchedule]). */
+    val mix: ScenarioMix? = null,
     val verified: Boolean = false,
 ) {
     init {

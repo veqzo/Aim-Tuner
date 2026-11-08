@@ -33,11 +33,21 @@ class AccelRunTest {
     @Test
     fun `the curve finder never plays range rounds`() {
         // The M15c gate: range rounds in the strength search raised the false directions for flat players (9/16 to 14/16).
-        val lists = listOf(AccelRun.CLICK_SCENARIOS, AccelRun.SCENARIOS_WITH_FLASH, AccelScenarios.of(true), AccelScenarios.of(false))
+        val valorantMix = checkNotNull(base.profile.geometry.mix)
+        val lists = listOf(AccelRun.CLICK_SCENARIOS, AccelRun.SCENARIOS_WITH_FLASH, AccelScenarios.of(true), AccelScenarios.of(false), AccelScenarios.forMix(valorantMix, 2.0))
         lists.forEach { assertFalse(ScenarioKind.RANGE in it) }
     }
 
     private fun newRun() = AccelRun(base, MetricWeights.DEFAULT, runKey = 1, seed = 3)
+
+    @Test
+    fun `with a game's mix the strength search plays its rotation`() {
+        val rotation = AccelScenarios.forMix(checkNotNull(base.profile.geometry.mix), flashParts = 1.0)
+        val run = AccelRun(base, MetricWeights.DEFAULT, runKey = 1, seed = 5, startWithSearch = true, scenarios = rotation)
+        val kinds = List(rotation.size) { run.nextRoundConfig().scenario.also { _ -> play(run, SimulatedPlayer()) } }
+        assertEquals(rotation, kinds)
+        assertFailsWith<IllegalArgumentException> { AccelRun(base, MetricWeights.DEFAULT, runKey = 1, seed = 5, scenarios = emptyList()) }
+    }
 
     private fun play(run: AccelRun, player: SimulatedPlayer) {
         val next = run.nextRoundConfig()

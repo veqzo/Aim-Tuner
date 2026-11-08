@@ -1,6 +1,8 @@
 package de.yuuto.aimtune.core.accel
 
 import de.yuuto.aimtune.core.scenario.ScenarioKind
+import de.yuuto.aimtune.core.scenario.ScenarioMix
+import de.yuuto.aimtune.core.scenario.ScenarioSchedule
 import de.yuuto.aimtune.core.score.MetricWeights
 import de.yuuto.aimtune.core.score.ScoreMetric
 
@@ -15,6 +17,15 @@ object AccelScenarios {
     )
 
     fun of(flash: Boolean): List<ScenarioKind> = if (flash) WITH_FLASH else CLICK
+
+    /** The scenarios of a game's [ScenarioMix] for the curve runs: flicks for standing opponents, both strafe scenarios for moving ones. */
+    val MIX_KINDS = setOf(ScenarioKind.FLICK, ScenarioKind.MICRO_STRAFE, ScenarioKind.SWITCH_STRAFE, ScenarioKind.FLASH)
+
+    /**
+     * The rotation of a game with a [mix] (M23): one cycle of its schedule over [MIX_KINDS], with [flashParts] for the flash rounds
+     * (0 plays none). Valorant with flash importance "sometimes" gives 12 rounds: 8 flicks, 1 of each strafe scenario, 2 flashes.
+     */
+    fun forMix(mix: ScenarioMix, flashParts: Double): List<ScenarioKind> = ScenarioSchedule.forMix(MIX_KINDS, mix, flashParts).cycle()
 }
 
 enum class RefinePhase {
@@ -56,7 +67,7 @@ class RefineEngine(
     val warmupRounds: Int = DEFAULT_WARMUP_ROUNDS,
     private val stageRounds: Int = RefineSearch.DEFAULT_ROUNDS,
     maxPairs: Int = AccelAbPlan.DEFAULT_MAX_PAIRS,
-    /** The rotation of the rounds instead of [AccelScenarios.of]; experiments only (the gate's flash-heavy mixes). */
+    /** The rotation of the rounds instead of [AccelScenarios.of]: a game's scenario mix ([AccelScenarios.forMix]) or an experiment's. */
     scenarioMix: List<ScenarioKind>? = null,
 ) {
     /** The parameters the profile supports, in the order they are searched. */
