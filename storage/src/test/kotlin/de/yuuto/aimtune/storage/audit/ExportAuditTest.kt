@@ -136,6 +136,11 @@ class ExportAuditTest {
     fun usersOwnProfile() {
         val text = readUserProfile() ?: run { note("4 user-rawaccel-settings.json not found, skipped"); return }
         val ref = RawAccelRef(text)
+        // The expected values below are the audited profile; the file is the user's live Raw Accel settings and changes with them.
+        if (!ref.isAuditedProfile()) {
+            note("4 user-rawaccel-settings.json is no longer the audited profile (classic, Gain true, exp 2, off 10, in_out 62.5/1.6), skipped")
+            return
+        }
         val xs = listOf(1.0, 10.0, 20.0, 30.0, 40.0, 50.0, 62.5, 100.0)
         val expected = listOf(1.0, 1.0, 1.0286, 1.0762, 1.1286, 1.1829, 1.2520, 1.3825)
         note("4 user curve (classic, Gain true, exp 2, off 10, in_out 62.5/1.6) multiplier: " + xs.joinToString(" ") { "%s:%.4f".format(Locale.ROOT, it, ref.multiplier(it)) })
@@ -246,6 +251,14 @@ private class RawAccelRef(json: String) {
     fun total(x: Double) = multiplier(x) * outputDpi / deviceDpi
 
     private fun n(name: String) = args.getValue(name).jsonPrimitive.double
+
+    /** True for the profile the audit was written against: classic, Gain true, exponent 2, offset 10, cap in_out 62.5 / 1.6. */
+    fun isAuditedProfile(): Boolean {
+        val cap = args.getValue("Cap / Jump").jsonObject
+        return args.getValue("mode").jsonPrimitive.content == "classic" && args.getValue("Gain / Velocity").jsonPrimitive.boolean &&
+            n("exponentClassic") == 2.0 && n("inputOffset") == 10.0 && args.getValue("Cap mode").jsonPrimitive.content == "in_out" &&
+            cap.getValue("x").jsonPrimitive.double == 62.5 && cap.getValue("y").jsonPrimitive.double == 1.6
+    }
 
     fun multiplier(x: Double): Double {
         val gain = args.getValue("Gain / Velocity").jsonPrimitive.boolean
