@@ -15,6 +15,7 @@ import de.yuuto.aimtune.app.accel.sampleAccelRun
 import de.yuuto.aimtune.app.accel.sampleDraftRun
 import de.yuuto.aimtune.app.accel.sampleOwnCurve
 import de.yuuto.aimtune.app.screens.AccelIntroScreen
+import de.yuuto.aimtune.app.setup.SetupDraft
 import de.yuuto.aimtune.app.ui.Motion
 import de.yuuto.aimtune.core.accel.FeltStage
 import de.yuuto.aimtune.core.accel.FeltStepFamily
@@ -38,7 +39,6 @@ import de.yuuto.aimtune.app.screens.MainMenuScreen
 import de.yuuto.aimtune.app.screens.ShareDataScreen
 import de.yuuto.aimtune.app.screens.StoredCounts
 import de.yuuto.aimtune.app.screens.TrainerScreen
-import de.yuuto.aimtune.app.setup.SetupStep
 import de.yuuto.aimtune.core.scenario.ScenarioKind
 import de.yuuto.aimtune.storage.SessionKind
 import java.nio.file.Files
@@ -69,10 +69,8 @@ class ScreenshotTour(private val ctx: AppContext, private val dir: Path, private
 
     private val steps = listOf(
         Step("menu") { ctx.showMenu() },
-        Step("onboarding-1-dpi") { ctx.showOnboarding(SetupStep.DPI) },
-        Step("onboarding-2-game") { ctx.showOnboarding(SetupStep.GAME) },
-        Step("onboarding-3-style") { ctx.showOnboarding(SetupStep.STYLE) },
-        Step("onboarding-4-pad") { ctx.showOnboarding(SetupStep.PAD) },
+        Step("onboarding") { ctx.showOnboarding() },
+        Step("onboarding-empty") { ctx.showOnboarding(draft = SetupDraft()) },
         Step("pretest") { ctx.showPreTest() },
         Step("settings") { ctx.showSettings() },
         Step("sound-settings") { ctx.showSoundSettings() },

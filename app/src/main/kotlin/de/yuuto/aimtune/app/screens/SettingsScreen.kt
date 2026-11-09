@@ -95,7 +95,7 @@ class SettingsScreen(ctx: AppContext, private val returnTo: (() -> Unit)? = null
         addRow(left, t("settings.flash"), flashImportanceButtons(draft.flashImportance) { draft = draft.copy(flashImportance = it); message = null; rebuild() })
         left.add(ui.label(t("settings.flash_help"), Styles.CAPTION_MUTED, wrap = true)).colspan(2).left().width(FLASH_HELP_WIDTH).padBottom(ROW_GAP).row()
         addRow(left, t("settings.sounds"), soundToggles())
-        val runSetup = ui.button(t("settings.run_setup"), Styles.SECONDARY) { ctx.showOnboarding(SetupStep.DPI, afterFinish = { ctx.showSettings(returnTo) }) }
+        val runSetup = ui.button(t("settings.run_setup"), Styles.SECONDARY) { ctx.showOnboarding(afterFinish = { ctx.showSettings(returnTo) }) }
         addRow(left, t("settings.style_pad"), Table().also { it.add(runSetup).height(CONTROL_HEIGHT) })
         addRow(left, t("settings.data"), Table().also { it.add(startOverButton()).width(START_OVER_WIDTH).height(CONTROL_HEIGHT) })
 

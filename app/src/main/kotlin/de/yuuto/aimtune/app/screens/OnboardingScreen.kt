@@ -2,422 +2,317 @@ package de.yuuto.aimtune.app.screens
 
 import com.badlogic.gdx.Gdx
 import com.badlogic.gdx.scenes.scene2d.Actor
-import com.badlogic.gdx.scenes.scene2d.ui.Button
-import com.badlogic.gdx.scenes.scene2d.ui.Image
 import com.badlogic.gdx.scenes.scene2d.ui.Label
 import com.badlogic.gdx.scenes.scene2d.ui.Table
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton
 import com.badlogic.gdx.scenes.scene2d.ui.TextField
-import com.badlogic.gdx.utils.Align
 import de.yuuto.aimtune.app.AppContext
 import de.yuuto.aimtune.app.setup.GAME_CUSTOM
 import de.yuuto.aimtune.app.setup.PadPreset
 import de.yuuto.aimtune.app.setup.SetupDraft
 import de.yuuto.aimtune.app.setup.SetupStep
+import de.yuuto.aimtune.app.ui.Disclosure
 import de.yuuto.aimtune.app.ui.FitCheckPanel
+import de.yuuto.aimtune.app.ui.Motion
 import de.yuuto.aimtune.app.ui.Styles
 import de.yuuto.aimtune.app.ui.addButton
 import de.yuuto.aimtune.app.ui.button
 import de.yuuto.aimtune.app.ui.caps
-import de.yuuto.aimtune.app.ui.frame
 import de.yuuto.aimtune.app.ui.label
-import de.yuuto.aimtune.app.ui.onChange
+import de.yuuto.aimtune.app.ui.stagger
 import de.yuuto.aimtune.core.score.FlashImportance
 import de.yuuto.aimtune.core.units.AimStyle
 import de.yuuto.aimtune.core.units.SearchRangeTable
 import java.util.Locale
 
-private const val TITLE_GAP = 24f
-private const val DESCRIPTION_WIDTH = 760f
-private const val SECTION_GAP = 40f
-private const val CAPTION_GAP = 12f
-private const val FIELD_WIDTH_LG = 760f
-private const val FIELD_HEIGHT_LG = 88f
-private const val PRESET_WIDTH = 120f
-private const val PRESET_HEIGHT = 64f
-private const val TILE_WIDTH = 280f
-private const val TILE_GAP = 16f
-private const val TILES_PER_ROW = 3
-private const val RIGHT_COLUMN_GAP = 140f
-private const val INFO_CARD_WIDTH = 560f
-private const val INFO_CARD_PADDING = 28f
-private const val STYLE_CARD_WIDTH = 380f
-private const val STYLE_CARD_HEIGHT = 220f
-private const val STYLE_CARD_PADDING = 28f
-private const val PAD_ROW_WIDTH = 760f
-private const val PAD_ROW_HEIGHT = 64f
-private const val PAD_ROW_PADDING = 24f
-private const val SMALL_FIELD_WIDTH = 260f
-private const val SMALL_FIELD_HEIGHT = 56f
-private const val FIT_PANEL_WIDTH = 640f
-private const val FIT_PANEL_HEIGHT = 300f
-private const val STEP_BAR_WIDTH = 56f
-private const val STEP_BAR_HEIGHT = 6f
-private const val STEP_BAR_GAP = 8f
-private const val ACCENT_RULE_WIDTH = 2f
-private const val CURRENT_SETTING_HEIGHT = 300f
-private const val RIGHT_BLOCK_PADDING = 40f
+private const val TITLE_GAP = 12f
+private const val SECTION_GAP = 32f
+private const val CAPTION_GAP = 8f
+private const val FIELD_GAP = 16f
+private const val TILE_GAP = 8f
+private const val GAME_TILE_HEIGHT = 64f
+private const val TILE_HEIGHT = 52f
+private const val FIELD_WIDTH = 360f
+private const val FIELD_HEIGHT = 84f
+private const val WELL_PADDING_X = 36f
+private const val WELL_PADDING_Y = 24f
+private const val UNIT_GAP = 14f
+private const val UNIT_LIFT = 22f
+private const val FIT_GAP = 16f
+private const val COUNT_FROM = 0.6
+private const val ENTER_STEP = 0.08f
+private const val FINISH_MIN_WIDTH = 260f
 private const val FORMULA = "360 × 2.54 ÷ (DPI × sens × yaw)"
 private val DPI_PRESETS = listOf("400", "800", "1600", "3200")
 
 /**
- * First-launch setup in four steps (also reachable later from settings): DPI, game and current
- * sensitivity, aim style, mousepad. All values live in a [SetupDraft]; nothing is saved until the
- * last step is finished.
+ * First-launch setup on one screen. The left column asks for the three values that matter (game,
+ * DPI, sensitivity); the right column shows the live cm/360° they give and the preset choices
+ * (aim style, mousepad, flash) the player can keep. Nothing is saved before Finish.
  */
 class OnboardingScreen(
     ctx: AppContext,
-    private var draft: SetupDraft,
-    private var step: SetupStep,
+    draft: SetupDraft,
     private val afterFinish: () -> Unit,
 ) : UiScreen(ctx) {
-    private var continueButton: TextButton? = null
-    private var liveCm: Label? = null
-    private var sensitivityHint: Label? = null
-    private var issueLabel: Label? = null
-    private var presetButtons: List<TextButton> = emptyList()
-    private var fitHolder: Table? = null
+    private var draft: SetupDraft = draft.withDefaults()
     private var edited = false
     private var saveError: String? = null
+    private var dpiHelpOpen = false
+    private var entered = false
+
+    /** True once the live number counted up, so it does not replay on every rebuild. */
+    private var counted = false
+
+    private var finishButton: TextButton? = null
+    private var issueLabel: Label? = null
+    private var liveNumber: Label? = null
+    private var hintLabel: Label? = null
+    private var dpiPresets: Table? = null
+    private var fitHolder: Table? = null
+
+    private val twoColumns: Boolean get() = HubLayout.twoColumns(stage.viewport.worldWidth)
+
+    private fun columnWidth(): Float {
+        val stageWidth = stage.viewport.worldWidth
+        if (!twoColumns) return HubLayout.columnWidth(stageWidth, ui.tokens.margin)
+        return (stageWidth - 2 * ui.tokens.margin - HubLayout.COLUMN_GAP) / 2
+    }
 
     override fun build(): Actor {
-        val content = when (step) {
-            SetupStep.DPI -> dpiStep()
-            SetupStep.GAME -> gameStep()
-            SetupStep.STYLE -> styleStep()
-            SetupStep.PAD -> padStep()
+        val width = columnWidth()
+        val columns = listOf<Actor>(essentials(width), live(width))
+        val shown = if (entered) columns else stagger(columns, ui.tokens.motionSlow, ENTER_STEP)
+        entered = true
+        val content = Table().top().left()
+        if (twoColumns) {
+            content.add(shown[0]).top().left().width(width)
+            content.add(shown[1]).top().left().width(width).padLeft(HubLayout.COLUMN_GAP)
+        } else {
+            content.add(shown[0]).top().left().width(width).row()
+            content.add(shown[1]).top().left().width(width).padTop(SECTION_GAP)
         }
-        val root = frame(content, footer(), Chrome.MINIMAL, stepIndicator())
+        val root = frame(content, footer(), Chrome.MINIMAL)
         refresh()
+        focusFirstEmpty()
         return root
     }
 
-    override fun onEscape() = back()
+    override fun onEscape() = ctx.showMenu()
 
-    override fun onEnter() = next()
-
-    // ---- navigation -------------------------------------------------------------------------
-
-    private fun back() {
-        if (step.ordinal == 0) {
-            ctx.showMenu()
-            return
-        }
-        step = SetupStep.entries[step.ordinal - 1]
-        resetStepState()
-        rebuild()
-    }
-
-    private fun next() {
-        if (draft.issue(step, ctx.profiles) != null) return
-        if (step == SetupStep.entries.last()) {
-            finish()
-        } else {
-            step = SetupStep.entries[step.ordinal + 1]
-            resetStepState()
-            rebuild()
-        }
-    }
+    override fun onEnter() = finish()
 
     private fun finish() {
+        if (issue() != null) {
+            edited = true
+            refresh()
+            return
+        }
         val error = ctx.settings.save(draft.toSettings(ctx.settings.current, ctx.profiles))
         if (error == null) {
             afterFinish()
         } else {
             saveError = error
-            rebuild()
-        }
-    }
-
-    private fun resetStepState() {
-        edited = false
-        saveError = null
-    }
-
-    /** Re-evaluates what the current input allows: Continue state, live distance and messages. */
-    private fun refresh() {
-        val issue = draft.issue(step, ctx.profiles)
-        continueButton?.isDisabled = issue != null
-        liveCm?.setText(draft.currentCm360(ctx.profiles)?.let { "%.1f".format(Locale.ROOT, it) } ?: "-")
-        sensitivityHint?.setText(sensitivityHintText())
-        issueLabel?.setText(if (issue != null && edited) t(issue.key) else saveError.orEmpty())
-        presetButtons.forEachIndexed { i, button ->
-            button.setProgrammaticChangeEvents(false)
-            button.isChecked = draft.dpi == DPI_PRESETS[i].toDouble()
-        }
-    }
-
-    // ---- shared pieces ----------------------------------------------------------------------
-
-    private fun stepIndicator(): Table {
-        val table = Table()
-        table.add(ui.label(t("onboarding.step", step.ordinal + 1, SetupStep.entries.size), Styles.MONO_MUTED)).padRight(16f)
-        SetupStep.entries.forEach { s ->
-            val segment = Image(if (s.ordinal <= step.ordinal) ui.stepOn else ui.stepOff)
-            table.add(segment).width(STEP_BAR_WIDTH).height(STEP_BAR_HEIGHT).padLeft(STEP_BAR_GAP)
-        }
-        return table
-    }
-
-    private fun footer(): Table {
-        val footer = Table()
-        footer.add(ui.button(t("common.back"), Styles.TEXT) { back() }).left().height(PRESET_HEIGHT).padLeft(8f)
-        footer.add().expandX()
-        issueLabel = ui.label("", Styles.CAUTION).also { footer.add(it).right().padRight(32f) }
-        val continueButton = ui.button(if (step == SetupStep.entries.last()) t("onboarding.finish") else t("common.continue"), Styles.PRIMARY) { next() }
-        this.continueButton = continueButton
-        footer.addButton(continueButton, minWidth = 220f)
-        return footer
-    }
-
-    private fun title(text: String, wrapWidth: Float = DESCRIPTION_WIDTH): Label = ui.label(text, Styles.HEADING, wrap = true).also { it.width = wrapWidth }
-
-    private fun numberField(text: String, style: String, onText: (String) -> Unit): TextField {
-        val field = TextField(text, ui.skin, style)
-        field.setTextFieldFilter { _, c -> c.isDigit() || c == '.' || c == ',' }
-        field.maxLength = MAX_INPUT_CHARS
-        field.onChange {
-            edited = true
-            onText(field.text)
             refresh()
         }
-        return field
     }
 
-    private fun focusLater(field: TextField) {
-        Gdx.app.postRunnable {
-            stage.keyboardFocus = field
-            field.setCursorPosition(field.text.length)
+    /** The first problem of the whole draft, in the order the screen shows the values. */
+    private fun issue() = listOf(SetupStep.GAME, SetupStep.DPI, SetupStep.STYLE, SetupStep.PAD)
+        .firstNotNullOfOrNull { draft.issue(it, ctx.profiles) }
+
+    private fun edit(change: SetupDraft) {
+        draft = change
+        edited = true
+        saveError = null
+        refresh()
+    }
+
+    /** Picking a tile changes which fields exist (custom game, custom pad), so the screen is built again. */
+    private fun pick(change: SetupDraft) {
+        draft = change
+        saveError = null
+        rebuild()
+    }
+
+    // ---- left column: the three values ------------------------------------------------------
+
+    private fun essentials(width: Float): Table {
+        val table = Table().top().left()
+        table.add(ui.label(t("onboarding.title"), Styles.HEADING)).left().padBottom(TITLE_GAP).row()
+        table.add(ui.label(t("onboarding.subtitle"), Styles.BODY_MUTED, wrap = true)).left().width(width).padBottom(SECTION_GAP + 8f).row()
+
+        table.add(ui.caps(t("onboarding.game.game"))).left().padBottom(CAPTION_GAP).row()
+        val games = ctx.profiles.profiles.map { it.id to it.name } + (GAME_CUSTOM to t("onboarding.game.custom"))
+        table.add(ui.choiceTiles(games, width, GAME_TILE_HEIGHT, TILE_GAP, { it.first == draft.gameId }, { it.second }) { pick(draft.copy(gameId = it.first)) })
+            .left().padBottom(SECTION_GAP).row()
+        if (draft.gameId == GAME_CUSTOM) {
+            table.add(customGame(width)).left().padBottom(SECTION_GAP).row()
         }
-    }
 
-    private fun tile(text: String, checked: Boolean, onClick: () -> Unit): TextButton {
-        val button = ui.button(text, Styles.TILE, onClick)
-        button.setProgrammaticChangeEvents(false)
-        button.isChecked = checked
-        return button
-    }
+        table.add(ui.caps("DPI")).left().padBottom(CAPTION_GAP).row()
+        table.add(dpiRow(width)).left().width(width).padBottom(CAPTION_GAP + 4f).row()
+        table.add(Disclosure(ui, t("onboarding.dpi.short"), t("onboarding.dpi.help_text"), t("dash.more") to t("dash.less"), width, dpiHelpOpen) { dpiHelpOpen = it })
+            .left().padBottom(SECTION_GAP).row()
 
-    // ---- step 1: DPI ------------------------------------------------------------------------
-
-    private fun dpiStep(): Table {
-        val left = Table()
-        left.add(title(t("onboarding.dpi.title"))).left().width(DESCRIPTION_WIDTH).padBottom(TITLE_GAP).row()
-        left.add(ui.label(t("onboarding.dpi.description"), Styles.BODY_MUTED, wrap = true))
-            .left().width(DESCRIPTION_WIDTH).padBottom(SECTION_GAP).row()
-        left.add(ui.caps("DPI")).left().padBottom(CAPTION_GAP).row()
-        val field = numberField(draft.dpiText, Styles.INPUT_LG) { draft = draft.copy(dpiText = it) }
-        left.add(field).left().width(FIELD_WIDTH_LG).height(FIELD_HEIGHT_LG).padBottom(TILE_GAP + 8f).row()
-        val presets = Table()
-        presetButtons = DPI_PRESETS.map { preset ->
-            tile(preset, draft.dpiText == preset) {
-                draft = draft.copy(dpiText = preset)
-                field.text = preset
-                field.setCursorPosition(preset.length)
-                edited = true
-                refresh()
-            }
-        }
-        presetButtons.forEach { presets.add(it).width(PRESET_WIDTH).height(PRESET_HEIGHT).padRight(TILE_GAP) }
-        left.add(presets).left()
-        focusLater(field)
-
-        val info = Table()
-        info.background(ui.skin.getDrawable(Styles.CARD))
-        info.pad(INFO_CARD_PADDING)
-        info.add(ui.label(t("onboarding.dpi.help_title"), Styles.BODY_LG)).left().padBottom(TILE_GAP).row()
-        info.add(ui.label(t("onboarding.dpi.help_text"), Styles.BODY_MUTED, wrap = true))
-            .width(INFO_CARD_WIDTH - 2 * INFO_CARD_PADDING).left()
-
-        val content = Table()
-        content.add(left).top().left()
-        content.add(info).top().left().padLeft(RIGHT_COLUMN_GAP).padTop(RIGHT_BLOCK_PADDING).width(INFO_CARD_WIDTH)
-        return content
-    }
-
-    // ---- step 2: game and sensitivity -------------------------------------------------------
-
-    private fun gameStep(): Table {
-        val left = Table()
-        left.add(title(t("onboarding.game.title"), wrapWidth = 640f)).left().width(640f).padBottom(SECTION_GAP).row()
-        left.add(ui.caps(t("onboarding.game.game"))).left().padBottom(CAPTION_GAP).row()
-        left.add(gameTiles()).left().padBottom(SECTION_GAP).row()
-        if (draft.gameId == GAME_CUSTOM) left.add(customFields()).left().padBottom(SECTION_GAP).row()
-        left.add(ui.caps(t("onboarding.game.sensitivity"))).left().padBottom(CAPTION_GAP).row()
-        val field = numberField(draft.sensitivityText, Styles.INPUT_LG) { draft = draft.copy(sensitivityText = it) }
-        left.add(field).left().width(340f).height(FIELD_HEIGHT_LG).padBottom(CAPTION_GAP).row()
-        sensitivityHint = ui.label("", Styles.MONO_MUTED).also { left.add(it).left() }
-
-        val right = Table()
-        right.add(Image(ui.whiteSolid).also { it.color = ui.tokens.accent(700) }).width(ACCENT_RULE_WIDTH).height(CURRENT_SETTING_HEIGHT).top().padRight(RIGHT_BLOCK_PADDING)
-        val block = Table()
-        block.add(ui.caps(t("onboarding.game.current"))).left().padBottom(CAPTION_GAP).row()
-        liveCm = ui.label("-", Styles.NUMBER_XL).also { block.add(it).left().row() }
-        block.add(ui.label("cm / 360°", Styles.NUMBER_MD)).left().padBottom(TILE_GAP).row()
-        block.add(ui.label(t("onboarding.game.current_help"), Styles.BODY_MUTED, wrap = true)).left().width(560f).padBottom(8f).row()
-        block.add(ui.label(FORMULA, Styles.MONO_MUTED)).left()
-        right.add(block).top().left()
-
-        val content = Table()
-        content.add(left).top().left()
-        content.add(right).top().left().padLeft(RIGHT_COLUMN_GAP / 2).padTop(RIGHT_BLOCK_PADDING)
-        if (draft.gameId == null || draft.dpi == null) Unit else focusLater(field)
-        return content
-    }
-
-    private fun gameTiles(): Table {
-        val grid = Table()
-        val options = ctx.profiles.profiles.map { it.id to it.name } + (GAME_CUSTOM to t("onboarding.game.custom"))
-        options.forEachIndexed { index, (id, name) ->
-            val tile = tile(name, draft.gameId == id) {
-                draft = draft.copy(gameId = id)
-                rebuild()
-            }
-            grid.add(tile).width(TILE_WIDTH).height(PRESET_HEIGHT).padRight(TILE_GAP).padBottom(TILE_GAP)
-            if ((index + 1) % TILES_PER_ROW == 0) grid.row()
-        }
-        return grid
-    }
-
-    private fun customFields(): Table {
-        val table = Table()
-        table.add(ui.caps(t("onboarding.game.custom_yaw"))).left().padBottom(CAPTION_GAP).padRight(TILE_GAP * 2)
-        table.add(ui.caps(t("onboarding.game.custom_fov"))).left().padBottom(CAPTION_GAP).row()
-        table.add(numberField(draft.customYawText, Styles.INPUT) { draft = draft.copy(customYawText = it) }).left().width(SMALL_FIELD_WIDTH).height(SMALL_FIELD_HEIGHT).padRight(TILE_GAP * 2)
-        table.add(numberField(draft.customFovText, Styles.INPUT) { draft = draft.copy(customFovText = it) }).left().width(SMALL_FIELD_WIDTH).height(SMALL_FIELD_HEIGHT)
+        table.add(ui.caps(t("onboarding.game.sensitivity"))).left().padBottom(CAPTION_GAP).row()
+        val sens = Table()
+        sens.add(field(draft.sensitivityText, SENSITIVITY) { edit(draft.copy(sensitivityText = it)) }).width(FIELD_WIDTH).height(FIELD_HEIGHT)
+        hintLabel = ui.label("", Styles.MONO_MUTED).also { sens.add(it).left().bottom().padLeft(FIELD_GAP + 8f).padBottom(FIELD_GAP) }
+        table.add(sens).left()
         return table
     }
 
-    private fun sensitivityHintText(): String {
-        val profile = draft.profile(ctx.profiles)
-        val yaw = profile?.let { t("onboarding.game.hint_yaw", SetupDraft.formatNumber(it.yawDegreesPerCount)) } ?: t("onboarding.game.hint_yaw", "-")
-        val dpi = draft.dpi?.let { " " + t("onboarding.game.hint_dpi", SetupDraft.formatNumber(it)) }.orEmpty()
-        return yaw + dpi
-    }
-
-    // ---- step 3: aim style ------------------------------------------------------------------
-
-    private fun styleStep(): Table {
-        val content = Table()
-        content.add(title(t("onboarding.style.title"))).left().width(DESCRIPTION_WIDTH).padBottom(TITLE_GAP).row()
-        content.add(ui.label(t("onboarding.style.description"), Styles.BODY_MUTED, wrap = true))
-            .left().width(DESCRIPTION_WIDTH).padBottom(SECTION_GAP).row()
-        val cards = Table()
-        listOf(AimStyle.WRIST to t("onboarding.style.wrist"), AimStyle.MIXED to t("onboarding.style.mixed"), AimStyle.ARM to t("onboarding.style.arm")).forEach { (style, name) ->
-            cards.add(styleCard(style, name)).width(STYLE_CARD_WIDTH).height(STYLE_CARD_HEIGHT).padRight(TILE_GAP * 2).top()
+    private fun dpiRow(width: Float): Table {
+        val row = Table()
+        val field = field(draft.dpiText, DPI) { edit(draft.copy(dpiText = it)) }
+        row.add(field).width(FIELD_WIDTH).height(FIELD_HEIGHT)
+        val presetsWidth = width - FIELD_WIDTH - FIELD_GAP
+        val presets = ui.choiceTiles(DPI_PRESETS, presetsWidth, FIELD_HEIGHT, TILE_GAP, { it == draft.dpiText.trim() }, { it }) { preset ->
+            field.text = preset
+            field.setCursorPosition(preset.length)
+            edit(draft.copy(dpiText = preset))
         }
-        content.add(cards).left().padBottom(SECTION_GAP).row()
-        content.add(ui.label(t("onboarding.flash.title"), Styles.TITLE)).left().padBottom(TILE_GAP / 2).row()
-        content.add(ui.label(t("onboarding.flash.description"), Styles.BODY_MUTED, wrap = true)).left().width(DESCRIPTION_WIDTH).padBottom(TILE_GAP).row()
-        val labels = FlashImportance.entries.associateWith { t("flash.importance.${it.name.lowercase()}") }
-        content.add(ui.flashImportanceButtons(labels, draft.flashImportance, onPick = { draft = draft.copy(flashImportance = it); rebuild() })).left()
-        return content
-    }
-
-    private fun styleCard(style: AimStyle, name: String): Button {
-        val (low, high) = SearchRangeTable.DEFAULT.ranges.getValue(style)
-        val description = when (style) {
-            AimStyle.WRIST -> t("onboarding.style.wrist_desc")
-            AimStyle.MIXED -> t("onboarding.style.mixed_desc")
-            AimStyle.ARM -> t("onboarding.style.arm_desc")
-        } + " " + t("onboarding.style.typical", low.toInt(), high.toInt())
-        val card = Button(ui.skin, Styles.CARD_BUTTON)
-        card.pad(STYLE_CARD_PADDING)
-        card.align(Align.topLeft)
-        card.add(ui.label(name, Styles.TITLE)).left().top().padBottom(TILE_GAP).row()
-        card.add(ui.label(description, Styles.BODY_MUTED, wrap = true)).left().top().growX()
-        card.children.forEach { it.touchable = com.badlogic.gdx.scenes.scene2d.Touchable.disabled }
-        card.setProgrammaticChangeEvents(false)
-        card.isChecked = draft.aimStyle == style
-        card.onChange {
-            draft = draft.copy(aimStyle = style)
-            rebuild()
-        }
-        return card
-    }
-
-    // ---- step 4: mousepad -------------------------------------------------------------------
-
-    private fun padStep(): Table {
-        val left = Table()
-        left.add(title(t("onboarding.pad.title"))).left().width(DESCRIPTION_WIDTH).padBottom(TITLE_GAP).row()
-        left.add(ui.label(t("onboarding.pad.description"), Styles.BODY_MUTED, wrap = true))
-            .left().width(DESCRIPTION_WIDTH).padBottom(SECTION_GAP).row()
-        PadPreset.entries.forEach { preset ->
-            left.add(padRow(preset)).left().width(PAD_ROW_WIDTH).height(PAD_ROW_HEIGHT).padBottom(TILE_GAP / 2).row()
-            if (preset == PadPreset.CUSTOM && draft.padPreset == PadPreset.CUSTOM) left.add(customPadFields()).left().padTop(TILE_GAP / 2).row()
-        }
-
-        val right = Table()
-        right.add(ui.caps(t("onboarding.pad.fit_check"))).left().padBottom(CAPTION_GAP).row()
-        val holder = Table()
-        fitHolder = holder
-        right.add(holder).left().width(FIT_PANEL_WIDTH).height(FIT_PANEL_HEIGHT)
-        fillFitCheck()
-
-        val content = Table()
-        content.add(left).top().left()
-        content.add(right).top().left().padLeft(RIGHT_COLUMN_GAP).padTop(TITLE_GAP * 5)
-        return content
-    }
-
-    private fun padRow(preset: PadPreset): Button {
-        val row = Button(ui.skin, Styles.CARD_BUTTON)
-        val name = when (preset) {
-            PadPreset.SMALL -> t("onboarding.pad.small")
-            PadPreset.MEDIUM -> t("onboarding.pad.medium")
-            PadPreset.LARGE -> t("onboarding.pad.large")
-            PadPreset.DESK_MAT -> t("onboarding.pad.desk_mat")
-            PadPreset.CUSTOM -> t("onboarding.pad.custom")
-        }
-        val dims = if (preset.widthCm != null) {
-            "≈ ${SetupDraft.formatNumber(preset.widthCm)} × ${SetupDraft.formatNumber(checkNotNull(preset.heightCm))} cm"
-        } else {
-            t("onboarding.pad.dimensions")
-        }
-        row.add(ui.label(name, Styles.BODY_LG)).left().padLeft(PAD_ROW_PADDING).expandX()
-        row.add(ui.label(dims, Styles.MONO_MUTED)).right().padRight(PAD_ROW_PADDING)
-        row.children.forEach { it.touchable = com.badlogic.gdx.scenes.scene2d.Touchable.disabled }
-        row.setProgrammaticChangeEvents(false)
-        row.isChecked = draft.padPreset == preset
-        row.onChange {
-            draft = draft.copy(padPreset = preset)
-            rebuild()
-        }
+        dpiPresets = presets
+        row.add(presets).padLeft(FIELD_GAP)
         return row
     }
 
-    private fun customPadFields(): Table {
+    private fun customGame(width: Float): Table {
+        val half = (width - FIELD_GAP) / 2
         val table = Table()
-        table.add(numberField(draft.customPadWidthText, Styles.INPUT) { draft = draft.copy(customPadWidthText = it); fillFitCheck() })
-            .width(SMALL_FIELD_WIDTH).height(SMALL_FIELD_HEIGHT)
-        table.add(ui.label("×", Styles.BODY_LG)).padLeft(TILE_GAP).padRight(TILE_GAP)
-        table.add(numberField(draft.customPadHeightText, Styles.INPUT) { draft = draft.copy(customPadHeightText = it); fillFitCheck() })
-            .width(SMALL_FIELD_WIDTH).height(SMALL_FIELD_HEIGHT)
-        table.add(ui.label("cm", Styles.MONO_MUTED)).padLeft(TILE_GAP)
+        table.add(ui.label(t("onboarding.game.custom_yaw"), Styles.CAPTION_MUTED, wrap = true)).left().bottom().width(half).padBottom(CAPTION_GAP)
+        table.add(ui.label(t("onboarding.game.custom_fov"), Styles.CAPTION_MUTED, wrap = true)).left().bottom().width(half).padLeft(FIELD_GAP).padBottom(CAPTION_GAP).row()
+        table.add(field(draft.customYawText) { edit(draft.copy(customYawText = it)) }).width(half).height(TILE_HEIGHT)
+        table.add(field(draft.customFovText) { edit(draft.copy(customFovText = it)) }).width(half).height(TILE_HEIGHT).padLeft(FIELD_GAP)
         return table
     }
 
-    private fun fillFitCheck() {
+    /** Fields by role, so the first empty one can take the keyboard focus after a rebuild. */
+    private val fields = mutableMapOf<String, TextField>()
+
+    private fun field(text: String, role: String? = null, onText: (String) -> Unit): TextField {
+        val field = ui.numberField(text, if (role == null) Styles.INPUT else Styles.INPUT_LG, onText)
+        role?.let { fields[it] = field }
+        return field
+    }
+
+    private fun focusFirstEmpty() {
+        val target = when {
+            draft.dpiText.isBlank() -> fields[DPI]
+            draft.sensitivityText.isBlank() -> fields[SENSITIVITY]
+            else -> null
+        } ?: return
+        Gdx.app.postRunnable {
+            stage.keyboardFocus = target
+            target.setCursorPosition(target.text.length)
+        }
+    }
+
+    // ---- right column: live value and presets -----------------------------------------------
+
+    private fun live(width: Float): Table {
+        val table = Table().top().left()
+        table.add(liveWell(width)).left().width(width).padBottom(SECTION_GAP - 4f).row()
+        table.add(ui.caps(t("onboarding.defaults"))).left().padBottom(CAPTION_GAP / 2).row()
+        table.add(ui.label(t("onboarding.defaults_note"), Styles.CAPTION_MUTED, wrap = true)).left().width(width).padBottom(FIELD_GAP + 4f).row()
+
+        table.add(ui.caps(t("setup.panel.style"))).left().padBottom(CAPTION_GAP).row()
+        table.add(ui.choiceTiles(AimStyle.entries, width, TILE_HEIGHT, TILE_GAP, { it == draft.aimStyle }, { t("onboarding.style.${it.name.lowercase()}") }) { pick(draft.copy(aimStyle = it)) })
+            .left().padBottom(CAPTION_GAP).row()
+        draft.aimStyle?.let { table.add(ui.label(styleNote(it), Styles.CAPTION_MUTED, wrap = true)).left().width(width).padBottom(FIELD_GAP + 4f).row() }
+
+        table.add(ui.caps(t("onboarding.pad.title"))).left().padBottom(CAPTION_GAP).row()
+        table.add(ui.choiceTiles(PadPreset.entries, width, TILE_HEIGHT, TILE_GAP, { it == draft.padPreset }, { t("onboarding.pad.${it.name.lowercase()}") }) { pick(draft.copy(padPreset = it)) })
+            .left().padBottom(FIELD_GAP + 4f).row()
+        if (draft.padPreset == PadPreset.CUSTOM) table.add(customPad(width)).left().padBottom(FIELD_GAP + 4f).row()
+
+        table.add(ui.caps(t("settings.flash"))).left().padBottom(CAPTION_GAP).row()
+        table.add(ui.choiceTiles(FlashImportance.entries, width, TILE_HEIGHT, TILE_GAP, { it == draft.flashImportance }, { t("flash.importance.${it.name.lowercase()}") }) { pick(draft.copy(flashImportance = it)) })
+            .left()
+        return table
+    }
+
+    /** The recessed display: the live cm/360°, how it is computed, and whether one turn fits the pad. */
+    private fun liveWell(width: Float): Table {
+        val well = Table()
+        well.background(ui.skin.getDrawable(Styles.WELL))
+        well.pad(WELL_PADDING_Y, WELL_PADDING_X, WELL_PADDING_Y, WELL_PADDING_X)
+        val inner = width - 2 * WELL_PADDING_X
+        well.add(ui.label(t("onboarding.game.current"), Styles.LABEL)).left().colspan(2).row()
+        liveNumber = ui.label("--", Styles.NUMBER_XL).also { well.add(it).left().bottom() }
+        well.add(ui.label("cm/360°", Styles.NUMBER_MD)).left().bottom().padLeft(UNIT_GAP).padBottom(UNIT_LIFT).expandX().row()
+        well.add(ui.label(FORMULA, Styles.MONO_MUTED)).left().colspan(2).row()
+        fitHolder = Table().also { well.add(it).left().colspan(2).width(inner).padTop(FIT_GAP) }
+        return well
+    }
+
+    private fun styleNote(style: AimStyle): String {
+        val (low, high) = SearchRangeTable.DEFAULT.ranges.getValue(style)
+        return t("onboarding.style.${style.name.lowercase()}_desc") + " " + t("onboarding.style.typical", low.toInt(), high.toInt())
+    }
+
+    private fun customPad(width: Float): Table {
+        val half = (width - FIELD_GAP) / 2
+        val table = Table()
+        table.add(ui.caps(t("setup.panel.pad_width"))).left().width(half).padBottom(CAPTION_GAP)
+        table.add(ui.caps(t("setup.panel.pad_height"))).left().width(half).padLeft(FIELD_GAP).padBottom(CAPTION_GAP).row()
+        table.add(field(draft.customPadWidthText) { edit(draft.copy(customPadWidthText = it)) }).width(half).height(TILE_HEIGHT)
+        table.add(field(draft.customPadHeightText) { edit(draft.copy(customPadHeightText = it)) }).width(half).height(TILE_HEIGHT).padLeft(FIELD_GAP)
+        return table
+    }
+
+    // ---- footer and in-place updates --------------------------------------------------------
+
+    private fun footer(): Table {
+        val footer = Table()
+        footer.add(ui.button(t("common.back"), Styles.TEXT) { ctx.showMenu() }).left().height(GAME_TILE_HEIGHT).padLeft(8f)
+        footer.add().expandX()
+        issueLabel = ui.label("", Styles.CAUTION).also { footer.add(it).right().padRight(SECTION_GAP) }
+        val finish = ui.button(t("onboarding.finish"), Styles.PRIMARY) { finish() }
+        finishButton = finish
+        footer.addButton(finish, minWidth = FINISH_MIN_WIDTH)
+        return footer
+    }
+
+    /** Typing changes only the live value, the hints and the footer; the fields keep their focus. */
+    private fun refresh() {
+        val issue = issue()
+        finishButton?.isDisabled = issue != null
+        issueLabel?.setText(saveError ?: issue?.takeIf { edited }?.let { t(it.key) }.orEmpty())
+        hintLabel?.setText(draft.profile(ctx.profiles)?.let { t("onboarding.game.hint_yaw", SetupDraft.formatNumber(it.yawDegreesPerCount)) }.orEmpty())
+        dpiPresets?.children?.filterIsInstance<TextButton>()?.forEachIndexed { i, tile -> tile.isChecked = draft.dpiText.trim() == DPI_PRESETS[i] }
+        val cm360 = draft.currentCm360(ctx.profiles)
+        updateNumber(cm360)
+        updateFit(cm360)
+    }
+
+    private fun updateNumber(cm360: Double?) {
+        val number = liveNumber ?: return
+        number.clearActions()
+        val format: (Double) -> String = { "%.1f".format(Locale.ROOT, it) }
+        when {
+            cm360 == null -> number.setText("--")
+            !counted -> Motion.countUp(number, cm360 * COUNT_FROM, cm360, ui.tokens.motionSlow * 2, format = format)
+            else -> number.setText(format(cm360))
+        }
+        if (cm360 != null) counted = true
+    }
+
+    private fun updateFit(cm360: Double?) {
         val holder = fitHolder ?: return
         holder.clearChildren()
-        val cm360 = draft.currentCm360(ctx.profiles)
         val pad = draft.padSizeCm()
-        if (cm360 == null || pad == null) {
-            holder.add(ui.label(t("onboarding.pad.choose"), Styles.BODY_MUTED, wrap = true)).width(FIT_PANEL_WIDTH).top().left()
-            return
-        }
-        val panel = FitCheckPanel(ui, cm360, pad.first)
-        holder.add(panel).growX().height(FIT_PANEL_HEIGHT - 80f).row()
-        val message = if (panel.fits) {
-            ui.label(t("onboarding.pad.fits"), Styles.OK)
-        } else {
-            ui.label(t("onboarding.pad.too_small"), Styles.CAUTION, wrap = true)
-        }
-        holder.add(message).left().width(FIT_PANEL_WIDTH).padTop(TILE_GAP)
+        if (cm360 == null || pad == null) return
+        val width = SetupDraft.formatNumber(pad.first)
+        val fit = FitCheckPanel(ui, cm360, pad.first, t("onboarding.fit.turn", "%.1f".format(Locale.ROOT, cm360)), t("onboarding.fit.pad", width))
+        holder.add(fit).growX().row()
+        val message = if (fit.fits) ui.label(t("onboarding.pad.fits"), Styles.OK, wrap = true) else ui.label(t("onboarding.pad.too_small"), Styles.CAUTION, wrap = true)
+        holder.add(message).left().growX().padTop(CAPTION_GAP)
     }
 
     private companion object {
-        const val MAX_INPUT_CHARS = 10
+        const val DPI = "dpi"
+        const val SENSITIVITY = "sensitivity"
     }
 }

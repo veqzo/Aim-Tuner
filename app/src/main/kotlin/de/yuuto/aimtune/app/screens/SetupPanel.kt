@@ -8,7 +8,6 @@ import com.badlogic.gdx.scenes.scene2d.ui.ScrollPane
 import com.badlogic.gdx.scenes.scene2d.ui.SelectBox
 import com.badlogic.gdx.scenes.scene2d.ui.Stack
 import com.badlogic.gdx.scenes.scene2d.ui.Table
-import com.badlogic.gdx.scenes.scene2d.ui.TextButton
 import com.badlogic.gdx.scenes.scene2d.ui.TextField
 import com.badlogic.gdx.scenes.scene2d.utils.ClickListener
 import de.yuuto.aimtune.app.AppContext
@@ -41,7 +40,6 @@ private const val TITLE_GAP = 28f
 private const val TILE_GAP = 8f
 private const val PANEL_TOP_GAP = 12f
 private const val BUTTON_HEIGHT = 60f
-private const val MAX_INPUT_CHARS = 10
 private const val SCROLL_GUTTER = 20f
 private const val LIVE_PADDING_X = 24f
 private const val LIVE_PADDING_Y = 16f
@@ -152,16 +150,10 @@ internal class SetupPanel(
         return table
     }
 
-    private fun field(text: String, onText: (String) -> Unit): TextField {
-        val field = TextField(text, ui.skin, Styles.INPUT)
-        field.setTextFieldFilter { _, c -> c.isDigit() || c == '.' || c == ',' }
-        field.maxLength = MAX_INPUT_CHARS
-        field.onChange {
-            editor.message = null
-            onText(field.text)
-            updateLive()
-        }
-        return field
+    private fun field(text: String, onText: (String) -> Unit): TextField = ui.numberField(text) {
+        editor.message = null
+        onText(it)
+        updateLive()
     }
 
     private fun liveReadout(): Table {
@@ -214,23 +206,13 @@ internal class SetupPanel(
         draft = draft.copy(flashImportance = it)
     }
 
-    /** One latched tile per entry in a row that fills the panel width. */
-    private fun <T> tiles(entries: List<T>, selected: (T) -> Boolean, name: (T) -> String, pick: (T) -> Unit): Table {
-        val table = Table()
-        val width = (INNER_WIDTH - TILE_GAP * (entries.size - 1)) / entries.size
-        entries.forEachIndexed { index, entry ->
-            val tile: TextButton = ui.button(name(entry), Styles.TILE) {
-                pick(entry)
-                editor.message = null
-                rebuild()
-            }
-            tile.pad(0f, 4f, 0f, 4f)
-            tile.setProgrammaticChangeEvents(false)
-            tile.isChecked = selected(entry)
-            table.add(tile).width(width).height(CONTROL_HEIGHT).padLeft(if (index == 0) 0f else TILE_GAP)
+    /** One latched tile per entry in a row that fills the panel width; a pick rebuilds the panel. */
+    private fun <T> tiles(entries: List<T>, selected: (T) -> Boolean, name: (T) -> String, pick: (T) -> Unit): Table =
+        ui.choiceTiles(entries, INNER_WIDTH, CONTROL_HEIGHT, TILE_GAP, selected, name) {
+            pick(it)
+            editor.message = null
+            rebuild()
         }
-        return table
-    }
 
     companion object {
         /** The first problem of [draft] in any step as text, or null when it can be saved. */

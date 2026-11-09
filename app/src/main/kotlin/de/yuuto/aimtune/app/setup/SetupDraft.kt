@@ -120,6 +120,12 @@ data class SetupDraft(
         else -> null
     }
 
+    /**
+     * The draft with a choice for aim style and mousepad where there is none yet: the onboarding asks only
+     * for game, DPI and sensitivity, and mixed aim on a medium pad is the middle of both scales.
+     */
+    fun withDefaults(): SetupDraft = copy(aimStyle = aimStyle ?: AimStyle.MIXED, padPreset = padPreset ?: PadPreset.MEDIUM)
+
     /** Applies this draft to [base]. @throws IllegalStateException if any step still has a problem. */
     fun toSettings(base: AppSettings, profiles: GameProfiles): AppSettings {
         SetupStep.entries.forEach { step -> issue(step, profiles)?.let { check(false) { "setup incomplete: $it" } } }

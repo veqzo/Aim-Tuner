@@ -52,6 +52,16 @@ class SetupDraftTest {
     }
 
     @Test
+    fun `defaults fill only the choices that are still open`() {
+        val filled = SetupDraft().withDefaults()
+        assertEquals(AimStyle.MIXED, filled.aimStyle)
+        assertEquals(PadPreset.MEDIUM, filled.padPreset)
+        val chosen = complete.copy(aimStyle = AimStyle.ARM).withDefaults()
+        assertEquals(AimStyle.ARM, chosen.aimStyle)
+        assertEquals(PadPreset.LARGE, chosen.padPreset)
+    }
+
+    @Test
     fun `dpi must be plausible`() {
         assertEquals(SetupIssue.DPI_INVALID, complete.copy(dpiText = "5000000").issue(SetupStep.DPI, profiles))
     }

@@ -248,8 +248,8 @@ class AppContext(
     /** Start test: onboarding on first use, then the pre-test notice. */
     fun showStart() = if (isSetUp) showPreTest() else showOnboarding(afterFinish = ::showPreTest)
 
-    fun showOnboarding(startStep: SetupStep = SetupStep.DPI, afterFinish: () -> Unit = ::showMenu) =
-        switchTo(OnboardingScreen(this, SetupDraft.fromSettings(settings.current), startStep, afterFinish))
+    fun showOnboarding(afterFinish: () -> Unit = ::showMenu, draft: SetupDraft = SetupDraft.fromSettings(settings.current)) =
+        switchTo(OnboardingScreen(this, draft, afterFinish))
 
     fun showPreTest() = switchTo(PreTestScreen(this))
 
