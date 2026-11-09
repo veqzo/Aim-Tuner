@@ -7,7 +7,10 @@ import de.yuuto.aimtune.core.optimizer.OptimizerConfig
 import de.yuuto.aimtune.core.optimizer.SensitivityOptimizer
 import de.yuuto.aimtune.core.scenario.ScenarioKind
 import de.yuuto.aimtune.core.score.MetricWeights
-import de.yuuto.aimtune.core.score.ScoreCalculator
+import de.yuuto.aimtune.core.score.DuelScorer
+import de.yuuto.aimtune.core.score.Engagement
+import de.yuuto.aimtune.core.score.RoundScorer
+import de.yuuto.aimtune.core.score.duelEngagements
 import de.yuuto.aimtune.core.score.ScoreMetric
 import de.yuuto.aimtune.core.score.scoreInputs
 import de.yuuto.aimtune.core.sim.HeadlessRound
@@ -40,11 +43,14 @@ fun playBlindTest(
     /** When set, the suggestion is not a sensitivity: every round is played at [playedCm360] with the curve this function makes of the suggestion. */
     accelOf: ((Double) -> de.yuuto.aimtune.core.accel.AccelModel?)? = null,
     playedCm360: Double? = null,
+    /** The game's duel score (M23g4); null scores every round by [weights]. */
+    duel: DuelScorer? = null,
 ): SimulatedTest {
     val optimizer = SensitivityOptimizer(range, seed, config)
-    val calculator = ScoreCalculator(weights)
+    val calculator = RoundScorer(weights, duel)
     val inputs = mutableListOf<Map<ScoreMetric, Double>>()
     val scenarios = mutableListOf<String>()
+    val engagements = mutableListOf<List<Engagement>?>()
     val cm360s = mutableListOf<Double>()
     var history = emptyList<Observation>()
     repeat(rounds) { index ->
@@ -53,10 +59,12 @@ fun playBlindTest(
         val offset = index * roundSeconds * 1_000_000_000L
         val kind = scenarioFor(index)
         val played = if (accelOf != null) checkNotNull(playedCm360) else cm360
-        inputs += computeRoundMetrics(HeadlessRound.of(kind, playerFor(index), TEST_DPI, played, roundSeed, roundSeconds, offset, accel = accelOf?.invoke(cm360), geometry = geometry)).scoreInputs()
+        val recording = HeadlessRound.of(kind, playerFor(index), TEST_DPI, played, roundSeed, roundSeconds, offset, accel = accelOf?.invoke(cm360), geometry = geometry)
+        inputs += computeRoundMetrics(recording).scoreInputs()
+        engagements += duelEngagements(kind, recording.targetEvents)
         scenarios += kind.id
         cm360s += cm360
-        val scores = calculator.scoreRounds(inputs, scenarios)
+        val scores = calculator.scoreRounds(inputs, scenarios, engagements)
         val stepInSession = HashMap<Long, Int>()
         history = cm360s.indices.map {
             val step = checkNotNull(stepInSession.merge(sessionOf(it), 1, Int::plus)) - 1
