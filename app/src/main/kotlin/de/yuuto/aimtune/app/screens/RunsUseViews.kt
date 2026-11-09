@@ -74,3 +74,15 @@ fun AppContext.runsUseLine(use: RunsUse?, width: Float, returnTo: () -> Unit): T
     if (use != null) line.add(skin.label(sourceText(use), Styles.CAPTION_MUTED, wrap = true)).left().width(width).colspan(4).padTop(4f)
     return line
 }
+
+/** The same information stacked for a narrow column (the CURVE back): title, values, source, then the settings link. */
+fun AppContext.runsUseBlock(use: RunsUse?, width: Float, returnTo: () -> Unit): Table {
+    val skin = ui.skin
+    val block = Table().left()
+    block.add(skin.caps(i18n.t("hub.runs.title"))).left().row()
+    val values = use?.let { i18n.t("hub.runs.values", it.gameName, it.sensitivityText, "%.1f".format(Locale.ROOT, it.cm360), SetupDraft.formatNumber(it.dpi)) }
+    block.add(skin.label(values ?: i18n.t("accel.baseline_none"), Styles.MONO, wrap = true)).left().width(width).padTop(ROW_GAP / 2).row()
+    if (use != null) block.add(skin.label(sourceText(use), Styles.CAPTION_MUTED, wrap = true)).left().width(width).padTop(4f).row()
+    block.add(link(returnTo).also { it.pad(0f) }).left().height(LINK_HEIGHT)
+    return block
+}

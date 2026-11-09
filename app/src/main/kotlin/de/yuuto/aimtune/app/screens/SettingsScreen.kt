@@ -110,6 +110,9 @@ class SettingsScreen(ctx: AppContext, private val returnTo: (() -> Unit)? = null
 
     override fun onEscape() = exit.leave()
 
+    // The screen keeps its own draft of the setup fields; a reload shows what the panel saved.
+    override fun onSetupSaved() = ctx.showSettings(returnTo)
+
     private fun footer(): Table {
         val footer = Table()
         footer.add(ui.button(t("common.back"), Styles.TEXT) { exit.leave() }).left().height(FOOTER_BUTTON_HEIGHT).padLeft(8f)

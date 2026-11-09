@@ -3,85 +3,129 @@ package de.yuuto.aimtune.app.screens
 import com.badlogic.gdx.Gdx
 import com.badlogic.gdx.Input
 import com.badlogic.gdx.scenes.scene2d.Actor
-import com.badlogic.gdx.scenes.scene2d.Touchable
-import com.badlogic.gdx.scenes.scene2d.ui.Button
 import com.badlogic.gdx.scenes.scene2d.ui.Table
-import com.badlogic.gdx.utils.Align
 import de.yuuto.aimtune.app.AppContext
-import de.yuuto.aimtune.app.setup.SetupDraft
+import de.yuuto.aimtune.app.accel.SettingsAnalyses
+import de.yuuto.aimtune.app.ui.RackModule
 import de.yuuto.aimtune.app.ui.Styles
 import de.yuuto.aimtune.app.ui.button
-import de.yuuto.aimtune.app.ui.caps
-import de.yuuto.aimtune.app.ui.frame
 import de.yuuto.aimtune.app.ui.label
-import de.yuuto.aimtune.app.ui.onChange
-import java.util.Locale
+import de.yuuto.aimtune.app.ui.stagger
+import java.util.concurrent.CompletableFuture
 
-private const val MENU_WIDTH = 760f
-private const val MENU_ITEM_HEIGHT = 72f
-private const val MENU_GAP = 8f
-private const val ITEM_PADDING = 28f
-private const val HEADING_GAP = 56f
-private const val COLUMN_GAP = 120f
-private const val CARD_PADDING = 36f
-private const val CARD_WIDTH = 640f
-private const val UNIT_GAP = 16f
-private const val UNIT_BASELINE_LIFT = 28f
-private const val STAT_GAP = 48f
-private const val PROBLEM_GAP = 24f
-private const val RIGHT_BLOCK_TOP = 130f
-private const val FOOTER_BUTTON_HEIGHT = 64f
-private const val EXIT_BUTTON_WIDTH = 200f
+private const val NOTICE_GAP = 12f
+private const val FOOTER_BUTTON_HEIGHT = 56f
+private const val EXIT_BUTTON_WIDTH = 180f
+private const val MODULE_PADDING = 40f
+private const val ENTER_STEP = 0.08f
 
-/** Entry screen: start the test, open settings, and see the current setting at a glance. */
+/**
+ * The dashboard: two equal rack modules, SENS (find the sensitivity) and CURVE (find or refine a
+ * Raw Accel curve). Each front holds the main task, its back the advanced settings of it. The setup
+ * is edited in the panel of the setup pill, the tools sit in the utility bar of the top bar.
+ */
 class MainMenuScreen(ctx: AppContext) : UiScreen(ctx) {
-    override fun build(): Actor {
-        val content = Table()
-        val left = Table()
-        left.add(ui.label(t("menu.title_1") + "\n" + t("menu.title_2"), Styles.HEADING)).left().padBottom(HEADING_GAP).row()
-        left.add(menuItem(t("menu.start"), startSubtitle(), "Enter") { ctx.showStart() })
-            .width(MENU_WIDTH).height(MENU_ITEM_HEIGHT).padBottom(MENU_GAP).row()
-        if (ctx.hasRangeMode()) {
-            left.add(menuItem(t("menu.range"), t("menu.range_sub"), "M") { ctx.showRangeMode() })
-                .width(MENU_WIDTH).height(MENU_ITEM_HEIGHT).padBottom(MENU_GAP).row()
-        }
-        left.add(menuItem(t("menu.results"), resultsSubtitle(), "R") { ctx.showStoredResults() })
-            .width(MENU_WIDTH).height(MENU_ITEM_HEIGHT).padBottom(MENU_GAP).row()
-        left.add(menuItem(t("menu.acceleration"), t("menu.acceleration_sub"), "A") { ctx.showRawAccelHub() })
-            .width(MENU_WIDTH).height(MENU_ITEM_HEIGHT).padBottom(MENU_GAP).row()
-        left.add(menuItem(t("menu.history"), t("menu.history_sub"), "H") { ctx.showHistory() })
-            .width(MENU_WIDTH).height(MENU_ITEM_HEIGHT).padBottom(MENU_GAP).row()
-        left.add(menuItem(t("menu.crosshair"), t("menu.crosshair_sub"), "C") { ctx.showCrosshair() })
-            .width(MENU_WIDTH).height(MENU_ITEM_HEIGHT).padBottom(MENU_GAP).row()
-        left.add(menuItem(t("menu.settings"), t("menu.settings_sub"), "S") { ctx.showSettings() })
-            .width(MENU_WIDTH).height(MENU_ITEM_HEIGHT).left().row()
-        ctx.startupProblems.forEach { left.add(ui.label(it, Styles.CAUTION, wrap = true)).width(MENU_WIDTH).left().padTop(PROBLEM_GAP).row() }
-        pendingUpdate()?.let { update ->
-            left.add(ui.button(t("update.available", update.version.toString()), Styles.TEXT) { openUpdate() }).left().padTop(PROBLEM_GAP).row()
-        }
-        content.add(left).top().left()
-        content.add(currentSettingBlock()).top().left().padLeft(COLUMN_GAP).padTop(RIGHT_BLOCK_TOP)
+    private val sensState = SensState()
+    private val curveState = CurveState()
+    private val analysesFuture: CompletableFuture<SettingsAnalyses> = ctx.hub.analyses()
 
-        val footer = Table()
-        footer.add(ui.label(t("menu.footer"), Styles.CAPTION_MUTED)).left().bottom().padBottom(ITEM_PADDING)
-        footer.add().expandX()
-        footer.add(ui.button(t("menu.exit"), Styles.SECONDARY) { Gdx.app.exit() }).right().bottom().height(FOOTER_BUTTON_HEIGHT).minWidth(EXIT_BUTTON_WIDTH)
-        return frame(content, footer)
+    /** The readout counts up and the modules enter only on the first build, not on every rebuild after a click. */
+    private var entered = false
+    private var builtTwoColumns = true
+    private var sensModule: RackModule? = null
+    private var curveModule: RackModule? = null
+
+    private val twoColumns: Boolean get() = HubLayout.twoColumns(stage.viewport.worldWidth)
+
+    override fun build(): Actor {
+        builtTwoColumns = twoColumns
+        val width = moduleWidth()
+        val inner = width - 2 * MODULE_PADDING
+        val animate = !entered
+        val sens = SensModule(ctx, ui, sensState, inner, animate, ::rebuild)
+        val curve = CurveModule(ctx, ui, curveState, inner, analysesFuture) { ctx.showMenu() }
+        val sensRack = RackModule(ui, t("dash.sens.title"), sens.status, t("dash.flip.tune") to t("dash.flip.back"), sens::front, sens::back, sensState.flipped) { sensState.flipped = it }
+        val curveRack = RackModule(ui, t("dash.curve.title"), curve.status, t("dash.flip.tune") to t("dash.flip.back"), curve::front, curve::back, curveState.flipped) { curveState.flipped = it }
+        sensModule = sensRack
+        curveModule = curveRack
+        val modules: List<Actor> = if (animate) stagger(listOf(sensRack, curveRack), ui.tokens.motionSlow, ENTER_STEP) else listOf(sensRack, curveRack)
+        entered = true
+
+        val content = Table().top().left()
+        if (twoColumns) {
+            content.add(modules[0]).top().left().width(width).fillY().expandY()
+            content.add(modules[1]).top().left().width(width).fillY().expandY().padLeft(HubLayout.COLUMN_GAP).row()
+        } else {
+            content.add(modules[0]).top().left().width(width).row()
+            content.add(modules[1]).top().left().width(width).padTop(HubLayout.COLUMN_GAP).row()
+        }
+        notices()?.let { content.add(it).left().colspan(2).padTop(NOTICE_GAP) }
+        return frame(content, footer())
     }
 
-    override fun onEnter() = ctx.showStart()
+    /** The two modules share the whole room between the margins; the column cap of the hub screens would leave a gap at the right. */
+    private fun moduleWidth(): Float {
+        val stageWidth = stage.viewport.worldWidth
+        if (!twoColumns) return HubLayout.columnWidth(stageWidth, ui.tokens.margin)
+        return (stageWidth - 2 * ui.tokens.margin - HubLayout.COLUMN_GAP) / 2
+    }
+
+    /** Problems found on start and a newer release, under the modules; null when there is nothing to say. */
+    private fun notices(): Table? {
+        val update = pendingUpdate()
+        if (ctx.startupProblems.isEmpty() && update == null) return null
+        val table = Table().left()
+        ctx.startupProblems.forEach { table.add(ui.label(it, Styles.CAUTION, wrap = true)).left().growX().row() }
+        update?.let { table.add(ui.button(t("update.available", it.version.toString()), Styles.TEXT) { openUpdate() }).left().row() }
+        return table
+    }
+
+    private fun footer(): Table {
+        val footer = Table()
+        footer.add(ui.label(t("menu.footer"), Styles.CAPTION_MUTED)).left()
+        footer.add().expandX()
+        footer.add(ui.button(t("menu.exit"), Styles.SECONDARY) { Gdx.app.exit() }).right().height(FOOTER_BUTTON_HEIGHT).minWidth(EXIT_BUTTON_WIDTH)
+        return footer
+    }
+
+    override fun render(delta: Float) {
+        // The analyses of the stored rounds arrive in the background; the CURVE back shows them once they are there.
+        if (curveState.analyses == null && analysesFuture.isDone) {
+            curveState.analyses = runCatching { analysesFuture.get() }.getOrNull()
+            if (curveState.flipped) rebuild()
+        }
+        super.render(delta)
+    }
+
+    override fun resize(width: Int, height: Int) {
+        super.resize(width, height)
+        if (twoColumns != builtTwoColumns) rebuild()
+    }
+
+    private fun sens() = SensModule(ctx, ui, sensState, 0f, false, ::rebuild)
+
+    override fun onEnter() = sens().start()
 
     override fun onEscape() = Gdx.app.exit()
 
     override fun onKey(keycode: Int): Boolean = when (keycode) {
+        Input.Keys.A -> true.also { CurveModule(ctx, ui, curveState, 0f, analysesFuture) { ctx.showMenu() }.start() }
+        Input.Keys.F -> true.also { sensModule?.flip() }
+        Input.Keys.G -> true.also { curveModule?.flip() }
+        Input.Keys.M -> sens().toggleRange()
         Input.Keys.S -> true.also { ctx.showSettings() }
-        Input.Keys.R -> true.also { ctx.showStoredResults() }
-        Input.Keys.A -> true.also { ctx.showRawAccelHub() }
+        Input.Keys.R -> (ctx.storedRoundCount() > 0).also { if (it) ctx.showStoredResults() }
         Input.Keys.H -> true.also { ctx.showHistory() }
         Input.Keys.C -> true.also { ctx.showCrosshair() }
-        Input.Keys.M -> ctx.hasRangeMode().also { if (it) ctx.showRangeMode() }
         Input.Keys.U -> (pendingUpdate() != null).also { if (it) openUpdate() }
         else -> false
+    }
+
+    /** Screenshot tour: shows the chosen sides of the modules. */
+    internal fun showSidesForTour(sensBack: Boolean, curveBack: Boolean) {
+        sensState.flipped = sensBack
+        curveState.flipped = curveBack
+        rebuild()
     }
 
     /** A newer release than this build, unless the player switched the check off in the settings. */
@@ -89,59 +133,5 @@ class MainMenuScreen(ctx: AppContext) : UiScreen(ctx) {
 
     private fun openUpdate() {
         pendingUpdate()?.let { ctx.showUpdate(it) }
-    }
-
-    private val storedRounds by lazy { ctx.storedRoundCount() }
-
-    private fun resultsSubtitle(): String =
-        if (storedRounds == 0) t("menu.results_none") else t("menu.results_stored", storedRounds)
-
-    private fun startSubtitle(): String {
-        val config = ctx.trainerConfig() ?: return t("menu.start_setup")
-        return t("menu.start_sub", config.roundSeconds, config.profile.name)
-    }
-
-    private fun menuItem(title: String, subtitle: String, key: String, action: () -> Unit): Button {
-        val button = Button(ui.skin, Styles.CARD_BUTTON)
-        val text = Table()
-        text.left()
-        text.add(ui.label(title, Styles.BODY_LG)).left().row()
-        text.add(ui.label(subtitle, Styles.CAPTION_MUTED)).left().padTop(4f)
-        button.add(text).growX().left().pad(0f, ITEM_PADDING, 0f, 0f)
-        button.add(ui.label(key, Styles.MONO_MUTED)).right().padRight(ITEM_PADDING)
-        button.children.forEach { it.touchable = Touchable.disabled }
-        button.onChange(action)
-        return button
-    }
-
-    private fun currentSettingBlock(): Table {
-        val block = Table()
-        block.add(ui.caps(t("menu.current"))).left().padBottom(16f).row()
-        val card = Table()
-        card.background(ui.skin.getDrawable(Styles.CARD))
-        card.pad(CARD_PADDING)
-        val config = ctx.trainerConfig()
-        if (config == null) {
-            card.add(ui.label(t("menu.not_set_up"), Styles.TITLE)).left().row()
-            card.add(ui.label(t("menu.not_set_up_sub"), Styles.CAPTION_MUTED)).left().padTop(8f)
-        } else {
-            val draft = SetupDraft.fromSettings(ctx.settings.current)
-            val row = Table()
-            row.add(ui.label("%.1f".format(Locale.ROOT, config.cm360), Styles.NUMBER_XL)).bottom()
-            row.add(ui.label("cm/360°", Styles.NUMBER_MD).also { it.setAlignment(Align.left) }).bottom().padLeft(UNIT_GAP).padBottom(UNIT_BASELINE_LIFT)
-            card.add(row).left().row()
-            val stats = Table()
-            stats.add(stat(t("menu.stat_game"), config.profile.name)).left().padRight(STAT_GAP)
-            stats.add(stat(t("menu.stat_sens"), draft.sensitivity?.let(config.profile::formatSensitivity) ?: "-")).left().padRight(STAT_GAP)
-            stats.add(stat(t("menu.stat_dpi"), SetupDraft.formatNumber(config.dpi))).left()
-            card.add(stats).left().padTop(UNIT_GAP)
-        }
-        block.add(card).width(CARD_WIDTH).left()
-        return block
-    }
-
-    private fun stat(name: String, value: String): Table = Table().apply {
-        add(ui.label(name, Styles.CAPTION_MUTED)).left().row()
-        add(ui.label(value, Styles.MONO)).left().padTop(4f)
     }
 }

@@ -34,6 +34,7 @@ import de.yuuto.aimtune.app.accel.RefineImport
 import de.yuuto.aimtune.app.accel.sampleSettingsAnalyses
 import de.yuuto.aimtune.app.screens.RefineImportScreen
 import de.yuuto.aimtune.app.screens.HistoryScreen
+import de.yuuto.aimtune.app.screens.MainMenuScreen
 import de.yuuto.aimtune.app.screens.ShareDataScreen
 import de.yuuto.aimtune.app.screens.StoredCounts
 import de.yuuto.aimtune.app.screens.TrainerScreen
@@ -90,6 +91,9 @@ class ScreenshotTour(private val ctx: AppContext, private val dir: Path, private
         Step("hub-setting-info") { showHub { ctx.showRawAccelSetting(RawAccelSetting.SNAP, it) } },
         Step("hub-setting-analysis") { showHub { ctx.showRawAccelSetting(RawAccelSetting.ROTATION, it) } },
         Step("hub-export") { showHub { ctx.hub.setTicked(RawAccelSetting.ROTATION, true); ctx.showPatchedExport(it) } },
+        Step("dashboard-curve") { showHub { ctx.showMenu() } },
+        Step("dashboard-backs") { (ctx.currentScreen as? MainMenuScreen)?.showSidesForTour(sensBack = true, curveBack = true) },
+        Step("setup-panel") { (ctx.currentScreen as? MainMenuScreen)?.let { it.showSidesForTour(false, false); it.openSetupForTour() } },
         Step("accel-intro") { ctx.showAccel() },
         Step("accel-intro-prior") { ctx.showAccel(AccelBaseline(48.7, "0.335", "Valorant", FinderResult(34.4, 61, 40, "0.474", searchRounds = 50), gameSearchRounds = 12)) },
         Step("accel-intro-plan") {

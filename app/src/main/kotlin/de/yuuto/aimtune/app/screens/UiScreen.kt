@@ -13,6 +13,7 @@ import com.badlogic.gdx.scenes.scene2d.Stage
 import com.badlogic.gdx.scenes.scene2d.ui.Table
 import com.badlogic.gdx.utils.viewport.ScreenViewport
 import de.yuuto.aimtune.app.AppContext
+import de.yuuto.aimtune.app.setup.SetupDraft
 import de.yuuto.aimtune.app.ui.UiSkin
 import de.yuuto.aimtune.app.ui.frame
 import kotlin.math.min
@@ -42,7 +43,7 @@ abstract class UiScreen(protected val ctx: AppContext) : Screen {
      * (inside a run) the top bar shows only the brand and [headerRight], so nothing there leaves the run.
      */
     protected fun frame(content: Actor, footer: Actor?, chrome: Chrome = Chrome.FULL, headerRight: Actor? = null): Table {
-        val right = if (chrome == Chrome.FULL) shellBar(ctx, ui, utility) { t(it) } else headerRight
+        val right = if (chrome == Chrome.FULL) shellBar(ctx, ui, utility, ::openSetup) { t(it) } else headerRight
         return ui.frame(right, content, footer)
     }
 
@@ -56,18 +57,67 @@ abstract class UiScreen(protected val ctx: AppContext) : Screen {
     /** Called when the window loses focus. */
     open fun onWindowFocusLost() {}
 
+    /** The setup panel over this screen while it is open; it lives outside the widgets so it survives a rebuild. */
+    private var setupEditor: SetupEditor? = null
+
+    /** Opens the setup panel from the pill; without a setup yet, the onboarding is the better place. */
+    protected fun openSetup() {
+        if (!ctx.isSetUp) {
+            ctx.showOnboarding(afterFinish = ctx::showMenu)
+            return
+        }
+        setupEditor = SetupEditor(SetupDraft.fromSettings(ctx.settings.current))
+        rebuild()
+    }
+
+    /** Screenshot tour: the setup panel over this screen. */
+    internal fun openSetupForTour() = openSetup()
+
+    private fun closeSetup() {
+        stage.unfocusAll()
+        setupEditor = null
+        rebuild()
+    }
+
+    private fun saveSetup() {
+        val editor = setupEditor ?: return
+        val problem = SetupPanel.problem(ctx, editor.draft) { t(it) }
+        if (problem != null) {
+            editor.message = problem
+            rebuild()
+            return
+        }
+        val error = ctx.settings.save(editor.draft.toSettings(ctx.settings.current, ctx.profiles))
+        if (error != null) {
+            editor.message = error
+            rebuild()
+            return
+        }
+        stage.unfocusAll()
+        setupEditor = null
+        onSetupSaved()
+    }
+
+    /** Called after the setup panel saved new values; screens that show the setup rebuild or reload. */
+    protected open fun onSetupSaved() = rebuild()
+
     fun rebuild() {
         stage.clear()
         stage.addActor(build())
+        setupEditor?.let { editor ->
+            stage.addActor(SetupPanel(ctx, ui, editor, { key, args -> t(key, *args) }, ::rebuild, ::saveSetup, ::closeSetup).overlay())
+        }
     }
 
     override fun show() {
         stage.addCaptureListener(object : InputListener() {
             override fun keyDown(event: InputEvent, keycode: Int): Boolean {
+                val panelOpen = setupEditor != null
                 val used = when (keycode) {
-                    Input.Keys.ESCAPE -> true.also { onEscape() }
-                    Input.Keys.ENTER, Input.Keys.NUMPAD_ENTER -> true.also { onEnter() }
-                    else -> onKey(keycode)
+                    Input.Keys.ESCAPE -> true.also { if (panelOpen) closeSetup() else onEscape() }
+                    Input.Keys.ENTER, Input.Keys.NUMPAD_ENTER -> true.also { if (panelOpen) saveSetup() else onEnter() }
+                    // Typing in the panel must not trigger the screen's shortcuts.
+                    else -> if (panelOpen) false else onKey(keycode)
                 }
                 if (used) event.stop()
                 return used

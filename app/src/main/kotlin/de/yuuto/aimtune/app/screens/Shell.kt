@@ -37,9 +37,9 @@ enum class Utility { HISTORY, CROSSHAIR, SETTINGS }
  * The right side of the top bar: the setup pill (game, DPI, sensitivity and cm/360° at a glance; a
  * click edits them) and the utility bar. [active] is the tool the current screen belongs to.
  */
-internal fun shellBar(ctx: AppContext, ui: UiSkin, active: Utility?, t: (String) -> String): Table {
+internal fun shellBar(ctx: AppContext, ui: UiSkin, active: Utility?, onSetup: () -> Unit, t: (String) -> String): Table {
     val bar = Table()
-    bar.add(setupPill(ctx, ui, t)).height(PILL_HEIGHT).padRight(PILL_TO_BAR)
+    bar.add(setupPill(ctx, ui, onSetup, t)).height(PILL_HEIGHT).padRight(PILL_TO_BAR)
     fun tool(utility: Utility, icon: Icon, key: String, open: () -> Unit) {
         val button = ui.iconButton(t(key), icon) { if (utility != active) open() }
         button.isChecked = utility == active
@@ -52,7 +52,7 @@ internal fun shellBar(ctx: AppContext, ui: UiSkin, active: Utility?, t: (String)
 }
 
 /** The setup as a recessed readout; a click opens the setup editor. */
-private fun setupPill(ctx: AppContext, ui: UiSkin, t: (String) -> String): Button {
+private fun setupPill(ctx: AppContext, ui: UiSkin, onSetup: () -> Unit, t: (String) -> String): Button {
     val pill = Button(ui.skin, Styles.WELL_BUTTON)
     pill.pad(0f, PILL_PADDING, 0f, PILL_PADDING)
     // A fixed seed: the pill only reads the setup and must not use up the seeds of the next rounds.
@@ -69,7 +69,7 @@ private fun setupPill(ctx: AppContext, ui: UiSkin, t: (String) -> String): Butto
         segment(pill, ui, "%.1f".format(Locale.ROOT, config.cm360), "cm/360°")
     }
     pill.children.forEach { it.touchable = Touchable.disabled }
-    pill.onChange { ctx.showSettings() }
+    pill.onChange(onSetup)
     return pill
 }
 
