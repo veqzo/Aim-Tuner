@@ -16,6 +16,8 @@ import java.util.Locale
 private const val WELL_PADDING = 20f
 private const val STAT_GAP = 48f
 private const val ROW_GAP = 24f
+private const val UNIT_GAP = 6f
+private const val UNIT_LIFT = 14f
 
 /**
  * The overlay after every blind round: what the round looked like and how sure the optimizer is. The
@@ -61,12 +63,12 @@ class BetweenRoundsScreen(ctx: AppContext, private val run: BlindRun) : RoundOve
         well.background(ui.skin.getDrawable(Styles.WELL))
         well.pad(WELL_PADDING)
         if (!outcome.scenario.usesClicks) {
-            val onTarget = outcome.trackingOnTargetRatio?.let { "%.0f %%".format(Locale.ROOT, it * 100) } ?: "-"
+            val onTarget = outcome.trackingOnTargetRatio?.let { "%.0f%%".format(Locale.ROOT, it * 100) } ?: "-"
             well.add(stat(t("between.time_on_target"), onTarget)).left()
         } else {
             val time = outcome.meanTimeToHitMs?.let { "%.0f ms".format(Locale.ROOT, it) } ?: "-"
             well.add(stat(t("between.hits"), "${outcome.hits} / ${outcome.shots}")).left().padRight(STAT_GAP)
-            well.add(stat(t("between.accuracy"), "%.0f %%".format(Locale.ROOT, outcome.accuracy * 100))).left().padRight(STAT_GAP)
+            well.add(stat(t("between.accuracy"), "%.0f%%".format(Locale.ROOT, outcome.accuracy * 100))).left().padRight(STAT_GAP)
             well.add(stat(t("between.time_to_hit"), time)).left()
         }
         well.add().expandX()
@@ -95,7 +97,11 @@ class BetweenRoundsScreen(ctx: AppContext, private val run: BlindRun) : RoundOve
             result.confidencePercent >= TARGET_PERCENT -> t("between.note_reached", TARGET_PERCENT)
             else -> t("between.note_more", roundsText(result.roundsToTarget), TARGET_PERCENT)
         }
-        block.add(ui.label("${result.confidencePercent} %", Styles.NUMBER_LG)).left().padRight(ROW_GAP)
+        // Number and sign are two labels: in the mono face a space before % reads as a wide gap.
+        val number = Table()
+        number.add(ui.label(result.confidencePercent.toString(), Styles.NUMBER_LG)).bottom()
+        number.add(ui.label("%", Styles.NUMBER_MD)).bottom().padLeft(UNIT_GAP).padBottom(UNIT_LIFT)
+        block.add(number).left().padRight(ROW_GAP)
         block.add(ui.progressBar(result.confidencePercent / 100f, width * 2 / 3)).left().expandX().row()
         block.add(ui.label(note, Styles.BODY_MUTED, wrap = true)).left().width(width).colspan(2).padTop(8f)
         return block

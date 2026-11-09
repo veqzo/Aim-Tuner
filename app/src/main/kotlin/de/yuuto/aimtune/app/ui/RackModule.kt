@@ -9,15 +9,6 @@ import com.badlogic.gdx.scenes.scene2d.ui.Table
 import com.badlogic.gdx.scenes.scene2d.utils.Layout
 import com.badlogic.gdx.utils.Align
 
-private const val MODULE_PADDING = 40f
-private const val HEAD_GAP = 32f
-private const val LED_TEXT_GAP = 4f
-private const val STATUS_GAP = 28f
-private const val FLIP_BUTTON_HEIGHT = 44f
-
-/** The text and LED in a module head: what state the module is in, said in words (the LED only repeats it). */
-data class ModuleStatus(val state: LedState, val text: String)
-
 /**
  * A rack module: a raised face with a head (name, status LED, flip key) and a body with two sides.
  * The front holds the main task, the back the advanced settings of it. [flip] turns the module
@@ -48,13 +39,7 @@ class RackModule(
         isTransform = true
         background(ui.skin.getDrawable(Styles.MODULE))
         pad(MODULE_PADDING)
-        val head = Table()
-        head.add(ui.label(title, Styles.TITLE)).left()
-        head.add(ui.led(status.state)).size(LED_CELL).padLeft(STATUS_GAP)
-        head.add(ui.label(status.text, Styles.CAPTION_MUTED)).left().padLeft(LED_TEXT_GAP)
-        head.add().expandX()
-        head.add(flipButton).height(FLIP_BUTTON_HEIGHT)
-        add(head).growX().padBottom(HEAD_GAP).row()
+        add(ui.moduleHead(title, status, flipButton)).growX().padBottom(MODULE_HEAD_GAP).row()
         add(body).grow()
         body.actor = side()
     }

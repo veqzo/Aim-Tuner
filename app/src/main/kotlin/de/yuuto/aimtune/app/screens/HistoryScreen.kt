@@ -1,6 +1,7 @@
 package de.yuuto.aimtune.app.screens
 
 import com.badlogic.gdx.scenes.scene2d.Actor
+import com.badlogic.gdx.scenes.scene2d.ui.Image
 import com.badlogic.gdx.scenes.scene2d.ui.SelectBox
 import com.badlogic.gdx.scenes.scene2d.ui.Table
 import de.yuuto.aimtune.app.AppContext
@@ -9,12 +10,15 @@ import de.yuuto.aimtune.app.ui.ChartActor
 import de.yuuto.aimtune.app.ui.ChartDots
 import de.yuuto.aimtune.app.ui.ChartLine
 import de.yuuto.aimtune.app.ui.ChartSpec
+import de.yuuto.aimtune.app.ui.LedState
+import de.yuuto.aimtune.app.ui.ModuleStatus
 import de.yuuto.aimtune.app.ui.Styles
 import de.yuuto.aimtune.app.ui.button
 import de.yuuto.aimtune.app.ui.caps
-import de.yuuto.aimtune.app.ui.frame
 import de.yuuto.aimtune.app.ui.label
+import de.yuuto.aimtune.app.ui.modulePanel
 import de.yuuto.aimtune.app.ui.onChange
+import de.yuuto.aimtune.app.ui.readout
 import de.yuuto.aimtune.storage.SessionKind
 import java.time.Instant
 import java.time.ZoneId
@@ -23,17 +27,25 @@ import java.util.Locale
 import java.util.concurrent.CompletableFuture
 
 private const val FOOTER_BUTTON_HEIGHT = 64f
-private const val CHART_HEIGHT = 300f
+private const val TOP_HEIGHT = 260f
+private const val READOUT_WIDTH = 620f
+private const val COLUMN_GAP = 48f
+private const val SECTION_GAP = 32f
+private const val CHART_PADDING = 20f
 private const val FILTER_WIDTH = 320f
 private const val ROWS_SHOWN = 6
-private const val ROW_GAP = 8f
-private val COLUMN_WIDTHS = floatArrayOf(270f, 280f, 130f, 190f, 190f, 220f)
+private const val ROW_PAD = 8f
+private const val RULE = 1f
+
+/** Column shares of the table width: date, game, rounds, cm/360°, confidence, type. */
+private val COLUMN_SHARES = floatArrayOf(0.18f, 0.2f, 0.1f, 0.15f, 0.15f, 0.22f)
 private val DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm", Locale.ROOT)
 
 /**
- * Stored sessions: the recommended cm/360° after each sensitivity session as a chart and a table of
- * the newest sessions, filterable by game. The recommendations are computed in the background
- * ([entriesFuture]) because every session needs its own model fit; the screen fills in when they are done.
+ * Stored sessions as an opened module: the newest recommendation as the display, the recommended
+ * cm/360° after each sensitivity session as a chart that draws on, and a table of the newest sessions,
+ * filterable by game. The recommendations are computed in the background ([entriesFuture]) because
+ * every session needs its own model fit; the screen fills in when they are done.
  */
 class HistoryScreen(ctx: AppContext, private val entriesFuture: CompletableFuture<List<HistoryEntry>>) : UiScreen(ctx) {
     override val utility = Utility.HISTORY
@@ -41,15 +53,24 @@ class HistoryScreen(ctx: AppContext, private val entriesFuture: CompletableFutur
     private var entries: List<HistoryEntry>? = null
     private var gameFilter: String? = null
 
+    /** The display and chart animate when the data first arrives, not again on a filter change. */
+    private var revealed = false
+
     override fun build(): Actor {
-        val content = Table()
-        content.add(ui.label(t("history.title"), Styles.HEADING)).left().padBottom(24f).row()
         val all = entries
+        val shown = all?.filter { gameFilter == null || it.gameId == gameFilter }
+        val status = shown?.let { ModuleStatus(LedState.OFF, t("history.count", it.size)) }
+        val filter = all?.takeIf { it.isNotEmpty() }?.let(::filterBox)
+        val panel = ui.modulePanel(t("history.title"), status, filter, showLed = false)
         when {
-            all == null -> content.add(ui.label(t("history.loading"), Styles.BODY_MUTED)).left()
-            all.isEmpty() -> content.add(ui.label(t("history.empty"), Styles.BODY_MUTED)).left()
-            else -> fill(content, all)
+            all == null -> panel.add(ui.label(t("history.loading"), Styles.BODY_MUTED)).left().row()
+            all.isEmpty() -> panel.add(ui.label(t("history.empty"), Styles.BODY_MUTED)).left().row()
+            else -> fill(panel, checkNotNull(shown))
         }
+        panel.add().expand()
+        val content = Table()
+        content.add(panel).grow()
+
         val footer = Table()
         footer.add(ui.button(t("common.back"), Styles.TEXT) { ctx.showMenu() }).left().height(FOOTER_BUTTON_HEIGHT).padLeft(8f)
         footer.add().expandX()
@@ -67,20 +88,31 @@ class HistoryScreen(ctx: AppContext, private val entriesFuture: CompletableFutur
 
     override fun onEscape() = ctx.showMenu()
 
-    private fun fill(content: Table, all: List<HistoryEntry>) {
-        content.add(filterRow(all)).left().padBottom(16f).row()
-        val shown = all.filter { gameFilter == null || it.gameId == gameFilter }
+    private fun fill(panel: Table, shown: List<HistoryEntry>) {
+        val animate = !revealed
+        revealed = true
         val recommended = shown.filter { it.cm360 != null }
-        if (recommended.size >= 2) {
-            content.add(ui.caps(t("history.chart"))).left().padBottom(8f).row()
-            content.add(ChartActor(ui, trendChart(recommended))).growX().height(CHART_HEIGHT).padBottom(16f).row()
-        }
-        content.add(table(shown)).left().top()
+        val top = Table()
+        top.add(ui.readout(t("history.latest"), recommended.lastOrNull()?.cm360, "cm/360°", animate)).width(READOUT_WIDTH).growY()
+        if (recommended.size >= 2) top.add(chartWell(recommended, animate)).grow().padLeft(COLUMN_GAP)
+        else top.add().expandX()
+        panel.add(top).growX().height(TOP_HEIGHT).row()
+        panel.add(table(shown)).growX().top().padTop(SECTION_GAP).row()
     }
 
-    private fun filterRow(all: List<HistoryEntry>): Table {
+    private fun chartWell(recommended: List<HistoryEntry>, animate: Boolean): Table {
+        val well = Table()
+        well.background(ui.skin.getDrawable(Styles.WELL))
+        well.pad(CHART_PADDING)
+        well.add(ui.label(t("history.chart"), Styles.LABEL)).left().padLeft(CHART_PADDING).row()
+        val chart = ChartActor(ui, trendChart(recommended))
+        if (animate) chart.drawOn(ui.tokens.motionSlow * 3, ui.tokens.motionBase)
+        well.add(chart).grow()
+        return well
+    }
+
+    private fun filterBox(all: List<HistoryEntry>): SelectBox<String> {
         val games = all.map { it.gameId }.distinct()
-        val row = Table()
         val select = SelectBox<String>(ui.skin)
         val allGames = t("history.all_games")
         val names = listOf(allGames) + games.map(::gameName)
@@ -90,30 +122,44 @@ class HistoryScreen(ctx: AppContext, private val entriesFuture: CompletableFutur
             gameFilter = if (select.selectedIndex == 0) null else games[select.selectedIndex - 1]
             rebuild()
         }
-        row.add(select).width(FILTER_WIDTH)
+        return select.also { it.width = FILTER_WIDTH }
+    }
+
+    /** The newest sessions first, one rule between rows; the newest row is not muted. */
+    private fun table(shown: List<HistoryEntry>): Table {
+        val table = Table().top().left()
+        val headers = listOf("date", "game", "rounds", "cm", "confidence", "type").map { t("history.col_$it") }
+        val header = row(headers) { ui.caps(it) }
+        table.add(header).growX().padBottom(ROW_PAD).row()
+        shown.asReversed().take(ROWS_SHOWN).forEachIndexed { index, entry ->
+            table.add(rule()).growX().height(RULE).row()
+            val style = if (index == 0) Styles.MONO else Styles.MONO_MUTED
+            table.add(row(cells(entry)) { ui.label(it, style) }).growX().pad(ROW_PAD, 0f, ROW_PAD, 0f).row()
+        }
+        if (shown.size > ROWS_SHOWN) {
+            table.add(rule()).growX().height(RULE).row()
+            table.add(ui.label(t("history.older", shown.size - ROWS_SHOWN), Styles.CAPTION_MUTED)).left().padTop(ROW_PAD)
+        }
+        return table
+    }
+
+    /** One table row whose columns take fixed shares of the row width, so header and rows line up. */
+    private fun row(texts: List<String>, cell: (String) -> Actor): Table {
+        val row = Table()
+        texts.forEachIndexed { i, text -> row.add(cell(text)).left().expandX().fillX().uniformX().prefWidth(COLUMN_SHARES[i] * 1000f) }
         return row
     }
 
-    private fun table(shown: List<HistoryEntry>): Table {
-        val table = Table()
-        val headers = listOf("date", "game", "rounds", "cm", "confidence", "type").map { t("history.col_$it") }
-        headers.forEachIndexed { i, text -> table.add(ui.caps(text)).left().width(COLUMN_WIDTHS[i]).padBottom(ROW_GAP) }
-        table.row()
-        shown.asReversed().take(ROWS_SHOWN).forEach { entry ->
-            val cells = listOf(
-                DATE_FORMAT.format(Instant.ofEpochMilli(entry.startedAtMs).atZone(ZoneId.systemDefault())),
-                gameName(entry.gameId),
-                entry.rounds.toString(),
-                entry.cm360?.let { "%.1f".format(Locale.ROOT, it) } ?: "–",
-                entry.confidencePercent?.let { "$it %" } ?: "–",
-                if (entry.kind != SessionKind.SENSITIVITY) t("history.type_accel") else t("history.type_sensitivity"),
-            )
-            cells.forEachIndexed { i, text -> table.add(ui.label(text, Styles.MONO)).left().width(COLUMN_WIDTHS[i]).padBottom(ROW_GAP) }
-            table.row()
-        }
-        if (shown.size > ROWS_SHOWN) table.add(ui.label(t("history.older", shown.size - ROWS_SHOWN), Styles.CAPTION_MUTED)).left().colspan(headers.size)
-        return table
-    }
+    private fun cells(entry: HistoryEntry) = listOf(
+        DATE_FORMAT.format(Instant.ofEpochMilli(entry.startedAtMs).atZone(ZoneId.systemDefault())),
+        gameName(entry.gameId),
+        entry.rounds.toString(),
+        entry.cm360?.let { "%.1f".format(Locale.ROOT, it) } ?: "–",
+        entry.confidencePercent?.let { "$it%" } ?: "–",
+        if (entry.kind != SessionKind.SENSITIVITY) t("history.type_accel") else t("history.type_sensitivity"),
+    )
+
+    private fun rule() = Image(ui.whiteSolid).also { it.color.set(ui.tokens.divider) }
 
     private fun trendChart(recommended: List<HistoryEntry>): ChartSpec {
         val xs = DoubleArray(recommended.size) { it + 1.0 }

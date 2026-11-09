@@ -25,12 +25,40 @@ private const val BAND_STRIP = 3f
 /**
  * Draws a [ChartSpec] with sprite-batch rectangles: grid and axis labels, uncertainty bands, lines
  * (solid or dashed), dots and labelled vertical markers. Sizes are design units like the rest of the UI.
+ * [drawOn] lets the data appear from left to right (lines, bands and dots; markers when the sweep
+ * passes them), while the grid stays.
  */
 class ChartActor(private val ui: UiSkin, private val spec: ChartSpec) : Widget() {
     private val white = ui.whiteSolid as TextureRegionDrawable
     private val font = ui.fonts.caption
     private val layout = GlyphLayout()
     private val dot = ui.dot(Color.WHITE, DOT_SIZE)
+
+    /** Seconds into the draw-on; negative while its delay runs. */
+    private var drawTime = 0f
+    private var drawDuration = 0f
+
+    /** 0 = no data drawn yet, 1 = all; eased. */
+    private var drawn = 1f
+
+    /** Draws the data on from left to right over [duration] seconds after [delay]; the grid shows at once. */
+    fun drawOn(duration: Float, delay: Float = 0f): ChartActor {
+        if (Motion.instant || duration <= 0f) return this
+        drawTime = -delay
+        drawDuration = duration
+        drawn = 0f
+        return this
+    }
+
+    override fun act(delta: Float) {
+        super.act(delta)
+        if (drawn >= 1f) return
+        drawTime += delta
+        drawn = Motion.enter.apply((drawTime / drawDuration).coerceIn(0f, 1f))
+    }
+
+    /** The data x up to which the draw-on has come. */
+    private val cutX get() = spec.xMin + (spec.xMax - spec.xMin) * drawn
 
     override fun getPrefWidth() = MIN_SIZE
 
@@ -49,7 +77,7 @@ class ChartActor(private val ui: UiSkin, private val spec: ChartSpec) : Widget()
         spec.bands.forEach { drawBand(batch, it, alpha) }
         spec.referenceYs.forEach { y -> rect(batch, sx(spec.xMin), sy(y) - GRID_WIDTH, plotWidth, GRID_WIDTH * 2, ui.tokens.neutral(600), alpha) }
         spec.lines.forEach { drawLine(batch, it, alpha) }
-        spec.markers.forEach { drawMarker(batch, it, alpha) }
+        spec.markers.filter { it.x <= cutX }.forEach { drawMarker(batch, it, alpha) }
         spec.dots.forEach { drawDots(batch, it, alpha) }
         batch.color = saved
     }
@@ -73,14 +101,17 @@ class ChartActor(private val ui: UiSkin, private val spec: ChartSpec) : Widget()
 
     /** The band as thin vertical strips, with the edges interpolated linearly between the data points. */
     private fun drawBand(batch: Batch, band: ChartBand, alpha: Float) {
+        val limit = sx(cutX)
         for (i in 0 until band.xs.size - 1) {
             val x0 = sx(band.xs[i])
+            if (x0 >= limit) break
             val x1 = sx(band.xs[i + 1])
             val steps = ((x1 - x0) / BAND_STRIP).toInt().coerceAtLeast(1)
             for (k in 0 until steps) {
                 val t = (k + 0.5) / steps
                 val lo = sy((band.lo[i] + (band.lo[i + 1] - band.lo[i]) * t).coerceIn(spec.yMin, spec.yMax))
                 val hi = sy((band.hi[i] + (band.hi[i + 1] - band.hi[i]) * t).coerceIn(spec.yMin, spec.yMax))
+                if (x0 + (x1 - x0) * k / steps >= limit) break
                 if (hi > lo) rect(batch, x0 + (x1 - x0) * k / steps, lo, (x1 - x0) / steps, hi - lo, band.color, alpha)
             }
         }
@@ -88,8 +119,15 @@ class ChartActor(private val ui: UiSkin, private val spec: ChartSpec) : Widget()
 
     private fun drawLine(batch: Batch, line: ChartLine, alpha: Float) {
         var phase = 0f
+        val cut = cutX
         for (i in 0 until line.xs.size - 1) {
-            phase = segment(batch, sx(line.xs[i]), sy(line.ys[i]), sx(line.xs[i + 1]), sy(line.ys[i + 1]), line.color, alpha, line.dashed, phase)
+            val x0 = line.xs[i]
+            val x1 = line.xs[i + 1]
+            if (x0 >= cut) break
+            // The segment the sweep is inside ends at the sweep.
+            val t = if (x1 > cut && x1 > x0) (cut - x0) / (x1 - x0) else 1.0
+            val y1 = line.ys[i] + (line.ys[i + 1] - line.ys[i]) * t
+            phase = segment(batch, sx(x0), sy(line.ys[i]), sx(x0 + (x1 - x0) * t), sy(y1), line.color, alpha, line.dashed, phase)
         }
     }
 
@@ -104,7 +142,7 @@ class ChartActor(private val ui: UiSkin, private val spec: ChartSpec) : Widget()
     private fun drawDots(batch: Batch, dots: ChartDots, alpha: Float) {
         batch.setColor(dots.color.r, dots.color.g, dots.color.b, dots.color.a * alpha)
         for (i in dots.xs.indices) {
-            if (dots.xs[i] < spec.xMin || dots.xs[i] > spec.xMax) continue
+            if (dots.xs[i] < spec.xMin || dots.xs[i] > spec.xMax || dots.xs[i] > cutX) continue
             dot.draw(batch, sx(dots.xs[i]) - DOT_SIZE / 2, sy(dots.ys[i].coerceIn(spec.yMin, spec.yMax)) - DOT_SIZE / 2, DOT_SIZE, DOT_SIZE)
         }
     }
