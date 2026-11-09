@@ -102,12 +102,15 @@ class RefineBaseInvariantTest {
 
     /** What the curve at [LOW_SPEED_PROBE] may move by: exact for curves flat there, a bound for the two documented exceptions. */
     private fun tolerance(args: RawAccelArgs): Double = when {
-        // With no offset these curves rise from 1 at speed 0 like x^(p-1): the multiplier at the probe is 1 + O(1e-3) and any change of
-        // the curve moves it by a share of that (the limit at speed 0, 1, never moves). The gain forms add rounding noise of ~1e-8.
-        (args.mode == RawAccelMode.CLASSIC || args.mode == RawAccelMode.NATURAL) && args.inputOffset == 0.0 -> 1e-2
+        // With no offset these curves rise from 1 at speed 0 like x^(p-1), and the limit at speed 0, 1, never moves. At the probe the
+        // rise is not negligible for an exponent near 1 ((acceleration x 1e-6)^0.26 is about 0.01), so the bound is a share of the
+        // curve's own rise there: classic high gain scales the rise by s, natural high gain by s^2 and transition by 1/t, with s and
+        // t in 0.5..2, so the change is at most 3 times the rise, plus the rounding noise of the gain forms.
+        (args.mode == RawAccelMode.CLASSIC || args.mode == RawAccelMode.NATURAL) && args.inputOffset == 0.0 ->
+            MAX_RISE_CHANGE * abs(RawAccelCurve(args).multiplier(LOW_SPEED_PROBE) - 1.0) + GAIN_NOISE
         // a smooth step has a tail e^(-2 pi x / (smooth capX)) that moving capX shifts by ~1e-11 at the probe, and the gain form adds
-        // rounding noise (accel-jump.hpp:42-45, :69) of ~1e-9
-        args.mode == RawAccelMode.JUMP && args.smooth * args.capX >= 1.0 -> 1e-7
+        // rounding noise (accel-jump.hpp:42-45, :69)
+        args.mode == RawAccelMode.JUMP && (args.smooth * args.capX >= 1.0 || args.gain) -> GAIN_NOISE
         else -> 1e-12
     }
 
@@ -221,5 +224,14 @@ class RefineBaseInvariantTest {
         const val MAX_TRIES = 200
         const val ENGINE_PROFILES = 250
         const val MAX_ROUNDS = 200
+
+        /** The largest change of the rise above 1 at the probe a stage can make, as a share of the rise (natural high gain: 2^2 - 1). */
+        const val MAX_RISE_CHANGE = 3.0
+
+        /**
+         * Rounding noise of the gain forms at the probe: they divide an integral by the speed, so a cancellation error of ~1e-16
+         * times the curve's scale (cap x, 1 / decay rate) becomes ~1e-8 at 1e-6 in/s; seen up to 3.2e-8.
+         */
+        const val GAIN_NOISE = 1e-7
     }
 }

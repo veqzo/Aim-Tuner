@@ -49,7 +49,8 @@ class TrainerScene(
 
     private val camera = PerspectiveCamera(verticalFovDegrees, 16f, 9f).apply {
         near = NEAR_PLANE
-        far = FAR_PLANE
+        // The far plane is also the fog distance; the map must fit inside it, and the room's fog grows with it.
+        far = maxOf(FAR_PLANE, (geometry?.arena?.wallDistanceMeters?.toFloat() ?: 0f) + WALL_FAR_MARGIN)
     }
     private val batch = ModelBatch()
     private val environment = Environment().apply {
@@ -57,6 +58,11 @@ class TrainerScene(
         add(DirectionalLight().set(0.85f, 0.85f, 0.85f, -0.55f, -1f, -0.35f))
         // Distant things fade into the dark: the main depth cue besides perspective (the camera's far plane is the fog distance).
         set(ColorAttribute(ColorAttribute.Fog, Theme.roomFog.r, Theme.roomFog.g, Theme.roomFog.b, 1f))
+    }
+    /** Targets have no fog: a head 60 m away must look as sharp as in the game, where there is no distance fog. */
+    private val targetEnvironment = Environment().apply {
+        set(ColorAttribute(ColorAttribute.AmbientLight, 0.42f, 0.42f, 0.48f, 1f))
+        add(DirectionalLight().set(0.85f, 0.85f, 0.85f, -0.55f, -1f, -0.35f))
     }
     private val fogOnly = Environment().apply {
         set(ColorAttribute(ColorAttribute.Fog, Theme.roomFog.r, Theme.roomFog.g, Theme.roomFog.b, 1f))
@@ -183,7 +189,7 @@ class TrainerScene(
             }
             val scale = (target.radius / modelRadius).toFloat()
             targetInstance.transform.setToTranslation(target.center.x.toFloat(), target.center.y.toFloat(), target.center.z.toFloat()).scale(scale, scale, scale)
-            batch.render(targetInstance, environment)
+            batch.render(targetInstance, targetEnvironment)
             drawBody(target)
         }
         batch.end()
@@ -201,7 +207,7 @@ class TrainerScene(
         val yaw = Math.toDegrees(atan2(target.center.x, -target.center.z))
         val r = target.radius.toFloat()
         botHeadInstance.transform.setToTranslation(cx, cy, cz).scale(r, r, r)
-        batch.render(botHeadInstance, environment)
+        batch.render(botHeadInstance, targetEnvironment)
         val torsoTop = cy - r - NECK
         val torsoBottom = torsoTop - TORSO_HEIGHT
         val pelvisBottom = torsoBottom - PELVIS_HEIGHT
@@ -209,7 +215,7 @@ class TrainerScene(
         fun box(instance: ModelInstance, side: Float, top: Float, bottom: Float, width: Float, depth: Float) {
             instance.transform.setToTranslation(cx, (top + bottom) / 2, cz).rotateRad(Vector3.Y, -Math.toRadians(yaw).toFloat())
                 .translate(side, 0f, 0f).scale(width, top - bottom, depth)
-            batch.render(instance, environment)
+            batch.render(instance, targetEnvironment)
         }
         box(botTorsoInstance, 0f, torsoTop, torsoBottom, TORSO_WIDTH, TORSO_DEPTH)
         box(botTorsoInstance, 0f, torsoBottom, pelvisBottom, PELVIS_WIDTH, TORSO_DEPTH)
@@ -229,7 +235,7 @@ class TrainerScene(
         val yaw = Math.toDegrees(atan2(target.center.x, -target.center.z))
         bodyInstance.transform.setToTranslation(target.center.x.toFloat(), floor + height / 2, target.center.z.toFloat())
             .rotateRad(Vector3.Y, -Math.toRadians(yaw).toFloat()).scale(BODY_WIDTH, height, BODY_DEPTH)
-        batch.render(bodyInstance, environment)
+        batch.render(bodyInstance, targetEnvironment)
     }
 
     /** A box [sx] wide (sideways), [sy] high and [sz] deep (along the line of sight) centered at ([x], [y], [z]), turned to face yaw [yawDegrees]. */
@@ -249,7 +255,7 @@ class TrainerScene(
         }
         // Crates just in front of the wall, farther away than any target: parallax and a sense of size.
         CRATES.forEach { (yaw, distance, size) ->
-            val c = ViewAngles.directionOf(yaw, 0.0) * distance
+            val c = ViewAngles.directionOf(yaw, 0.0) * (distance * wall / CRATE_WALL_METERS)
             parts += part(crateBox, c.x.toFloat(), floor + size / 2, c.z.toFloat(), size, size, size, yaw + 20.0)
         }
         if (bot != null) parts += rangeCourse(floor, geometry.range)
@@ -340,6 +346,10 @@ class TrainerScene(
         const val DEFAULT_MODEL_RADIUS = 1.0
         const val NEAR_PLANE = 0.05f
         const val FAR_PLANE = 60f
+        /** The far plane stays this far behind the wall, so the wall is fogged but drawn. */
+        const val WALL_FAR_MARGIN = 14f
+        /** The crate distances below are for this wall distance and scale with the profile's wall. */
+        const val CRATE_WALL_METERS = 36.0
         const val ROOM_WIDTH = 150f
         const val ROOM_HEIGHT = 50f
         const val ROOM_DEPTH = 150f

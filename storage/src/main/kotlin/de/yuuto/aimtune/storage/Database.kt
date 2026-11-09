@@ -79,6 +79,22 @@ class Database private constructor(private val connection: Connection) : AutoClo
             connection.createStatement().use { s -> s.executeQuery("PRAGMA user_version").use { it.next(); it.getInt(1) } }
         }
 
+    /**
+     * Writes a consistent copy of the whole database to [target], which must not exist yet (SQLite `VACUUM INTO`). VACUUM cannot
+     * run inside a transaction, so the connection is in auto-commit mode while it runs; the lock keeps every other use out.
+     */
+    fun backupTo(target: Path) = synchronized(this) {
+        require(!Files.exists(target)) { "backup file already exists: $target" }
+        target.toAbsolutePath().parent?.let { Files.createDirectories(it) }
+        connection.commit()
+        connection.autoCommit = true
+        try {
+            connection.prepareStatement("VACUUM INTO ?").use { it.setString(1, target.toAbsolutePath().toString()); it.execute() }
+        } finally {
+            connection.autoCommit = false
+        }
+    }
+
     override fun close() = synchronized(this) { connection.close() }
 
     companion object {

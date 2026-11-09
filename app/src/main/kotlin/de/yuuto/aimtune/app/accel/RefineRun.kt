@@ -7,7 +7,10 @@ import de.yuuto.aimtune.core.accel.RefineEngine
 import de.yuuto.aimtune.core.accel.RefinePhase
 import de.yuuto.aimtune.core.metrics.computeRoundMetrics
 import de.yuuto.aimtune.core.recording.RoundRecording
+import de.yuuto.aimtune.core.scenario.ScenarioKind
+import de.yuuto.aimtune.core.score.DuelScorer
 import de.yuuto.aimtune.core.score.MetricWeights
+import de.yuuto.aimtune.core.score.duelEngagements
 import de.yuuto.aimtune.core.score.scoreInputs
 
 /**
@@ -27,8 +30,12 @@ class RefineRun(
     val profile: RawAccelProfile,
     flash: Boolean,
     stageRounds: Int = 12,
+    /** The rotation of the rounds instead of the [flash] choice, e.g. a game's scenario mix. */
+    scenarios: List<ScenarioKind>? = null,
+    /** The game's duel score ([de.yuuto.aimtune.core.score.RoundScorer]); null scores by [weights]. */
+    duel: DuelScorer? = null,
 ) {
-    val engine = RefineEngine(profile, baseConfig.cm360, weights, seed, flash, stageRounds = stageRounds)
+    val engine = RefineEngine(profile, baseConfig.cm360, weights, seed, flash, stageRounds = stageRounds, scenarioMix = scenarios, duel = duel)
 
     val phase: RefinePhase get() = engine.phase
 
@@ -51,13 +58,18 @@ class RefineRun(
     var lastSeed: Long = 0L
         private set
 
+    /** The scenario of the round played last, for the duels of its recording. */
+    private var lastScenario: ScenarioKind = ScenarioKind.FLICK
+
     fun nextRoundConfig(): TrainerConfig {
         val round = engine.nextRound()
         lastSeed = round.seed
+        lastScenario = round.scenario
         return baseConfig.copy(cm360 = round.cm360, scenario = round.scenario, seed = round.seed, accel = round.profile)
     }
 
-    fun recordRound(recording: RoundRecording) = engine.record(computeRoundMetrics(recording).scoreInputs())
+    fun recordRound(recording: RoundRecording) =
+        engine.record(computeRoundMetrics(recording).scoreInputs(), duelEngagements(lastScenario, recording.targetEvents, recording.endNanos))
 
     /** The fields the refined profile changes against the imported one. */
     fun changes(): List<FieldChange> = RefineDiff.changes(profile, engine.candidate)

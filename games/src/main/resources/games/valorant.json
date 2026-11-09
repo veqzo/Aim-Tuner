@@ -18,7 +18,7 @@
     "https://csdb.gg/sensitivity-converter/valorant-to-cs2/",
     "https://fovcalculatorpro.com/games/valorant-fov/"
   ],
-  "notes": "Yaw is fixed at 0.07. FOV is 103 horizontal at 16:9 (about 70.5 vertical) with the vertical angle kept for other aspect ratios; these FOV values come from community sources, not Riot documentation. Trainer geometry (the `trainer` block) is an assumption, not a measurement: head about 0.2 m wide seen from 6-30 m (0.4-1.9 degrees), duels mostly under 20 degrees, strafing at 3-6 m/s. Riot publishes no hitbox or speed numbers; measure them in the shooting range (docs/history/REVIEW.md, Realism) and set verified to true.",
+  "notes": "Yaw is fixed at 0.07. FOV is 103 horizontal at 16:9 (about 70.5 vertical) with the vertical angle kept for other aspect ratios; these FOV values come from community sources, not Riot documentation. Trainer geometry (the `trainer` block) is an assumption, not a measurement, except the values taken from open-aim (commit 807f557, M23, docs/VALORANT-WEIGHTS.md): the `body` and `movement` blocks, the click-target distances (`clickTargetDistanceQuantiles`, heads of 0.24 m), the flick angle bins (offsets from the crosshair in open-aim's flash drills: 18 / 21 / 24 / 18 / 19 percent up to 5 / 10 / 20 / 40 / 90 degrees) and the off-level share. Open-aim drills show what players train, not match frequencies. Strafing at 3-6 m/s is still an assumption. Riot publishes no hitbox or speed numbers; measure them in the shooting range (docs/history/REVIEW.md, Realism) and set verified to true.",
   "trainer": {
     "fieldYawDegrees": 50.0,
     "fieldPitchDegrees": 25.0,
@@ -30,26 +30,41 @@
       "min": 6.0,
       "max": 30.0
     },
+    "clickTargetDistanceQuantiles": {
+      "points": [
+        { "share": 0.0, "meters": 4.0 },
+        { "share": 0.05, "meters": 8.584 },
+        { "share": 0.1, "meters": 11.22 },
+        { "share": 0.25, "meters": 13.835 },
+        { "share": 0.5, "meters": 18.253 },
+        { "share": 0.75, "meters": 29.14 },
+        { "share": 0.9, "meters": 43.003 },
+        { "share": 0.95, "meters": 44.066 },
+        { "share": 1.0, "meters": 60.297 }
+      ],
+      "verified": false,
+      "source": "open-aim commit 807f557, flash drills (18 scenes, 260 exposure points), extracted by tools/openaim-extract into valorant-engagements.json (groups.flash.metrics.distance, p5-p95 and max). The minimum 4.0 m is an assumption: the measured minimum 1.63 m is a single spawn next to the player, and a head that close (8 degrees) is not a flick target. Drills show what players train, not how often a distance occurs in a match; Riot reports that nearly half of Phantom kills are within 15 m (this curve: 32 percent). With these distances the click targets are heads of the body block (0.24 m), so clickTargetDiameterDegrees and clickTargetDistanceMeters are not used (docs/VALORANT-WEIGHTS.md section 6)."
+    },
     "flickAngles": [
       {
         "maxDegrees": 5,
-        "weight": 0.3
+        "weight": 0.18
       },
       {
         "maxDegrees": 10,
-        "weight": 0.3
+        "weight": 0.21
       },
       {
         "maxDegrees": 20,
-        "weight": 0.2
+        "weight": 0.24
       },
       {
         "maxDegrees": 40,
-        "weight": 0.15
+        "weight": 0.18
       },
       {
         "maxDegrees": 90,
-        "weight": 0.05
+        "weight": 0.19
       }
     ],
     "microStepDegrees": {
@@ -67,17 +82,21 @@
       "max": 6.0
     },
     "stopProbability": 0.25,
-    "eyeHeightMeters": 1.6,
-    "headHeightMeters": 1.65,
+    "eyeHeightMeters": 1.75,
+    "headHeightMeters": 1.75,
     "elevation": {
       "spreadDegrees": 1.5,
-      "offLevelShare": 0.12,
+      "offLevelShare": 0.27,
       "offLevelDegrees": {
         "min": 3.0,
         "max": 10.0
       },
       "loweredShare": 0.4,
-      "notes": "Assumption, not a measurement. Valorant maps are mostly flat and players place the crosshair at head height, so most enemies are within about 1.5 degrees of the crosshair level; about 12 percent are on a different level (heaven positions, ramps, stairs, crouching players), 3-10 degrees up or down, more of them above. Riot publishes no eye height, head height or map elevation statistics (secondary sources only say all agents are about 2 m tall); 1.6 m eye and 1.65 m head centre only tilt level targets by a fraction of a degree. Measure in the shooting range (docs/history/REVIEW.md, Realism) and set verified to true."
+      "notes": "Assumption, not a measurement. Valorant maps are mostly flat and players place the crosshair at head height, so most enemies are within about 1.5 degrees of the crosshair level; about 12 percent are on a different level (heaven positions, ramps, stairs, crouching players), 3-10 degrees up or down, more of them above. M23: offLevelShare 0.27 is the share of open-aim flash-drill exposures (commit 807f557, valorant-engagements.json) with more than 1.5 degrees of elevation (bootstrap CI 13-42 percent); the other values are still assumptions. Riot publishes no eye height, head height or map elevation statistics (secondary sources only say all agents are about 2 m tall); eye and head centre are both 1.75 m (the `body` block), so level targets are exactly level. Measure in the shooting range (docs/history/REVIEW.md, Realism) and set verified to true."
+    },
+    "arena": {
+      "wallDistanceMeters": 64.0,
+      "notes": "The far wall stands behind the farthest click target (60.3 m, clickTargetDistanceQuantiles). Corners and doorways keep the defaults."
     },
     "flash": {
       "popDelaySeconds": {
@@ -128,8 +147,8 @@
         "min": 5.0,
         "max": 20.0
       },
-      "botHeightMeters": 1.8,
-      "headDiameterMeters": 0.25,
+      "botHeightMeters": 1.87,
+      "headDiameterMeters": 0.24,
       "strafe": {
         "speedMetersPerSecond": 2.0,
         "movingSeconds": {
@@ -167,11 +186,11 @@
         },
         "botHeightMeters": {
           "verified": false,
-          "source": "Assumption: agents are about 2 m tall in secondary sources (the eye height of 1.6 m of this profile is also an assumption); 1.8 m for the bot."
+          "source": "Derived from the body block (M23): head centre at the standing eye height 1.75 m plus the head radius 0.12 m, so the top of the head is at 1.87 m. Before M23 an assumed 1.8 m."
         },
         "headDiameterMeters": {
           "verified": false,
-          "source": "Assumption: Riot publishes no hitbox. A generous 0.25 m head sphere; the head hitbox was not measurable in the clips."
+          "source": "From the body block (M23): open-aim's head sphere, r 0.12 m. Riot publishes no hitbox; before M23 an assumed 0.25 m."
         },
         "strafe": {
           "verified": false,
@@ -181,6 +200,129 @@
           "verified": false,
           "source": "Assumption: a head hit kills; Vandal damage against 100 health plus 50 armor needs 4 body hits with bot armor on and 3 with it off (Bot Armor is a setting of the range panel). Not observable in the clips."
         }
+      }
+    },
+    "body": {
+      "headDiameterMeters": 0.24,
+      "capsuleHeightMeters": 1.96,
+      "eyeStandMeters": 1.75,
+      "eyeCrouchMeters": 1.35,
+      "runSpeedMetersPerSecond": 5.4,
+      "walkSpeedMetersPerSecond": 2.97,
+      "crouchSpeedMetersPerSecond": 1.62,
+      "valueNotes": {
+        "headDiameterMeters": {
+          "verified": false,
+          "source": "open-aim commit 807f557 (github.com/unkwsr/open-aim, read only, no code copied): head hit sphere radius 0.12 m (plus two head capsules of radius 0.11 m). Riot publishes no hitbox."
+        },
+        "capsuleHeightMeters": {
+          "verified": false,
+          "source": "open-aim commit 807f557 (github.com/unkwsr/open-aim, read only, no code copied): player capsule halfHeight 0.98 m, radius 0.42 m, so 1.96 m tall. Secondary sources say agents are about 2 m tall."
+        },
+        "eyeStandMeters": {
+          "verified": false,
+          "source": "open-aim commit 807f557 (github.com/unkwsr/open-aim, read only, no code copied): eye height 1.75 m standing; open-aim also puts the head centre of a bot there."
+        },
+        "eyeCrouchMeters": {
+          "verified": false,
+          "source": "open-aim commit 807f557 (github.com/unkwsr/open-aim, read only, no code copied): eye height 1.35 m crouched."
+        },
+        "runSpeedMetersPerSecond": {
+          "verified": false,
+          "source": "open-aim commit 807f557 (github.com/unkwsr/open-aim, read only, no code copied): Vandal base run speed 5.4 m/s; the same value is in https://valorant.fandom.com/wiki/Vandal (docs/VALORANT-WEIGHTS.md section 2)."
+        },
+        "walkSpeedMetersPerSecond": {
+          "verified": false,
+          "source": "open-aim commit 807f557 (github.com/unkwsr/open-aim, read only, no code copied): walk = 0.55 x run speed = 2.97 m/s."
+        },
+        "crouchSpeedMetersPerSecond": {
+          "verified": false,
+          "source": "open-aim commit 807f557 (github.com/unkwsr/open-aim, read only, no code copied): crouch = 0.3 x run speed = 1.62 m/s."
+        }
+      }
+    },
+    "movement": {
+      "accel": 18,
+      "friction": 3.3,
+      "brakingFriction": 21.5,
+      "frictionMin": 11,
+      "aboveMaxSpeedDecay": 13,
+      "walkAccelFactor": 0.55,
+      "walkBrakingFactor": 0.55,
+      "crouchAccelFactor": 0.4,
+      "crouchFrictionFactor": 0.8,
+      "crouchFrictionMinFactor": 0.85,
+      "valueNotes": {
+        "accel": {
+          "verified": false,
+          "source": "open-aim commit 807f557 (github.com/unkwsr/open-aim, read only, no code copied): ground acceleration 18 m/s^2 while a movement key is held. Riot publishes no movement constants."
+        },
+        "friction": {
+          "verified": false,
+          "source": "open-aim commit 807f557 (github.com/unkwsr/open-aim, read only, no code copied): friction 3.3 per second on the velocity part against the key (turning, counter-strafe). Riot publishes no movement constants."
+        },
+        "brakingFriction": {
+          "verified": false,
+          "source": "open-aim commit 807f557 (github.com/unkwsr/open-aim, read only, no code copied): braking friction 21.5 per second without a movement key. Riot publishes no movement constants."
+        },
+        "frictionMin": {
+          "verified": false,
+          "source": "open-aim commit 807f557 (github.com/unkwsr/open-aim, read only, no code copied): minimum braking deceleration 11 m/s^2 without a movement key. Riot publishes no movement constants."
+        },
+        "aboveMaxSpeedDecay": {
+          "verified": false,
+          "source": "open-aim commit 807f557 (github.com/unkwsr/open-aim, read only, no code copied): a speed above the top speed decays at 13 m/s^2. Riot publishes no movement constants."
+        },
+        "walkAccelFactor": {
+          "verified": false,
+          "source": "open-aim commit 807f557 (github.com/unkwsr/open-aim, read only, no code copied): walk state scales the acceleration by 0.55. Riot publishes no movement constants."
+        },
+        "walkBrakingFactor": {
+          "verified": false,
+          "source": "open-aim commit 807f557 (github.com/unkwsr/open-aim, read only, no code copied): walk state scales the braking friction by 0.55. Riot publishes no movement constants."
+        },
+        "crouchAccelFactor": {
+          "verified": false,
+          "source": "open-aim commit 807f557 (github.com/unkwsr/open-aim, read only, no code copied): crouch state scales the acceleration by 0.4. Riot publishes no movement constants."
+        },
+        "crouchFrictionFactor": {
+          "verified": false,
+          "source": "open-aim commit 807f557 (github.com/unkwsr/open-aim, read only, no code copied): crouch state scales the friction by 0.8. Riot publishes no movement constants."
+        },
+        "crouchFrictionMinFactor": {
+          "verified": false,
+          "source": "open-aim commit 807f557 (github.com/unkwsr/open-aim, read only, no code copied): crouch state scales the minimum braking deceleration by 0.85. Riot publishes no movement constants."
+        }
+      }
+    },
+    "strafe": {
+      "travelMeters": { "min": 1.0, "max": 1.75 },
+      "dwellSeconds": { "min": 0.2, "max": 0.65 },
+      "reverseProbability": 0.6,
+      "maxOffsetMeters": 2.0,
+      "valueNotes": {
+        "travelMeters": { "verified": false, "source": "open-aim commit 807f557 (github.com/unkwsr/open-aim, read only, no code copied), tools/openaim-extract over 20 scenes with strafing bots (30 bots): way per strafe leg p10 1.0 m, p50 1.5 m, p90 1.75 m (timings.strafe_travel_s in valorant-engagements.json; the key is named _s but open-aim's strafe behaviour treats travel as a width in meters). The speed comes from the movement block." },
+        "dwellSeconds": { "verified": false, "source": "open-aim commit 807f557 (github.com/unkwsr/open-aim, read only, no code copied), tools/openaim-extract over 20 scenes with strafing bots (30 bots): pause between legs p10 0.21 s, p50 0.33 s, max 0.65 s (timings.strafe_dwell_s)." },
+        "reverseProbability": { "verified": false, "source": "Assumption kept from docs/RANGE.md (Behaviour spec): open-aim's bots swing between two sides, so most legs turn around." },
+        "maxOffsetMeters": { "verified": false, "source": "Assumption kept from docs/RANGE.md: the opponent stays within 2 m of its spawn, so a leg of up to 1.75 m always fits." }
+      }
+    },
+    "mix": {
+      "standingParts": 4,
+      "movingParts": 1,
+      "trackingParts": 0,
+      "valueNotes": {
+        "standingParts": { "verified": false, "source": "open-aim commit 807f557 (github.com/unkwsr/open-aim, read only, no code copied), tools/openaim-extract over 110 scenes: standing bots are 56 % of the scenes (static) plus 40 % of the peek scenes (27 %), so 67 % of the engagements (docs/VALORANT-WEIGHTS.md section 5). Drills show what players train, not match frequencies." },
+        "movingParts": { "verified": false, "source": "open-aim commit 807f557 (github.com/unkwsr/open-aim, read only, no code copied), tools/openaim-extract over 110 scenes: 60 % of the exposures in peek scenes (27 %) move, so 16 % of the engagements (docs/VALORANT-WEIGHTS.md section 5). Flash scenes (16 %) are the flash rounds, whose parts the player's flash importance sets." },
+        "trackingParts": { "verified": false, "source": "docs/VALORANT-WEIGHTS.md section 4, confirmed by the user: a moving shooter is inaccurate in Valorant (walk +3°, run +6° spread), so moving targets are shot from a stop and covered by the strafe click scenarios; tracking gets no rounds." }
+      }
+    },
+    "duel": {
+      "missFollowUpMs": 308,
+      "limitMs": 3000,
+      "valueNotes": {
+        "missFollowUpMs": { "verified": false, "source": "docs/VALORANT-WEIGHTS.md section 4, confirmed by the user (option A): Vandal at 9.75 rounds/s, four body shots kill 150 HP, so a first shot that misses the head kills three shot intervals later (308 ms). The least penalty for a miss over the tested weapons, so the least push toward slow." },
+        "limitMs": { "verified": false, "source": "Assumption, chosen by the user (M23 duel-limit option 1): a reach at one target that lasts longer than 3 s is a lost duel, because an opponent who peeks has shot long before. This includes a reach that the round end cut off after more than 3 s, so a round in which the player gets stuck on one target scores 0 instead of being left out. Not measured in the game." }
       }
     },
     "verified": false

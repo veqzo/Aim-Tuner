@@ -1,6 +1,10 @@
 package de.yuuto.aimtune.core.accel
 
 import de.yuuto.aimtune.core.scenario.ScenarioKind
+import de.yuuto.aimtune.core.scenario.ScenarioMix
+import de.yuuto.aimtune.core.scenario.ScenarioSchedule
+import de.yuuto.aimtune.core.score.DuelScorer
+import de.yuuto.aimtune.core.score.Engagement
 import de.yuuto.aimtune.core.score.MetricWeights
 import de.yuuto.aimtune.core.score.ScoreMetric
 
@@ -15,6 +19,15 @@ object AccelScenarios {
     )
 
     fun of(flash: Boolean): List<ScenarioKind> = if (flash) WITH_FLASH else CLICK
+
+    /** The scenarios of a game's [ScenarioMix] for the curve runs: flicks for standing opponents, both strafe scenarios for moving ones. */
+    val MIX_KINDS = setOf(ScenarioKind.FLICK, ScenarioKind.MICRO_STRAFE, ScenarioKind.SWITCH_STRAFE, ScenarioKind.FLASH)
+
+    /**
+     * The rotation of a game with a [mix] (M23): one cycle of its schedule over [MIX_KINDS], with [flashParts] for the flash rounds
+     * (0 plays none). Valorant with flash importance "sometimes" gives 12 rounds: 8 flicks, 1 of each strafe scenario, 2 flashes.
+     */
+    fun forMix(mix: ScenarioMix, flashParts: Double): List<ScenarioKind> = ScenarioSchedule.forMix(MIX_KINDS, mix, flashParts).cycle()
 }
 
 enum class RefinePhase {
@@ -56,8 +69,10 @@ class RefineEngine(
     val warmupRounds: Int = DEFAULT_WARMUP_ROUNDS,
     private val stageRounds: Int = RefineSearch.DEFAULT_ROUNDS,
     maxPairs: Int = AccelAbPlan.DEFAULT_MAX_PAIRS,
-    /** The rotation of the rounds instead of [AccelScenarios.of]; experiments only (the gate's flash-heavy mixes). */
+    /** The rotation of the rounds instead of [AccelScenarios.of]: a game's scenario mix ([AccelScenarios.forMix]) or an experiment's. */
     scenarioMix: List<ScenarioKind>? = null,
+    /** The game's duel score ([de.yuuto.aimtune.core.score.RoundScorer]); null scores every round by [weights]. */
+    private val duel: DuelScorer? = null,
 ) {
     /** The parameters the profile supports, in the order they are searched. */
     val stages: List<RefineParameter> = profile.refineStages()
@@ -141,8 +156,11 @@ class RefineEngine(
         RefinePhase.STAGE_RESULT, RefinePhase.DONE -> error("no round is due in phase $phase")
     }
 
-    /** Takes the score inputs of the round [nextRound] returned and moves on when the phase is complete. */
-    fun record(scoreInputs: Map<ScoreMetric, Double>) {
+    /**
+     * Takes the score inputs of the round [nextRound] returned, with its [engagements] for the duel score (null for tracking or
+     * without events), and moves on when the phase is complete.
+     */
+    fun record(scoreInputs: Map<ScoreMetric, Double>, engagements: List<Engagement>? = null) {
         when (phase) {
             RefinePhase.WARMUP -> {
                 roundLog += RefineRoundLog(RefinePhase.WARMUP, null, null, null)
@@ -152,13 +170,13 @@ class RefineEngine(
             RefinePhase.SEARCH -> {
                 val active = checkNotNull(search)
                 roundLog += RefineRoundLog(RefinePhase.SEARCH, active.parameter, currentValue, null)
-                active.record(currentValue, scenarios[active.roundsPlayed % scenarios.size].id, scoreInputs)
+                active.record(currentValue, scenarios[active.roundsPlayed % scenarios.size].id, scoreInputs, engagements)
                 if (active.roundsPlayed >= active.plannedRounds) finishStage()
             }
             RefinePhase.TEST -> {
                 val round = plan.round(outcomes.size)
                 roundLog += RefineRoundLog(RefinePhase.TEST, null, null, round.condition == AbCondition.ACCEL)
-                outcomes += AbOutcome(round.pair, round.condition, scoreInputs, round.scenario.id)
+                outcomes += AbOutcome(round.pair, round.condition, scoreInputs, round.scenario.id, engagements)
                 if (outcomes.size % 2 == 0) decide()
             }
             RefinePhase.STAGE_RESULT, RefinePhase.DONE -> error("no round is due in phase $phase")
@@ -201,7 +219,7 @@ class RefineEngine(
     private fun beginStage(index: Int) {
         if (index >= stages.size) return beginTestOrEnd()
         stageIndex = index
-        search = RefineSearch(stages[index], weights, seed * SEARCH_SEED_MIX + index, stageRounds)
+        search = RefineSearch(stages[index], weights, seed * SEARCH_SEED_MIX + index, stageRounds, duel)
         phase = RefinePhase.SEARCH
     }
 
@@ -223,7 +241,7 @@ class RefineEngine(
     }
 
     private fun decide() {
-        val result = evaluateAb(outcomes, weights, maxPairs = plan.maxPairs)
+        val result = evaluateAb(outcomes, weights, maxPairs = plan.maxPairs, duel = duel)
         verdict = result
         // Pairs without a usable score never complete, so the plan's last round ends the test whatever the verdict says.
         if (result.status != AbStatus.NEED_MORE_ROUNDS || outcomes.size >= maxTestRounds) phase = RefinePhase.DONE

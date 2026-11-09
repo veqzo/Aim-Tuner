@@ -7,6 +7,8 @@ import de.yuuto.aimtune.core.accel.NaturalCurve
 import de.yuuto.aimtune.core.accel.NoAccel
 import de.yuuto.aimtune.core.accel.strengthAccel
 import de.yuuto.aimtune.core.scenario.ScenarioKind
+import de.yuuto.aimtune.core.score.DuelScorer
+import de.yuuto.aimtune.core.score.Engagement
 import de.yuuto.aimtune.core.score.MetricWeights
 import de.yuuto.aimtune.storage.RoundRow
 import de.yuuto.aimtune.storage.SessionKind
@@ -132,9 +134,15 @@ object StoredSearches {
      * The rounds of the searches at this DPI and a sensitivity within [CM360_TOLERANCE] of [cm360] ([sessions] oldest first),
      * at most the newest [MAX_ROUNDS], each with its session and its position in it, so the optimizer can learn a better or
      * worse day per session. The strengths are all played at the same sensitivity, which is what lets the rounds of
-     * several days answer the same question.
+     * several days answer the same question. [engagements] reads the duels of a round for the duel score.
      */
-    fun priorRounds(sessions: List<SearchSession>, dpi: Double, cm360: Double, base: SearchBase? = null): List<PriorSearchRound> =
+    fun priorRounds(
+        sessions: List<SearchSession>,
+        dpi: Double,
+        cm360: Double,
+        base: SearchBase? = null,
+        engagements: (RoundRow) -> List<Engagement>? = { null },
+    ): List<PriorSearchRound> =
         sessions.filter { abs(it.dpi - dpi) < 0.5 && abs(it.cm360 / cm360 - 1.0) <= CM360_TOLERANCE }
             .mapNotNull { session ->
                 // A session played on top of another curve (or on a plain mouse) is another question; it is left out, not guessed at.
@@ -142,18 +150,26 @@ object StoredSearches {
                 if (strengths.any { it == null }) null else session to strengths.map { checkNotNull(it) }
             }
             .flatMap { (session, strengths) ->
-                session.rounds.mapIndexed { step, round -> PriorSearchRound(session.sessionId, step, strengths[step], round.scenario, round.scoreInputs()) }
+                session.rounds.mapIndexed { step, round -> round to PriorSearchRound(session.sessionId, step, strengths[step], round.scenario, round.scoreInputs()) }
             }
             .takeLast(MAX_ROUNDS)
+            // The events are read only for the rounds that are kept.
+            .map { (round, prior) -> prior.copy(engagements = engagements(round)) }
 
     /** The newest search together with the earlier ones at its setup, analysed together; null without a search. */
-    fun pool(sessions: List<SearchSession>, weights: MetricWeights, base: SearchBase? = null): LastSearch? {
+    fun pool(
+        sessions: List<SearchSession>,
+        weights: MetricWeights,
+        base: SearchBase? = null,
+        duel: DuelScorer? = null,
+        engagements: (RoundRow) -> List<Engagement>? = { null },
+    ): LastSearch? {
         val newest = sessions.lastOrNull() ?: return null
-        val rounds = priorRounds(sessions, newest.dpi, newest.cm360, base)
+        val rounds = priorRounds(sessions, newest.dpi, newest.cm360, base, engagements)
         if (rounds.isEmpty()) return null
         // Searches with flash rounds were played over the wider strength range, so they are analysed over it too.
         val flash = rounds.any { it.scenarioId == ScenarioKind.FLASH.id }
-        val result = StrengthSearch(weights, seed = 0L, plannedRounds = rounds.size, prior = rounds, flash = flash, base = base).result()
+        val result = StrengthSearch(weights, seed = 0L, plannedRounds = rounds.size, prior = rounds, flash = flash, base = base, duel = duel).result()
         return LastSearch(newest.dpi, newest.cm360, rounds.size, rounds.map { it.sessionKey }.distinct().size, result, base)
     }
 }

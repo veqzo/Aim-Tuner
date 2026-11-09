@@ -149,6 +149,9 @@ class SettingsStoreTest {
     fun `the default scenarios depend on whether the game has a Range mode`() {
         assertEquals(listOf("flick", "range", "flash"), AppSettings.defaultScenarios(hasRange = true))
         assertEquals(listOf("flick", "flash"), AppSettings.defaultScenarios(hasRange = false))
+        assertEquals(listOf("flick", "range", "micro-strafe", "switch-strafe", "flash"), AppSettings.defaultScenarios(hasRange = true, hasMix = true))
+        assertTrue(AppSettings.isDefaultScenarios(listOf("flick", "range")), "a default without flash is still a default")
+        assertFalse(AppSettings.isDefaultScenarios(listOf("flick", "micro", "flash")))
     }
 
     @Test

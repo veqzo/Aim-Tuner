@@ -1,0 +1,188 @@
+{
+  "id": "valorant",
+  "name": "Valorant",
+  "yaw": 0.07,
+  "fov": {
+    "degrees": 103.0,
+    "type": "horizontal",
+    "aspect": {
+      "width": 16,
+      "height": 9
+    },
+    "scaling": "hor_plus"
+  },
+  "sensitivity": {
+    "decimals": 3
+  },
+  "sources": [
+    "https://csdb.gg/sensitivity-converter/valorant-to-cs2/",
+    "https://fovcalculatorpro.com/games/valorant-fov/"
+  ],
+  "notes": "Yaw is fixed at 0.07. FOV is 103 horizontal at 16:9 (about 70.5 vertical) with the vertical angle kept for other aspect ratios; these FOV values come from community sources, not Riot documentation. Trainer geometry (the `trainer` block) is an assumption, not a measurement: head about 0.2 m wide seen from 6-30 m (0.4-1.9 degrees), duels mostly under 20 degrees, strafing at 3-6 m/s. Riot publishes no hitbox or speed numbers; measure them in the shooting range (docs/history/REVIEW.md, Realism) and set verified to true.",
+  "trainer": {
+    "fieldYawDegrees": 50.0,
+    "fieldPitchDegrees": 25.0,
+    "clickTargetDiameterDegrees": {
+      "min": 0.4,
+      "max": 1.9
+    },
+    "clickTargetDistanceMeters": {
+      "min": 6.0,
+      "max": 30.0
+    },
+    "flickAngles": [
+      {
+        "maxDegrees": 5,
+        "weight": 0.3
+      },
+      {
+        "maxDegrees": 10,
+        "weight": 0.3
+      },
+      {
+        "maxDegrees": 20,
+        "weight": 0.2
+      },
+      {
+        "maxDegrees": 40,
+        "weight": 0.15
+      },
+      {
+        "maxDegrees": 90,
+        "weight": 0.05
+      }
+    ],
+    "microStepDegrees": {
+      "min": 1.5,
+      "max": 8.0
+    },
+    "switchingSeparationDegrees": 10.0,
+    "trackingDiameterDegrees": {
+      "min": 2.0,
+      "max": 3.7
+    },
+    "trackingDistanceMeters": 14.0,
+    "strafeSpeedMetersPerSecond": {
+      "min": 3.0,
+      "max": 6.0
+    },
+    "stopProbability": 0.25,
+    "eyeHeightMeters": 1.6,
+    "headHeightMeters": 1.65,
+    "elevation": {
+      "spreadDegrees": 1.5,
+      "offLevelShare": 0.12,
+      "offLevelDegrees": {
+        "min": 3.0,
+        "max": 10.0
+      },
+      "loweredShare": 0.4,
+      "notes": "Assumption, not a measurement. Valorant maps are mostly flat and players place the crosshair at head height, so most enemies are within about 1.5 degrees of the crosshair level; about 12 percent are on a different level (heaven positions, ramps, stairs, crouching players), 3-10 degrees up or down, more of them above. Riot publishes no eye height, head height or map elevation statistics (secondary sources only say all agents are about 2 m tall); 1.6 m eye and 1.65 m head centre only tilt level targets by a fraction of a degree. Measure in the shooting range (docs/history/REVIEW.md, Realism) and set verified to true."
+    },
+    "flash": {
+      "popDelaySeconds": {
+        "min": 0.5,
+        "max": 0.65
+      },
+      "cueOffsetDegrees": {
+        "min": 10.0,
+        "max": 40.0
+      },
+      "cueElevationDegrees": 12.0,
+      "distanceMeters": {
+        "min": 6.0,
+        "max": 20.0
+      },
+      "gapSeconds": {
+        "min": 0.4,
+        "max": 1.0
+      },
+      "blindSeconds": 1.5,
+      "returnSpreadDegrees": 8.0,
+      "returnMinDegrees": 1.5,
+      "exitMarginDegrees": 10.0,
+      "verified": false,
+      "sources": [
+        "https://valorant.fandom.com/wiki/Curveball",
+        "https://valorant.fandom.com/wiki/Blindside",
+        "https://valorant.fandom.com/wiki/Guiding_Light",
+        "https://valorant.fandom.com/wiki/FLASH-drive"
+      ],
+      "notes": "Documented windups (PC): Flashpoint 0.5 s, Arc Rose 0.5 s, Curveball 0.6 s, Blindside 0.6 s (the quick, common flashes; KAY/O FLASH/drive 1.0 s lobbed or 1.6 s thrown and Skye Guiding Light up to 2 s are slower and not modelled); maximum blind 1.5 s (Curveball, Blindside) to 2.25 s. Players who look away are blinded only briefly (secondary sources). The time a flash is visible before it pops also contains part of its flight, which no source gives: popDelaySeconds 0.5-0.65 follows the common windups (the visible flight before the windup is not given by any source); an earlier 0.45-0.9 was found too slow by the player and was chosen so that the simulated hand neither always nor never turns away in time. The exit margin of 10 degrees past the edge of the screen is an assumption for the glare. Measure both in the shooting range and set verified to true."
+    },
+    "range": {
+      "spawnDelaySeconds": {
+        "min": 0.2,
+        "max": 0.8
+      },
+      "speedPresets": {
+        "easySeconds": 3.0,
+        "mediumSeconds": 2.0,
+        "hardSeconds": 1.2
+      },
+      "bearingDegrees": {
+        "min": -50.0,
+        "max": 80.0
+      },
+      "distanceMeters": {
+        "min": 5.0,
+        "max": 20.0
+      },
+      "botHeightMeters": 1.8,
+      "headDiameterMeters": 0.25,
+      "strafe": {
+        "speedMetersPerSecond": 2.0,
+        "movingSeconds": {
+          "min": 0.25,
+          "max": 0.45
+        },
+        "stopSeconds": {
+          "min": 0.3,
+          "max": 0.7
+        },
+        "reverseProbability": 0.6,
+        "maxOffsetMeters": 2.0
+      },
+      "killRule": {
+        "headHitKills": true,
+        "bodyHitsArmorOn": 4,
+        "bodyHitsArmorOff": 3
+      },
+      "valueNotes": {
+        "spawnDelaySeconds": {
+          "verified": false,
+          "source": "Measured, rough: clips of 2026-10-22 (60 fps, one played run, n = 19): a new bot about 1.8 s after the previous spawn minus a shot bot's lifetime of 1.4 s gives about 0.4 s; the 0.2-0.8 s spread is an assumption."
+        },
+        "speedPresets": {
+          "verified": false,
+          "source": "Assumption, not measured: the range has Speed Easy / Medium / Hard (valorant.fandom.com/wiki/Range) but none was selected in the clips; a bot lives 3.0 / 2.0 / 1.2 s. Without a preset an unshot bot never leaves (measured: one stayed 44 s)."
+        },
+        "bearingDegrees": {
+          "verified": false,
+          "source": "Measured: clips of 2026-10-22, bearings -51 to +81 degrees from the counter's forward direction in a played run; uniform between them is an assumption."
+        },
+        "distanceMeters": {
+          "verified": false,
+          "source": "Measured, rough: 3-19 m, median 6.8 m, from the angular size of a bot assumed 1.8 m tall (so partly circular); 5-20 m log-uniform is the rounded assumption."
+        },
+        "botHeightMeters": {
+          "verified": false,
+          "source": "Assumption: agents are about 2 m tall in secondary sources (the eye height of 1.6 m of this profile is also an assumption); 1.8 m for the bot."
+        },
+        "headDiameterMeters": {
+          "verified": false,
+          "source": "Assumption: Riot publishes no hitbox. A generous 0.25 m head sphere; the head hitbox was not measurable in the clips."
+        },
+        "strafe": {
+          "verified": false,
+          "source": "Measured, then adjusted by the player's feel: clips of 2026-10-22 gave move-stop-move with moving segments 0.36 s median (0.25-0.5), stops 0.2 s (0.1-0.3) and about 12 degrees per second at an assumed 12 m (2.5 m/s, so partly circular). The player found the bots in the first version (2.5 m/s, stops 0.1-0.3 s) moving too much and turning too fast, so the values are 2.2 m/s, moves 0.25-0.45 s and stops 0.3-0.7 s (about 40 % of the time moving); after the second play (2026-10-24) the bots were still a touch too fast, so the speed is 2.0 m/s. The reverse probability 0.6 and the +-2 m limit are assumptions."
+        },
+        "killRule": {
+          "verified": false,
+          "source": "Assumption: a head hit kills; Vandal damage against 100 health plus 50 armor needs 4 body hits with bot armor on and 3 with it off (Bot Armor is a setting of the range panel). Not observable in the clips."
+        }
+      }
+    },
+    "verified": false
+  }
+}

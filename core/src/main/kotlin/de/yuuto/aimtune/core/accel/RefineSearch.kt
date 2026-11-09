@@ -2,8 +2,10 @@ package de.yuuto.aimtune.core.accel
 
 import de.yuuto.aimtune.core.optimizer.Observation
 import de.yuuto.aimtune.core.optimizer.SensitivityOptimizer
+import de.yuuto.aimtune.core.score.DuelScorer
+import de.yuuto.aimtune.core.score.Engagement
 import de.yuuto.aimtune.core.score.MetricWeights
-import de.yuuto.aimtune.core.score.ScoreCalculator
+import de.yuuto.aimtune.core.score.RoundScorer
 import de.yuuto.aimtune.core.score.ScoreMetric
 
 /** What one stage of the refine search found: the best factor of [parameter] with its credible range. 1 is the imported value. */
@@ -30,12 +32,16 @@ data class RefineResult(
  */
 class RefineSearch(
     val parameter: RefineParameter,
-    private val weights: MetricWeights,
+    weights: MetricWeights,
     seed: Long,
     val plannedRounds: Int = DEFAULT_ROUNDS,
+    /** The game's duel score ([RoundScorer]); null scores every round by [weights]. */
+    duel: DuelScorer? = null,
 ) {
+    private val scorer = RoundScorer(weights, duel)
     private val optimizer = SensitivityOptimizer(parameter.searchRange, seed)
     private val inputs = mutableListOf<Map<ScoreMetric, Double>>()
+    private val engagements = mutableListOf<List<Engagement>?>()
     private val scenarios = mutableListOf<String>()
     private val pseudo = mutableListOf<Double>()
 
@@ -51,8 +57,10 @@ class RefineSearch(
     /** The factor of the next round. Blind: callers must not show it. */
     fun nextValue(): Double = parameter.fromPseudo(optimizer.suggestNext(history()).cm360)
 
-    fun record(value: Double, scenarioId: String, scoreInputs: Map<ScoreMetric, Double>) {
+    /** Takes a round played at [value]; [roundEngagements] are its duels for the duel score (null for tracking or without events). */
+    fun record(value: Double, scenarioId: String, scoreInputs: Map<ScoreMetric, Double>, roundEngagements: List<Engagement>? = null) {
         inputs += scoreInputs
+        engagements += roundEngagements
         scenarios += scenarioId
         pseudo += parameter.toPseudo(value)
     }
@@ -67,7 +75,7 @@ class RefineSearch(
     }
 
     private fun history(): List<Observation> {
-        val scores = ScoreCalculator(weights).scoreRounds(inputs, scenarios)
+        val scores = scorer.scoreRounds(inputs, scenarios, engagements)
         return pseudo.indices.map { Observation(SESSION, pseudo[it], scores[it] ?: UNKNOWN_SCORE, scenarios[it].hashCode(), it) }
     }
 

@@ -2,6 +2,7 @@ package de.yuuto.aimtune.app.history
 
 import de.yuuto.aimtune.core.metrics.computeRoundMetrics
 import de.yuuto.aimtune.core.score.MetricWeights
+import de.yuuto.aimtune.core.score.RoundScorer
 import de.yuuto.aimtune.core.sim.HeadlessRound
 import de.yuuto.aimtune.core.sim.SimulatedPlayer
 import de.yuuto.aimtune.core.units.SearchRange
@@ -33,7 +34,7 @@ class HistoryTest {
             SessionRow(2, 2_000, "valorant", 800.0, SessionKind.SENSITIVITY),
         )
         val rounds = sensitivityRounds(1, 5) + sensitivityRounds(2, 5)
-        val history = buildHistory(sessions, rounds, MetricWeights.DEFAULT, range)
+        val history = buildHistory(sessions, rounds, RoundScorer(MetricWeights.DEFAULT), range)
         assertEquals(listOf(1L, 2L), history.map { it.sessionId })
         assertEquals(listOf(5, 5), history.map { it.rounds })
         history.forEach { assertTrue(assertNotNull(it.cm360) in range) }
@@ -47,7 +48,7 @@ class HistoryTest {
             SessionRow(2, 2_000, "valorant", 800.0, SessionKind.ACCEL_AB),
             SessionRow(3, 3_000, "valorant", 800.0, SessionKind.SENSITIVITY),
         )
-        val history = buildHistory(sessions, sensitivityRounds(1, 4) + sensitivityRounds(2, 2), MetricWeights.DEFAULT, range)
+        val history = buildHistory(sessions, sensitivityRounds(1, 4) + sensitivityRounds(2, 2), RoundScorer(MetricWeights.DEFAULT), range)
         assertEquals(listOf(1L, 2L), history.map { it.sessionId }, "the session without rounds is dropped")
         assertNull(history[1].cm360)
         assertNull(history[1].confidencePercent)
@@ -60,7 +61,7 @@ class HistoryTest {
             SessionRow(1, 1_000, "cs2", 800.0, SessionKind.SENSITIVITY),
             SessionRow(2, 2_000, "valorant", 800.0, SessionKind.SENSITIVITY),
         )
-        val history = buildHistory(sessions, sensitivityRounds(1, 6) + sensitivityRounds(2, 2), MetricWeights.DEFAULT, range)
+        val history = buildHistory(sessions, sensitivityRounds(1, 6) + sensitivityRounds(2, 2), RoundScorer(MetricWeights.DEFAULT), range)
         assertNotNull(history[0].cm360)
         assertNull(history[1].cm360, "two valorant rounds are too few for an estimate")
     }

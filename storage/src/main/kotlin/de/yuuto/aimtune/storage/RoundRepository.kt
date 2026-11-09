@@ -71,6 +71,11 @@ class RoundRepository(private val database: Database) {
         }
     }
 
+    /** Deletes every session; the foreign keys delete their rounds, events, metrics and ratings. Use [startOver], which backs up first. */
+    internal fun clearAll() = database.transaction { c ->
+        c.createStatement().use { it.executeUpdate("DELETE FROM session") }
+    }
+
     fun sessions(): List<SessionRow> = database.transaction { c ->
         c.createStatement().use { s ->
             s.executeQuery("SELECT id, started_at_ms, game_id, dpi, kind FROM session ORDER BY started_at_ms, id").use { rs ->
@@ -130,6 +135,22 @@ class RoundRepository(private val database: Database) {
                     accel = rs.getString(9)?.let(AccelSpec::decodeModel),
                 )
             }
+        }
+    }
+
+    /** The target events of a round without its mouse events (cheap, for the duel score); empty for an unknown round. */
+    fun loadTargetEvents(roundId: Long): List<TargetEvent> = database.transaction { c ->
+        c.prepareStatement("SELECT start_nanos FROM round WHERE id = ?").use { s ->
+            s.setLong(1, roundId)
+            s.executeQuery().use { rs -> if (rs.next()) loadTargetEvents(c, roundId, rs.getLong(1)) else emptyList() }
+        }
+    }
+
+    /** The end of a round on the clock of its events (start + duration); null for an unknown round. */
+    fun roundEndNanos(roundId: Long): Long? = database.transaction { c ->
+        c.prepareStatement("SELECT start_nanos + duration_nanos FROM round WHERE id = ?").use { s ->
+            s.setLong(1, roundId)
+            s.executeQuery().use { rs -> if (rs.next()) rs.getLong(1) else null }
         }
     }
 

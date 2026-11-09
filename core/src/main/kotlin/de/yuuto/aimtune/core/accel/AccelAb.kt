@@ -1,8 +1,10 @@
 package de.yuuto.aimtune.core.accel
 
 import de.yuuto.aimtune.core.scenario.ScenarioKind
+import de.yuuto.aimtune.core.score.DuelScorer
+import de.yuuto.aimtune.core.score.Engagement
 import de.yuuto.aimtune.core.score.MetricWeights
-import de.yuuto.aimtune.core.score.ScoreCalculator
+import de.yuuto.aimtune.core.score.RoundScorer
 import de.yuuto.aimtune.core.score.ScoreMetric
 import de.yuuto.aimtune.core.score.normalCdf
 import kotlin.math.sqrt
@@ -49,8 +51,17 @@ class AccelAbPlan(private val scenarios: List<ScenarioKind>, private val seed: L
     }
 }
 
-/** What one finished round contributes: its condition, the score metrics it produced and the scenario it played. */
-data class AbOutcome(val pair: Int, val condition: AbCondition, val inputs: Map<ScoreMetric, Double>, val scenarioId: String? = null)
+/**
+ * What one finished round contributes: its condition, the score metrics it produced, the scenario it played and its
+ * [engagements] for the duel score (null for tracking or without events).
+ */
+data class AbOutcome(
+    val pair: Int,
+    val condition: AbCondition,
+    val inputs: Map<ScoreMetric, Double>,
+    val scenarioId: String? = null,
+    val engagements: List<Engagement>? = null,
+)
 
 enum class AbStatus { NEED_MORE_ROUNDS, ACCEL_BETTER, ACCEL_WORSE, NO_DIFFERENCE }
 
@@ -85,10 +96,16 @@ fun evaluateAb(
      * level, and at a level that brings them back to 5 % it confirmed real curves no more often (gate-v.txt, M14 T2).
      */
     groupByScenario: Boolean = false,
+    /** The game's duel score ([RoundScorer]); null scores every round by [weights]. */
+    duel: DuelScorer? = null,
 ): AbVerdict {
     val scenarioIds = outcomes.map { it.scenarioId }
     val grouped = groupByScenario && scenarioIds.all { it != null }
-    val scores = ScoreCalculator(weights).scoreRounds(outcomes.map { it.inputs }, if (grouped) scenarioIds.map { checkNotNull(it) } else null)
+    val scores = RoundScorer(weights, duel).scoreRounds(
+        outcomes.map { it.inputs },
+        if (grouped) scenarioIds.map { checkNotNull(it) } else null,
+        outcomes.map { it.engagements },
+    )
     val byPair = outcomes.indices.groupBy { outcomes[it].pair }
     val differences = byPair.values.mapNotNull { indices ->
         val plain = indices.firstOrNull { outcomes[it].condition == AbCondition.PLAIN }?.let { scores[it] }

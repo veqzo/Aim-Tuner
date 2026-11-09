@@ -5,8 +5,10 @@ import de.yuuto.aimtune.core.metrics.RoundMetrics
 import de.yuuto.aimtune.core.optimizer.Observation
 import de.yuuto.aimtune.core.optimizer.SensitivityOptimizer
 import de.yuuto.aimtune.core.scenario.ScenarioKind
+import de.yuuto.aimtune.core.score.DuelScorer
+import de.yuuto.aimtune.core.score.Engagement
 import de.yuuto.aimtune.core.score.MetricWeights
-import de.yuuto.aimtune.core.score.ScoreCalculator
+import de.yuuto.aimtune.core.score.RoundScorer
 import de.yuuto.aimtune.core.score.ScoreMetric
 import de.yuuto.aimtune.core.score.scoreInputs
 
@@ -29,9 +31,16 @@ data class StrengthResult(
 /**
  * A round of an earlier search, as the optimizer needs it: the strength it was played with, its score inputs and where it
  * was played. [sessionKey] says which earlier session it belongs to (a better or worse day is learned per session) and
- * [step] is its position within that session.
+ * [step] is its position within that session. [engagements] are its duels for the duel score (null for tracking or without events).
  */
-data class PriorSearchRound(val sessionKey: Long, val step: Int, val strength: Double, val scenarioId: String, val scoreInputs: Map<ScoreMetric, Double>)
+data class PriorSearchRound(
+    val sessionKey: Long,
+    val step: Int,
+    val strength: Double,
+    val scenarioId: String,
+    val scoreInputs: Map<ScoreMetric, Double>,
+    val engagements: List<Engagement>? = null,
+)
 
 /**
  * The blind search for the curve strength: rounds played with different strengths (some of them no curve
@@ -41,7 +50,7 @@ data class PriorSearchRound(val sessionKey: Long, val step: Int, val strength: D
  * this search, so [plannedRounds] can be lower and the first strengths already build on what is known.
  */
 class StrengthSearch(
-    private val weights: MetricWeights,
+    weights: MetricWeights,
     seed: Long,
     val plannedRounds: Int = DEFAULT_ROUNDS,
     private val prior: List<PriorSearchRound> = emptyList(),
@@ -49,12 +58,16 @@ class StrengthSearch(
     flash: Boolean = false,
     /** The player's own curve the strengths scale, or null for the natural curves over a plain mouse; it sets the range. */
     base: SearchBase? = null,
+    /** The game's duel score ([RoundScorer]); null scores every round by [weights]. */
+    duel: DuelScorer? = null,
 ) {
+    private val scorer = RoundScorer(weights, duel)
     // Earlier rounds above the narrow range (a search that played flash rounds) widen it too, so the optimizer covers them.
     private val range = base?.strengths?.searchRange
         ?: CurveStrength.searchRange(flash || prior.any { it.strength > CurveStrength.MAX + STRENGTH_TOLERANCE })
     private val optimizer = SensitivityOptimizer(range, seed)
     private val inputs = mutableListOf<Map<ScoreMetric, Double>>()
+    private val engagements = mutableListOf<List<Engagement>?>()
     private val scenarios = mutableListOf<String>()
     private val pseudo = mutableListOf<Double>()
 
@@ -69,11 +82,13 @@ class StrengthSearch(
     /** The strength of the next round. Blind: callers must not show it. */
     fun nextStrength(): Double = CurveStrength.fromPseudo(optimizer.suggestNext(history()).cm360)
 
-    fun record(strength: Double, scenario: ScenarioKind, metrics: RoundMetrics) = record(strength, scenario.id, metrics.scoreInputs())
+    fun record(strength: Double, scenario: ScenarioKind, metrics: RoundMetrics, roundEngagements: List<Engagement>? = null) =
+        record(strength, scenario.id, metrics.scoreInputs(), roundEngagements)
 
-    /** Takes a round by its scenario id and score inputs. */
-    fun record(strength: Double, scenarioId: String, scoreInputs: Map<ScoreMetric, Double>) {
+    /** Takes a round by its scenario id, score inputs and duels ([PriorSearchRound.engagements]). */
+    fun record(strength: Double, scenarioId: String, scoreInputs: Map<ScoreMetric, Double>, roundEngagements: List<Engagement>? = null) {
         inputs += scoreInputs
+        engagements += roundEngagements
         scenarios += scenarioId
         pseudo += CurveStrength.toPseudo(strength)
     }
@@ -91,7 +106,7 @@ class StrengthSearch(
     }
 
     private fun history(): List<Observation> {
-        val scores = ScoreCalculator(weights).scoreRounds(prior.map { it.scoreInputs } + inputs, prior.map { it.scenarioId } + scenarios)
+        val scores = scorer.scoreRounds(prior.map { it.scoreInputs } + inputs, prior.map { it.scenarioId } + scenarios, prior.map { it.engagements } + engagements)
         val earlier = prior.indices.map {
             val round = prior[it]
             Observation(round.sessionKey, CurveStrength.toPseudo(round.strength), scores[it] ?: UNKNOWN_SCORE, round.scenarioId.hashCode(), round.step)

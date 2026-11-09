@@ -76,6 +76,7 @@ class SettingsScreen(ctx: AppContext, private val returnTo: (() -> Unit)? = null
     private var checkForUpdates = ctx.settings.current.checkForUpdates
     private var message: Pair<String, Boolean>? = null
     private var updateStatus: String? = null
+    private var startOver = StartOverState.IDLE
     private var liveCm: Label? = null
     private var totalLabel: Label? = null
 
@@ -94,6 +95,7 @@ class SettingsScreen(ctx: AppContext, private val returnTo: (() -> Unit)? = null
         addRow(left, t("settings.sounds"), soundToggles())
         val runSetup = ui.button(t("settings.run_setup"), Styles.SECONDARY) { ctx.showOnboarding(SetupStep.DPI, afterFinish = { ctx.showSettings(returnTo) }) }
         addRow(left, t("settings.style_pad"), Table().also { it.add(runSetup).height(CONTROL_HEIGHT) })
+        addRow(left, t("settings.data"), Table().also { it.add(startOverButton()).width(START_OVER_WIDTH).height(CONTROL_HEIGHT) })
 
         val right = Table()
         right.add(weightsBlock()).left().row()
@@ -203,10 +205,24 @@ class SettingsScreen(ctx: AppContext, private val returnTo: (() -> Unit)? = null
     private fun weightsBlock(): Table {
         val block = Table()
         block.add(ui.caps(t("settings.weights"))).left().padBottom(8f).row()
-        block.add(ui.label(t("settings.weights_help"), Styles.CAPTION_MUTED)).left().padBottom(32f).row()
+        block.add(ui.label(weightsHelp(), Styles.CAPTION_MUTED, wrap = true)).left().width(WEIGHTS_WIDTH).padBottom(32f).row()
         METRIC_KEYS.forEach { (metric, key) -> block.add(weightRow(metric, t(key))).left().width(WEIGHTS_WIDTH).padBottom(SLIDER_ROW_GAP).row() }
         totalLabel = ui.label(totalText(), Styles.MONO_MUTED).also { block.add(it).left() }
         return block
+    }
+
+    /**
+     * In a game with duel rules (M23g4) the click rounds score duel wins, and with a scenario mix the game sets how often each
+     * scenario comes; the help says so, because the sliders then barely change the result.
+     */
+    private fun weightsHelp(): String {
+        val profile = draft.profile(ctx.profiles)
+        return if (profile?.geometry?.duel != null) t("settings.weights_help_duel", profile.name) else t("settings.weights_help")
+    }
+
+    private fun scenariosHelp(): String {
+        val profile = draft.profile(ctx.profiles)
+        return if (profile?.geometry?.mix != null) t("settings.scenarios_help_mix", profile.name) else t("settings.scenarios_help")
     }
 
     private fun weightRow(metric: ScoreMetric, name: String): Table {
@@ -240,6 +256,34 @@ class SettingsScreen(ctx: AppContext, private val returnTo: (() -> Unit)? = null
         }
     }
 
+    /**
+     * Deletes all rounds after a backup; the settings stay. It takes two clicks: the first only arms it and says what will happen.
+     * The outcome is the label of the button, as for the update check, so the footer keeps its width.
+     */
+    private fun startOverButton(): TextButton {
+        val text = when (startOver) {
+            StartOverState.IDLE -> t("settings.start_over")
+            StartOverState.ARMED -> t("settings.start_over_confirm")
+            StartOverState.RUNNING -> t("settings.start_over_running")
+            StartOverState.DONE -> t("settings.start_over_done")
+            StartOverState.FAILED -> t("settings.start_over_failed")
+        }
+        return ui.button(text, Styles.SECONDARY) {
+            when (startOver) {
+                StartOverState.RUNNING -> Unit
+                StartOverState.ARMED -> {
+                    startOver = StartOverState.RUNNING
+                    ctx.startOver { result ->
+                        startOver = if (result.isSuccess) StartOverState.DONE else StartOverState.FAILED
+                        if (ctx.currentScreen === this) rebuild()
+                    }
+                }
+                else -> startOver = StartOverState.ARMED
+            }
+            rebuild()
+        }
+    }
+
     /** The switch for the daily update check, in the footer: both columns are as tall as the window. */
     private fun updateToggle(): Table {
         val button: TextButton = ui.button(t("settings.update_check", t(if (checkForUpdates) "settings.on" else "settings.off")), Styles.TILE) { checkForUpdates = !checkForUpdates; message = null; rebuild() }
@@ -251,7 +295,7 @@ class SettingsScreen(ctx: AppContext, private val returnTo: (() -> Unit)? = null
     private fun scenariosBlock(): Table {
         val block = Table()
         block.add(ui.caps(t("settings.scenarios"))).left().padBottom(8f).row()
-        block.add(ui.label(t("settings.scenarios_help"), Styles.CAPTION_MUTED)).left().padBottom(24f).row()
+        block.add(ui.label(scenariosHelp(), Styles.CAPTION_MUTED, wrap = true)).left().width(WEIGHTS_WIDTH).padBottom(24f).row()
         val grid = Table()
         // The flash scenario is switched by the importance control below, not by a tile.
         val hasRange = draft.profile(ctx.profiles)?.geometry?.range != null
@@ -354,7 +398,8 @@ class SettingsScreen(ctx: AppContext, private val returnTo: (() -> Unit)? = null
         weights.clear()
         weights.putAll(AppSettings.DEFAULT_WEIGHTS)
         scenarios.clear()
-        scenarios.addAll(AppSettings.defaultScenarios(draft.profile(ctx.profiles)?.geometry?.range != null))
+        val geometry = draft.profile(ctx.profiles)?.geometry
+        scenarios.addAll(AppSettings.defaultScenarios(geometry?.range != null, geometry?.mix != null))
         draft = draft.copy(flashImportance = FlashImportance.SOMETIMES)
         flashSound = true
         hitSound = true
@@ -366,7 +411,10 @@ class SettingsScreen(ctx: AppContext, private val returnTo: (() -> Unit)? = null
         rebuild()
     }
 
+    private enum class StartOverState { IDLE, ARMED, RUNNING, DONE, FAILED }
+
     private companion object {
         const val MAX_INPUT_CHARS = 10
+        const val START_OVER_WIDTH = 520f
     }
 }

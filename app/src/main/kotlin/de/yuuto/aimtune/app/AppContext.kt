@@ -76,11 +76,15 @@ import de.yuuto.aimtune.app.setup.SetupStep
 import de.yuuto.aimtune.app.ui.UiHolder
 import de.yuuto.aimtune.core.accel.AbStatus
 import de.yuuto.aimtune.core.accel.AccelFit
+import de.yuuto.aimtune.core.accel.AccelScenarios
 import de.yuuto.aimtune.core.scenario.ScenarioKind
 import de.yuuto.aimtune.core.score.FlashImportance
+import de.yuuto.aimtune.core.scenario.ScenarioMix
 import de.yuuto.aimtune.core.scenario.ScenarioSchedule
 import de.yuuto.aimtune.core.optimizer.OptimizationResult
+import de.yuuto.aimtune.core.score.DuelScorer
 import de.yuuto.aimtune.core.score.MetricWeights
+import de.yuuto.aimtune.core.score.RoundScorer
 import de.yuuto.aimtune.core.units.AimStyle
 import de.yuuto.aimtune.core.units.searchRange
 import de.yuuto.aimtune.games.GameProfiles
@@ -91,6 +95,7 @@ import de.yuuto.aimtune.app.files.FileDialogs
 import de.yuuto.aimtune.app.files.TinyfdFileDialogs
 import de.yuuto.aimtune.storage.RawAccelExport
 import de.yuuto.aimtune.storage.ResearchExportResult
+import de.yuuto.aimtune.storage.StartOverResult
 import de.yuuto.aimtune.storage.SettingsException
 import java.nio.file.Path
 import java.util.concurrent.CompletableFuture
@@ -155,6 +160,9 @@ class AppContext(
 
     /** The folder the update files go to, inside the data folder; null without one. */
     val updateDir: Path? get() = exportDir?.parent?.parent?.resolve("update")
+
+    /** Where "Start over" puts its database copies (`AppPaths.backupDir`); null without a data folder. */
+    val backupDir: Path? get() = exportDir?.parent?.parent?.resolve("backups")
 
     /** How this copy is installed, which decides how an update is put in place. */
     fun installKind(): InstallKind = UpdateApplier.kindOf(UpdateApplier.runningLauncher(), UpdateApplier.installRoots())
@@ -281,10 +289,14 @@ class AppContext(
         val playable = if (rangeMode) setOf(ScenarioKind.FLICK, ScenarioKind.RANGE) else if (hasRange) enabled else enabled - ScenarioKind.RANGE
         val past = processor.pastBlindRounds(setup.gameId, config.dpi)
         val seed = nextSeed++
-        val test = BlindTest(range, weights, past, seed)
-        val schedule = ScenarioSchedule(playable.ifEmpty { setOf(ScenarioKind.FLICK) }, weights)
+        val test = BlindTest(range, roundScorer(config, weights), past, seed)
+        val schedule = scheduleFor(playable.ifEmpty { setOf(ScenarioKind.FLICK) }, config.profile.geometry.mix.takeUnless { rangeMode }, weights)
         showBlindRound(BlindRun(test, runKey = System.currentTimeMillis(), baseConfig = config, nextSeed = nextSeed++, schedule = schedule))
     }
+
+    /** A game's scenario mix decides the rounds (M23); without one, or in Range mode, the metric weights do. */
+    private fun scheduleFor(playable: Set<ScenarioKind>, mix: ScenarioMix?, weights: MetricWeights): ScenarioSchedule =
+        if (mix == null) ScenarioSchedule(playable, weights) else ScenarioSchedule.forMix(playable, mix, settings.current.flashImportance().mixParts)
 
     /** One blind round at the sensitivity the optimizer picked (hidden from the user). */
     fun showBlindRound(run: BlindRun) = switchTo(TrainerScreen(this, run.nextRoundConfig(), BlindSession(this, run)))
@@ -305,7 +317,7 @@ class AppContext(
         val config = stored.config
         val data = ResultsData(
             config.profile, config.dpi, config.cm360, stored.result, stored.rounds.size, stored.rounds.map { it.sessionId }.distinct().size,
-            BlindTest.scoreRounds(stored.weights, stored.rounds),
+            BlindTest.scoreRounds(stored.scorer, stored.rounds),
             AxisSummary.of(stored.rounds.map { it.axes }),
         )
         switchTo(ResultsScreen(this, data))
@@ -317,10 +329,14 @@ class AppContext(
         val setup = settings.current
         val pad = setup.padWidthCm ?: return null
         val range = searchRange(setup.aimStyleOrNull() ?: AimStyle.MIXED, config.cm360, pad)
-        val weights = metricWeights()
+        val scorer = roundScorer(config)
         val rounds = processor.pastBlindRounds(setup.gameId, config.dpi)
-        return StoredAnalysis(config, weights, rounds, BlindTest.analyzeStored(range, weights, rounds))
+        return StoredAnalysis(config, scorer, rounds, BlindTest.analyzeStored(range, scorer, rounds))
     }
+
+    /** The score of both finders: duel wins for the click rounds of a game with duel rules (M23g4), else the metric weights. */
+    private fun roundScorer(config: TrainerConfig, weights: MetricWeights = metricWeights()): RoundScorer =
+        RoundScorer(weights, config.profile.geometry.duel?.scorer())
 
     private fun metricWeights(): MetricWeights = try {
         settings.current.toMetricWeights()
@@ -328,7 +344,7 @@ class AppContext(
         MetricWeights.DEFAULT
     }
 
-    private class StoredAnalysis(val config: TrainerConfig, val weights: MetricWeights, val rounds: List<PastRound>, val result: OptimizationResult?)
+    private class StoredAnalysis(val config: TrainerConfig, val scorer: RoundScorer, val rounds: List<PastRound>, val result: OptimizationResult?)
 
     /**
      * The sensitivity the acceleration steps are played at: the configured game sensitivity, plus the finder's result for
@@ -379,7 +395,7 @@ class AppContext(
     fun importProfile(profile: ImportedProfile) = hub.setImported(profile)
 
     /** The newest blind strength search, analysed again from its stored rounds. */
-    fun showLastSearch(last: LastSearch? = processor.lastSearch(metricWeights(), accelBaseline()?.ownCurve?.takeIf { useOwnCurve })) = switchTo(AccelLastSearchScreen(this, last))
+    fun showLastSearch(last: LastSearch? = processor.lastSearch(metricWeights(), accelBaseline()?.ownCurve?.takeIf { useOwnCurve }, gameDuel())) = switchTo(AccelLastSearchScreen(this, last))
 
     /** The analysis of the stored calibration rounds, computed again from them. */
     fun showLastAccelAnalysis(last: LastCalibration? = processor.lastCalibration()) = switchTo(AccelLastAnalysisScreen(this, last))
@@ -388,6 +404,20 @@ class AppContext(
     fun showShareData() = switchTo(
         ShareDataScreen(this, CompletableFuture.supplyAsync { processor.storedHistory().let { StoredCounts(it.sessions.size, it.rounds.size) } }),
     )
+
+    /**
+     * Settings "Start over": backs up the database, then clears all rounds; the settings stay. [onResult] runs on the UI thread.
+     * Results the hub kept in memory came from the cleared rounds, so they are dropped too.
+     */
+    fun startOver(onResult: (Result<StartOverResult>) -> Unit) {
+        val dir = backupDir ?: return onResult(Result.failure(IllegalStateException("no data folder to write to")))
+        processor.startOver(dir).thenAccept { result ->
+            Gdx.app.postRunnable {
+                if (result.isSuccess) hub.forgetResults()
+                onResult(result)
+            }
+        }
+    }
 
     /** Writes the research file; fails with the reason when there is no data folder. */
     fun exportResearch(): CompletableFuture<Result<ResearchExportResult>> {
@@ -404,10 +434,10 @@ class AppContext(
         val pad = setup.padWidthCm
         if (config == null || pad == null) return CompletableFuture.completedFuture(emptyList())
         val range = searchRange(setup.aimStyleOrNull() ?: AimStyle.MIXED, config.cm360, pad)
-        val weights = metricWeights()
+        val scorer = roundScorer(config)
         return CompletableFuture.supplyAsync {
             val stored = processor.storedHistory()
-            buildHistory(stored.sessions, stored.rounds, weights, range)
+            buildHistory(stored.sessions, stored.rounds, scorer, range, engagements = stored.engagements)
         }
     }
 
@@ -417,7 +447,7 @@ class AppContext(
     /** Where the stage plan on top of the player's own curve stands at the setup of the next run; null without a plan or a curve in use. */
     fun stagePlan(baseline: AccelBaseline?): StageProgress? {
         val own = baseline?.ownCurve?.takeIf { useOwnCurve } ?: return null
-        return processor.stagePlan(baseline.settingsDpi, baseline.cm360(useFinderResult), own, metricWeights())
+        return processor.stagePlan(baseline.settingsDpi, baseline.cm360(useFinderResult), own, metricWeights(), duel = gameDuel())
     }
 
     /** Starts a session on the stage the plan stands on: the calibration plays that stored table, earlier sessions on it count. */
@@ -431,9 +461,17 @@ class AppContext(
         val run = AccelRun(
             base, metricWeights(), runKey = System.currentTimeMillis(), seed = nextSeed++, prior = processor.priorCalibration(base.dpi, base.cm360, own, stage),
             flash = settings.current.flashImportance() != FlashImportance.NEVER, boundedCurves = boundedCurves, baseCurve = own, stage = stage,
+            scenarios = curveScenarios(base), duel = base.profile.geometry.duel?.scorer(),
         )
         showAccelStep(run)
     }
+
+    /** The duel score of the game in the settings (M23g4), for screens that read stored curve rounds; null without duel rules. */
+    private fun gameDuel(): DuelScorer? = SetupDraft.fromSettings(settings.current).profile(profiles)?.geometry?.duel?.scorer()
+
+    /** The curve runs' rotation from the game's scenario mix (M23); null keeps the click scenarios with or without flash. */
+    private fun curveScenarios(config: TrainerConfig): List<ScenarioKind>? =
+        config.profile.geometry.mix?.let { AccelScenarios.forMix(it, settings.current.flashImportance().mixParts) }
 
     /** Starts the acceleration steps at the game sensitivity (or the finder's confident result, if chosen); onboarding until the setup is complete. */
     fun startAccelRun(search: Boolean = false) {
@@ -449,7 +487,8 @@ class AppContext(
         val run = AccelRun(
             base, metricWeights(), runKey = System.currentTimeMillis(), seed = nextSeed++, prior = prior, startWithSearch = search,
             flash = settings.current.flashImportance() != FlashImportance.NEVER, priorSearch = priorSearch,
-            boundedCurves = boundedCurves, baseCurve = own,
+            boundedCurves = boundedCurves, baseCurve = own, scenarios = curveScenarios(base),
+            duel = base.profile.geometry.duel?.scorer(),
         )
         showAccelStep(run)
     }
@@ -460,7 +499,9 @@ class AppContext(
         val stored = storedAnalysis() ?: return showOnboarding(afterFinish = ::showMenu)
         val base = stored.config.copy(dpi = last.dpi, cm360 = last.cm360)
         showAccelStep(
-            AccelRun(base, stored.weights, runKey = System.currentTimeMillis(), seed = nextSeed++, flash = settings.current.flashImportance() != FlashImportance.NEVER, startWithTest = curve, boundedCurves = boundedCurves),
+            AccelRun(base, stored.scorer.weights, runKey = System.currentTimeMillis(), seed = nextSeed++, flash = settings.current.flashImportance() != FlashImportance.NEVER, startWithTest = curve, boundedCurves = boundedCurves,
+                scenarios = curveScenarios(base), duel = base.profile.geometry.duel?.scorer(),
+            ),
         )
     }
 
@@ -500,7 +541,9 @@ class AppContext(
         if (!this.source.hasReportTimestamps || !rawAccelConfirmed) return showRefine()
         val config = trainerConfig() ?: return showOnboarding(afterFinish = ::showMenu)
         showRefineStep(
-            RefineRun(config, metricWeights(), runKey = System.currentTimeMillis(), seed = nextSeed++, source = source, profile = profile, flash = settings.current.flashImportance() != FlashImportance.NEVER),
+            RefineRun(config, metricWeights(), runKey = System.currentTimeMillis(), seed = nextSeed++, source = source, profile = profile, flash = settings.current.flashImportance() != FlashImportance.NEVER,
+                scenarios = curveScenarios(config), duel = config.profile.geometry.duel?.scorer(),
+            ),
         )
     }
 

@@ -125,9 +125,15 @@ data class SetupDraft(
         SetupStep.entries.forEach { step -> issue(step, profiles)?.let { check(false) { "setup incomplete: $it" } } }
         val (padWidth, padHeight) = checkNotNull(padSizeCm())
         val custom = gameId == GAME_CUSTOM
-        // A game without a Range mode cannot play range rounds, so the scenario does not stay listed.
-        val hasRange = profile(profiles)?.geometry?.range != null
-        val scenarios = if (hasRange) base.scenarios else base.scenarios.filter { it != ScenarioKind.RANGE.id }.ifEmpty { listOf(ScenarioKind.FLICK.id) }
+        // A list the player did not choose becomes the game's own defaults; a chosen one stays, but a game without a
+        // Range mode cannot play range rounds, so that scenario does not stay listed.
+        val geometry = profile(profiles)?.geometry
+        val hasRange = geometry?.range != null
+        val scenarios = when {
+            AppSettings.isDefaultScenarios(base.scenarios) -> AppSettings.defaultScenarios(hasRange, geometry?.mix != null)
+            hasRange -> base.scenarios
+            else -> base.scenarios.filter { it != ScenarioKind.RANGE.id }.ifEmpty { listOf(ScenarioKind.FLICK.id) }
+        }
         return base.copy(scenarios = scenarios).withFlashImportance(flashImportance).copy(
             dpi = dpi,
             gameId = gameId,
