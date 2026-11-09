@@ -205,10 +205,24 @@ class SettingsScreen(ctx: AppContext, private val returnTo: (() -> Unit)? = null
     private fun weightsBlock(): Table {
         val block = Table()
         block.add(ui.caps(t("settings.weights"))).left().padBottom(8f).row()
-        block.add(ui.label(t("settings.weights_help"), Styles.CAPTION_MUTED)).left().padBottom(32f).row()
+        block.add(ui.label(weightsHelp(), Styles.CAPTION_MUTED, wrap = true)).left().width(WEIGHTS_WIDTH).padBottom(32f).row()
         METRIC_KEYS.forEach { (metric, key) -> block.add(weightRow(metric, t(key))).left().width(WEIGHTS_WIDTH).padBottom(SLIDER_ROW_GAP).row() }
         totalLabel = ui.label(totalText(), Styles.MONO_MUTED).also { block.add(it).left() }
         return block
+    }
+
+    /**
+     * In a game with duel rules (M23g4) the click rounds score duel wins, and with a scenario mix the game sets how often each
+     * scenario comes; the help says so, because the sliders then barely change the result.
+     */
+    private fun weightsHelp(): String {
+        val profile = draft.profile(ctx.profiles)
+        return if (profile?.geometry?.duel != null) t("settings.weights_help_duel", profile.name) else t("settings.weights_help")
+    }
+
+    private fun scenariosHelp(): String {
+        val profile = draft.profile(ctx.profiles)
+        return if (profile?.geometry?.mix != null) t("settings.scenarios_help_mix", profile.name) else t("settings.scenarios_help")
     }
 
     private fun weightRow(metric: ScoreMetric, name: String): Table {
@@ -281,7 +295,7 @@ class SettingsScreen(ctx: AppContext, private val returnTo: (() -> Unit)? = null
     private fun scenariosBlock(): Table {
         val block = Table()
         block.add(ui.caps(t("settings.scenarios"))).left().padBottom(8f).row()
-        block.add(ui.label(t("settings.scenarios_help"), Styles.CAPTION_MUTED)).left().padBottom(24f).row()
+        block.add(ui.label(scenariosHelp(), Styles.CAPTION_MUTED, wrap = true)).left().width(WEIGHTS_WIDTH).padBottom(24f).row()
         val grid = Table()
         // The flash scenario is switched by the importance control below, not by a tile.
         val hasRange = draft.profile(ctx.profiles)?.geometry?.range != null
