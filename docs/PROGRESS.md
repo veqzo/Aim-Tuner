@@ -424,7 +424,7 @@ Gate for every task: tests green, before/after tables from the gated harness (`g
 
 ## Next steps
 
-- M23: the sim still does not show the 1.5x bias direction (M23 recommends faster than before M23 for the same simulated hand). Open question for the user: accept this (the sim hand is not the real hand; the real test i decides) or look further (the head-size sweep moves the optimum most: head x0.7 gives 38/62/80).
+- M23: the sim does not show the 1.5x bias direction (M23 recommends faster than before M23 for the same simulated hand). The user accepted this on 2026-11-09: the sim hand is not the real hand, and the hands-on test i decides. If i fails, look at the head size first (head x0.7 moved the sim optimum to 38/62/80).
 - M23: step i: the user and the friend run the sensitivity finder in the packaged app with the Valorant defaults; acceptance: the friend's result within ±15 % of 0.8 @400 DPI. Merge to `dev` only then.
 - Find-a-curve redesign: the user answers the open product questions in `docs/FIND-CURVE-REDESIGN.md` section 6; steps 0 and 1 are done (see Last session); step 2 next, decide the consequence of step 0 for steps 5-6 along the way.
 - User tests M22 hands-on (`gradlew.bat :app:run` and the app image from `:app:jpackage`): the Raw Accel hub with real data, open/cancel/wrong file/save as in the native dialogs (also a path with umlauts), a refine run with `settings.json`, the patched export loaded into Raw Accel. Then decide about merging `feature/m22-raw-accel-hub` into `dev`. Possible follow-up: a refine experiment with a profile whose rise lies at 15-25 in/s.
