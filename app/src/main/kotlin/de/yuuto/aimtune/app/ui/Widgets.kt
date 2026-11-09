@@ -24,8 +24,8 @@ private const val PROGRESS_HEIGHT = 8f
 fun UiSkin.label(text: CharSequence, style: String = Styles.BODY, wrap: Boolean = false): Label =
     Label(text, skin, style).also { it.wrap = wrap }
 
-/** Small uppercase caption above a field or section. The design's 10 % letter-spacing is not reproduced (see DESIGN.md). */
-fun UiSkin.caps(text: String): Label = label(text.uppercase(), Styles.LABEL)
+/** Small sentence-case caption above a field or section (Rack labels are never all caps). */
+fun UiSkin.caps(text: String): Label = label(text, Styles.LABEL)
 
 fun UiSkin.button(text: String, style: String, onClick: () -> Unit): TextButton =
     TextButton(text, skin, style).also { button ->

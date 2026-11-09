@@ -15,7 +15,7 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 
 /**
- * Creates the anti-aliased rounded shapes of the design (outlined buttons, cards, inputs) as
+ * Creates the anti-aliased shapes of the design (buttons, module faces, inputs, LED glow, icons) as
  * drawables. Shapes are drawn into small textures at framebuffer resolution and stretched as nine
  * patches; sizes are given in design units and [scale] converts them to pixels. Owns its textures.
  */
@@ -43,6 +43,35 @@ class DrawableFactory(private val scale: Float) : Disposable {
 
     /** A rounded bar (slider track and fill) of [height] design units; stretches horizontally. */
     fun pill(height: Float, color: Color): Drawable = roundedRect(height / 2f, color)
+
+    /**
+     * A raised hardware face: rounded [fill] with a [borderWidth] edge whose color runs from [top]
+     * (lit) to [bottom] (shadow). The light comes from above, as on a rack unit.
+     */
+    fun bevel(radius: Float, fill: Color, top: Color, bottom: Color, borderWidth: Float = 1f): Drawable {
+        val r = max(2, (radius * scale).roundToInt())
+        val b = max(1f, borderWidth * scale)
+        val texture = texture(bevelPixmap(2 * r + 2, r.toFloat(), fill, top, bottom, b))
+        val patch = NinePatch(TextureRegion(texture), r, r, r, r)
+        patch.scale(1f / scale, 1f / scale)
+        return NinePatchDrawable(patch)
+    }
+
+    /** A white soft disc (gaussian falloff) of [diameter] units, tinted at draw time: LED glow, focus halos. */
+    fun glow(diameter: Float): Drawable {
+        val px = max(4, (diameter * scale).roundToInt())
+        val drawable = TextureRegionDrawable(TextureRegion(texture(glowPixmap(px))))
+        drawable.setMinSize(diameter, diameter)
+        return drawable
+    }
+
+    /** A white [icon] of [size] units, tinted at draw time. */
+    fun icon(icon: Icon, size: Float, strokeWidth: Float = Icon.STROKE): Drawable {
+        val px = max(8, (size * scale).roundToInt())
+        val drawable = TextureRegionDrawable(TextureRegion(texture(iconPixmap(icon, px, strokeWidth))))
+        drawable.setMinSize(size, size)
+        return drawable
+    }
 
     /** A solid 1-pixel color, stretched to any size (text cursor, selections, lines). */
     fun solid(color: Color): Drawable {
@@ -85,6 +114,57 @@ class DrawableFactory(private val scale: Float) : Disposable {
             }
             return pixmap
         }
+
+        /** Like [shapePixmap] with a vertical border gradient from [top] (row 0) to [bottom]. Square, [size] pixels. */
+        fun bevelPixmap(size: Int, radius: Float, fill: Color, top: Color, bottom: Color, borderWidth: Float): Pixmap {
+            val pixmap = Pixmap(size, size, Pixmap.Format.RGBA8888)
+            pixmap.blending = Pixmap.Blending.None
+            val half = size / 2f
+            val edge = Color()
+            for (y in 0 until size) {
+                // Pixmap row 0 is the top of the texture; the nine patch keeps the top corner rows lit.
+                edge.set(top).lerp(bottom, (y + 0.5f) / size)
+                for (x in 0 until size) {
+                    val d = distanceOutside(x + 0.5f - half, y + 0.5f - half, half, radius)
+                    val outer = coverage(d)
+                    val inner = coverage(d + borderWidth)
+                    pixmap.setColor(blend(fill, edge, outer, inner))
+                    pixmap.drawPixel(x, y)
+                }
+            }
+            return pixmap
+        }
+
+        /** A white disc of [size] pixels whose alpha falls off like a gaussian towards the edge. */
+        fun glowPixmap(size: Int): Pixmap {
+            val pixmap = Pixmap(size, size, Pixmap.Format.RGBA8888)
+            pixmap.blending = Pixmap.Blending.None
+            val half = size / 2f
+            for (y in 0 until size) {
+                for (x in 0 until size) {
+                    val r = hypot(x + 0.5f - half, y + 0.5f - half) / half
+                    val a = if (r >= 1f) 0f else kotlin.math.exp(-GLOW_FALLOFF * r * r) * (1f - r)
+                    pixmap.setColor(1f, 1f, 1f, a)
+                    pixmap.drawPixel(x, y)
+                }
+            }
+            return pixmap
+        }
+
+        fun iconPixmap(icon: Icon, size: Int, strokeWidth: Float): Pixmap {
+            val pixmap = Pixmap(size, size, Pixmap.Format.RGBA8888)
+            pixmap.blending = Pixmap.Blending.None
+            val cover = IconRaster.coverage(icon, size, strokeWidth)
+            for (y in 0 until size) {
+                for (x in 0 until size) {
+                    pixmap.setColor(1f, 1f, 1f, cover[y * size + x])
+                    pixmap.drawPixel(x, y)
+                }
+            }
+            return pixmap
+        }
+
+        private const val GLOW_FALLOFF = 3.2f
 
         /** Signed distance from the point to the rounded square's edge (negative inside). */
         private fun distanceOutside(px: Float, py: Float, half: Float, radius: Float): Float {

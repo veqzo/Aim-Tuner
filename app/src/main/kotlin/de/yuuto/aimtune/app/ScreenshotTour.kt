@@ -15,6 +15,7 @@ import de.yuuto.aimtune.app.accel.sampleAccelRun
 import de.yuuto.aimtune.app.accel.sampleDraftRun
 import de.yuuto.aimtune.app.accel.sampleOwnCurve
 import de.yuuto.aimtune.app.screens.AccelIntroScreen
+import de.yuuto.aimtune.app.ui.Motion
 import de.yuuto.aimtune.core.accel.FeltStage
 import de.yuuto.aimtune.core.accel.FeltStepFamily
 import de.yuuto.aimtune.core.accel.HoldReason
@@ -59,6 +60,12 @@ class ScreenshotTour(private val ctx: AppContext, private val dir: Path, private
     private class Step(val name: String, val show: () -> Unit)
 
     private val log = System.getLogger("aimtune.screenshots")
+
+    init {
+        // Screenshots show the end state of every reveal, never a frame in the middle of one.
+        Motion.instant = true
+    }
+
     private val steps = listOf(
         Step("menu") { ctx.showMenu() },
         Step("onboarding-1-dpi") { ctx.showOnboarding(SetupStep.DPI) },

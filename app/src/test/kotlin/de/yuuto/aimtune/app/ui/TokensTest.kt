@@ -18,15 +18,17 @@ class TokensTest {
     @Test
     fun `the bundled design tokens load with the values of the design`() {
         val t = Tokens.load()
-        assertEquals(Tokens.parseColor("#161826"), t.bg)
-        assertEquals(Tokens.parseColor("#232532"), t.surface)
-        assertEquals(Tokens.parseColor("#9184d9"), t.accent)
-        assertEquals(Tokens.parseColor("#2b2741"), t.accent(900))
-        assertEquals(Tokens.parseColor("#9397ab"), t.neutral(500))
-        assertEquals(8f, t.radiusMd)
+        assertEquals(Tokens.parseColor("#121314"), t.bg)
+        assertEquals(Tokens.parseColor("#1B1D1F"), t.surface)
+        assertEquals(Tokens.parseColor("#FFB020"), t.accent)
+        assertEquals(Tokens.parseColor("#2E220C"), t.accent(900))
+        assertEquals(Tokens.parseColor("#7D838A"), t.neutral(500))
+        assertEquals(Tokens.parseColor("#0D0E0F"), t.well)
+        assertEquals(10f, t.radiusMd)
         assertEquals(1080f, t.screenHeight)
-        assertEquals(72f, t.margin)
+        assertEquals(64f, t.margin)
         assertEquals(150f, t.fontSize("numberXl"))
-        assertEquals(20f, t.fontSize("body"))
+        assertEquals(19f, t.fontSize("body"))
+        assertEquals(0.22f, t.motionBase)
     }
 }

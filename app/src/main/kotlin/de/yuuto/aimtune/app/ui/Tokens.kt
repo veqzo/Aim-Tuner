@@ -4,7 +4,7 @@ import com.badlogic.gdx.graphics.Color
 import com.badlogic.gdx.utils.JsonReader
 import com.badlogic.gdx.utils.JsonValue
 
-/** The design tokens of `docs/design/tokens.json` (bundled as `assets/ui/tokens.json`). */
+/** The design tokens of `docs/design/tokens.json` ("Rack", bundled as `assets/ui/tokens.json`). */
 class Tokens private constructor(root: JsonValue) {
     private val color = root.get("color")
     private val neutral = color.get("neutral")
@@ -13,6 +13,9 @@ class Tokens private constructor(root: JsonValue) {
     private val radius = root.get("radius")
     private val layout = root.get("layout")
     private val fontSize = root.get("fontSize")
+    private val rack = color.get("rack")
+    private val led = color.get("led")
+    private val motion = root.get("motion")
 
     val bg: Color = parseColor(color.getString("bg"))
     val surface: Color = parseColor(color.getString("surface"))
@@ -24,6 +27,23 @@ class Tokens private constructor(root: JsonValue) {
     val error: Color = parseColor(color.get("status").getString("error"))
     val chartBaseline: Color = parseColor(chart.getString("baseline"))
     val chartCandidate: Color = parseColor(chart.getString("candidate"))
+
+    /** Rack: the module face, its lit top edge and shadowed bottom edge, the recessed display well, text on accent fills. */
+    val module: Color = parseColor(rack.getString("module"))
+    val moduleHi: Color = parseColor(rack.getString("moduleHi"))
+    val moduleLo: Color = parseColor(rack.getString("moduleLo"))
+    val well: Color = parseColor(rack.getString("well"))
+    val onAccent: Color = parseColor(rack.getString("onAccent"))
+
+    /** Status LEDs; a LED always has a text label next to it, the color is never the only signal. */
+    val ledOk: Color = parseColor(led.getString("ok"))
+    val ledCaution: Color = parseColor(led.getString("caution"))
+    val ledOff: Color = parseColor(led.getString("off"))
+
+    /** Motion durations in seconds. */
+    val motionFast: Float = motion.getFloat("fast")
+    val motionBase: Float = motion.getFloat("base")
+    val motionSlow: Float = motion.getFloat("slow")
 
     /** Neutral ramp, [step] in 100..900. */
     fun neutral(step: Int): Color = parseColor(neutral.getString(step.toString()))
