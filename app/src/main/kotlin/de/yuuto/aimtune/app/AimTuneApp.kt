@@ -132,6 +132,7 @@ class AimTuneApp(private val options: LaunchOptions) : Game() {
         screen?.dispose()
         context?.let {
             it.transition.dispose()
+            it.roundBackdrop.dispose()
             it.disposeAudio()
             it.ui.dispose()
             it.source.close()

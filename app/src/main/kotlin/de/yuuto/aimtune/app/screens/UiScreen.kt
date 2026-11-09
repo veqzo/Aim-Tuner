@@ -131,9 +131,13 @@ abstract class UiScreen(protected val ctx: AppContext) : Screen {
 
     override fun render(delta: Float) {
         clear()
+        drawBackground()
         stage.act(min(delta, MAX_FRAME_SECONDS))
         stage.draw()
     }
+
+    /** Drawn after the clear and before the stage; the round overlay puts the frozen trainer room here. */
+    protected open fun drawBackground() {}
 
     private fun clear() {
         val bg = ui.tokens.bg
@@ -149,6 +153,7 @@ abstract class UiScreen(protected val ctx: AppContext) : Screen {
         val fbo = FrameBuffer(Pixmap.Format.RGBA8888, Gdx.graphics.backBufferWidth, Gdx.graphics.backBufferHeight, false)
         fbo.begin()
         clear()
+        drawBackground()
         stage.draw()
         // Blending leaves alpha below 1 under translucent widgets; the snapshot must be opaque.
         Gdx.gl.glColorMask(false, false, false, true)

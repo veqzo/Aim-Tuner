@@ -68,12 +68,14 @@ import de.yuuto.aimtune.app.screens.PreTestScreen
 import de.yuuto.aimtune.app.screens.ResultsData
 import de.yuuto.aimtune.app.screens.ResultsScreen
 import de.yuuto.aimtune.app.screens.SettingsScreen
+import de.yuuto.aimtune.app.screens.RoundOverlayScreen
 import de.yuuto.aimtune.app.screens.TrainerScreen
 import de.yuuto.aimtune.app.screens.UpdateScreen
 import de.yuuto.aimtune.app.screens.UiScreen
 import de.yuuto.aimtune.app.setup.SetupDraft
 import de.yuuto.aimtune.app.setup.SetupStep
 import de.yuuto.aimtune.app.ui.Motion
+import de.yuuto.aimtune.app.ui.RoundBackdrop
 import de.yuuto.aimtune.app.ui.ScreenTransition
 import de.yuuto.aimtune.app.ui.UiHolder
 import de.yuuto.aimtune.core.accel.AbStatus
@@ -185,6 +187,9 @@ class AppContext(
 
     /** Fades the old screen out over the new one; [AimTuneApp] draws it after each frame. */
     val transition = ScreenTransition(ui.tokens.motionBase)
+
+    /** The trainer room of the last round, behind the overlay between rounds; dropped when a screen outside the run shows. */
+    val roundBackdrop = RoundBackdrop()
 
     /** Where the open settings screen returns to (a screen that linked to it), or null for the menu; the sound screen passes it on. */
     var settingsReturn: (() -> Unit)? = null
@@ -304,7 +309,7 @@ class AppContext(
         if (mix == null) ScenarioSchedule(playable, weights) else ScenarioSchedule.forMix(playable, mix, settings.current.flashImportance().mixParts)
 
     /** One blind round at the sensitivity the optimizer picked (hidden from the user). */
-    fun showBlindRound(run: BlindRun) = switchTo(TrainerScreen(this, run.nextRoundConfig(), BlindSession(this, run)))
+    fun showBlindRound(run: BlindRun, autoStart: Boolean = false) = switchTo(TrainerScreen(this, run.nextRoundConfig(), BlindSession(this, run), autoStart))
 
     fun showBetweenRounds(run: BlindRun) = switchTo(BetweenRoundsScreen(this, run))
 
@@ -520,7 +525,7 @@ class AppContext(
         },
     )
 
-    fun showAccelRound(run: AccelRun) = switchTo(TrainerScreen(this, run.nextRoundConfig(), AccelSession(this, run)))
+    fun showAccelRound(run: AccelRun, autoStart: Boolean = false) = switchTo(TrainerScreen(this, run.nextRoundConfig(), AccelSession(this, run), autoStart))
 
     /** Writes the Raw Accel settings.json of the tested curve; the path, or the reason it failed. */
     fun exportAccel(run: AccelRun): Result<Path> = exportAccel(run.candidate, run.dpi)
@@ -564,7 +569,7 @@ class AppContext(
         },
     )
 
-    fun showRefineRound(run: RefineRun) = switchTo(TrainerScreen(this, run.nextRoundConfig(), RefineSession(this, run)))
+    fun showRefineRound(run: RefineRun, autoStart: Boolean = false) = switchTo(TrainerScreen(this, run.nextRoundConfig(), RefineSession(this, run), autoStart))
 
     /** The patched copy of a finished refine run, with the recommendations ticked on the setting pages. */
     fun patchedCopy(run: RefineRun, analyses: SettingsAnalyses? = null): PatchedCopy =
@@ -604,6 +609,7 @@ class AppContext(
     fun switchTo(screen: Screen) {
         val old = game.screen
         if (old is UiScreen && screen is UiScreen && !Motion.instant) transition.start(old.snapshot())
+        if (screen !is TrainerScreen && screen !is RoundOverlayScreen) roundBackdrop.clear()
         game.screen = screen
         old?.dispose()
     }

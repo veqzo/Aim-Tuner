@@ -62,16 +62,21 @@ fun AppContext.runsUseCard(use: RunsUse?, width: Float, returnTo: () -> Unit): T
     return card
 }
 
-/** The same information as one short line for the flow screens: values, the source below, and the settings link on the right. */
+/**
+ * The same information as two short lines for the flow screens: the values, then the source with the
+ * settings link on the right. The link shares the second line so the first one fits a narrow card in
+ * every language.
+ */
 fun AppContext.runsUseLine(use: RunsUse?, width: Float, returnTo: () -> Unit): Table {
     val skin = ui.skin
     val line = Table()
     line.add(skin.caps(i18n.t("hub.runs.title"))).left().padRight(STAT_GAP / 2)
     val values = use?.let { i18n.t("hub.runs.values", it.gameName, it.sensitivityText, "%.1f".format(Locale.ROOT, it.cm360), SetupDraft.formatNumber(it.dpi)) }
-    line.add(skin.label(values ?: i18n.t("accel.baseline_none"), Styles.MONO)).left()
-    line.add().expandX()
-    line.add(link(returnTo)).right().height(LINK_HEIGHT).row()
-    if (use != null) line.add(skin.label(sourceText(use), Styles.CAPTION_MUTED, wrap = true)).left().width(width).colspan(4).padTop(4f)
+    line.add(skin.label(values ?: i18n.t("accel.baseline_none"), Styles.MONO)).left().expandX().row()
+    val below = Table()
+    if (use != null) below.add(skin.label(sourceText(use), Styles.CAPTION_MUTED, wrap = true)).left().growX() else below.add().expandX()
+    below.add(link(returnTo)).right().height(LINK_HEIGHT).padLeft(STAT_GAP / 2)
+    line.add(below).left().width(width).colspan(2).padTop(4f)
     return line
 }
 

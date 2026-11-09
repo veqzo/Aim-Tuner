@@ -2,26 +2,23 @@ package de.yuuto.aimtune.app.screens
 
 import com.badlogic.gdx.scenes.scene2d.Actor
 import com.badlogic.gdx.scenes.scene2d.ui.Table
+import com.badlogic.gdx.scenes.scene2d.ui.TextButton
 import de.yuuto.aimtune.app.AppContext
 import de.yuuto.aimtune.app.accel.AccelPhase
 import de.yuuto.aimtune.app.accel.AccelRun
 import de.yuuto.aimtune.app.ui.Styles
-import de.yuuto.aimtune.app.ui.addButton
 import de.yuuto.aimtune.app.ui.button
-import de.yuuto.aimtune.app.ui.caps
-import de.yuuto.aimtune.app.ui.frame
 import de.yuuto.aimtune.app.ui.label
 import de.yuuto.aimtune.app.ui.progressBar
 
-private const val BAR_WIDTH = 640f
-private const val TEXT_WIDTH = 1000f
-private const val FOOTER_BUTTON_HEIGHT = 64f
+private const val ROW_GAP = 24f
 
 /**
- * Shown before every calibration or test round: how far the run is and what is going on, never which
- * condition the next test round has and never a verdict before the test has decided.
+ * The overlay before every calibration, search or test round of the curve run: how far the run is and
+ * what is going on, never which condition the next test round has and never a verdict before the test
+ * has decided.
  */
-class AccelBetweenScreen(ctx: AppContext, private val run: AccelRun) : UiScreen(ctx) {
+class AccelBetweenScreen(ctx: AppContext, private val run: AccelRun) : RoundOverlayScreen(ctx) {
     private val calibrating = run.phase == AccelPhase.CALIBRATION
     private val searching = run.phase == AccelPhase.SEARCH
     private val done = when {
@@ -35,51 +32,42 @@ class AccelBetweenScreen(ctx: AppContext, private val run: AccelRun) : UiScreen(
         else -> run.maxTestRounds
     }
 
-    override fun build(): Actor {
-        val content = Table()
-        content.add(ui.label(heading(), Styles.HEADING)).left().padBottom(24f).row()
-        content.add(ctx.runsUseLine(run.runsUse, TEXT_WIDTH, { ctx.showAccelStep(run) })).left().width(TEXT_WIDTH).padBottom(32f).row()
-        content.add(ui.caps(phaseName())).left().padBottom(12f).row()
-        content.add(ui.progressBar(done.toFloat() / total, BAR_WIDTH)).left().padBottom(12f).row()
-        content.add(ui.label(progressText(), Styles.BODY_MUTED)).left().padBottom(40f).row()
-        content.add(ui.label(explanation(), Styles.CAPTION_MUTED, wrap = true)).left().width(TEXT_WIDTH)
-
-        val footer = Table()
-        footer.add(ui.button(t("common.stop"), Styles.SECONDARY) { ctx.showMenu() }).left().height(FOOTER_BUTTON_HEIGHT).padLeft(8f)
-        footer.add().expandX()
-        if (run.canAnalyseNow) {
-            footer.addButton(ui.button(t("accel.between.analyse_now"), Styles.SECONDARY) { analyseNow() }, minWidth = 220f).padRight(16f)
-        }
-        if (run.canFinishSearchNow) {
-            footer.addButton(ui.button(t("accel.between.finish_search"), Styles.SECONDARY) { finishSearchNow() }, minWidth = 220f).padRight(16f)
-        }
-        footer.addButton(ui.button(if (done == 0) t("common.start") else t("common.next_round"), Styles.PRIMARY) { ctx.showAccelRound(run) }, minWidth = 220f)
-        return frame(content, footer, Chrome.MINIMAL)
+    override val phaseName: String get() = when {
+        calibrating -> t("accel.between.calibration")
+        searching -> t("accel.between.search")
+        else -> t("accel.between.test")
     }
+    override val heading: String get() = if (done == 0) t("overlay.first_round") else t("accel.between.round_done", done)
+    override val roundsDone: Int get() = done
+    override val primaryText: String get() = if (done == 0) t("common.start") else t("common.next_round")
+    override val stopText: String get() = t("common.stop")
+
+    override fun next(autoStart: Boolean) = ctx.showAccelRound(run, autoStart)
+
+    override fun stopRun() = ctx.showMenu()
+
+    override fun body(width: Float): Actor {
+        val body = Table()
+        body.add(ctx.runsUseLine(run.runsUse, width, { ctx.showAccelStep(run) })).left().width(width).padBottom(ROW_GAP).row()
+        body.add(ui.progressBar(done.toFloat() / total, width)).left().padBottom(8f).row()
+        body.add(ui.label(progressText(), Styles.BODY_MUTED)).left().padBottom(ROW_GAP).row()
+        body.add(ui.label(explanation(), Styles.CAPTION_MUTED, wrap = true)).left().width(width)
+        return body
+    }
+
+    override fun extraActions(): List<TextButton> = listOfNotNull(
+        if (run.canAnalyseNow) ui.button(t("accel.between.analyse_now"), Styles.SECONDARY) { analyseNow() } else null,
+        if (run.canFinishSearchNow) ui.button(t("accel.between.finish_search"), Styles.SECONDARY) { finishSearchNow() } else null,
+    )
 
     private fun finishSearchNow() {
         run.finishSearchNow()
         ctx.showAccelStep(run)
     }
 
-    private fun phaseName() = when {
-        calibrating -> t("accel.between.calibration")
-        searching -> t("accel.between.search")
-        else -> t("accel.between.test")
-    }
-
     private fun analyseNow() {
         run.analyseNow()
         ctx.showAccelStep(run)
-    }
-
-    override fun onEnter() = ctx.showAccelRound(run)
-
-    override fun onEscape() = ctx.showMenu()
-
-    private fun heading() = when {
-        done == 0 -> phaseName()
-        else -> t("accel.between.round_done", done)
     }
 
     private fun progressText() = when {

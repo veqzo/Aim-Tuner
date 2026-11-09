@@ -25,9 +25,15 @@ private const val MILLIS_PER_SECOND = 1000L
  * The 3D trainer: room, targets, HUD and the round state machine for the scenario in [config]. Without a [blind] run it is
  * the free trainer at the current sensitivity; with a [session] it plays a single round with the
  * settings in [config] (for the blind test the sensitivity is chosen by the optimizer and never shown)
- * and then lets the session decide what comes next.
+ * and then lets the session decide what comes next. With [autoStart] (the countdown between rounds ran out)
+ * the round starts without a click, but only while the window has the focus.
  */
-class TrainerScreen(private val ctx: AppContext, private val config: TrainerConfig, private val session: RoundSession? = null) : Screen {
+class TrainerScreen(
+    private val ctx: AppContext,
+    private val config: TrainerConfig,
+    private val session: RoundSession? = null,
+    private val autoStart: Boolean = false,
+) : Screen {
     private var sessionRoundDone = false
     private val trainer = Trainer(config, ctx.source) { recording ->
         val startedAtMs = System.currentTimeMillis() - config.roundSeconds * MILLIS_PER_SECOND
@@ -85,11 +91,16 @@ class TrainerScreen(private val ctx: AppContext, private val config: TrainerConf
             }
         }
         resize(Gdx.graphics.width, Gdx.graphics.height)
+        if (autoStart && ctx.gate.windowFocused) {
+            trainer.startRound()
+            syncCursor()
+        }
     }
 
     override fun render(delta: Float) {
         trainer.update()
         if (sessionRoundDone && session != null) {
+            captureBackdrop()
             session.showNext()
             return
         }
@@ -102,6 +113,12 @@ class TrainerScreen(private val ctx: AppContext, private val config: TrainerConf
         scene.render(trainer.view, trainer.activeTargets, trainer.activeFlash)
         hud.render(trainer, ctx.source, ctx.processor.report, Gdx.graphics.framesPerSecond, ctx.ui.skin.fonts)
     }
+
+    /** The room without HUD, targets or flash, as the backdrop of the overlay between rounds. */
+    private fun captureBackdrop() = ctx.roundBackdrop.capture { scene.render(trainer.view, emptyList()) }
+
+    /** Screenshot tour: the backdrop of the overlay that comes next. */
+    fun captureBackdropForTour() = captureBackdrop()
 
     /** The cue sounds of a flash round: when to turn away and, with the pop, when it is safe to turn back. */
     private fun playFlashSounds() {

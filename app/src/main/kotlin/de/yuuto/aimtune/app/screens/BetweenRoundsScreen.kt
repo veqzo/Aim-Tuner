@@ -8,101 +8,96 @@ import de.yuuto.aimtune.app.blind.RoundOutcome
 import de.yuuto.aimtune.app.i18n.scenarioName
 import de.yuuto.aimtune.app.i18n.t
 import de.yuuto.aimtune.app.ui.Styles
-import de.yuuto.aimtune.app.ui.addButton
-import de.yuuto.aimtune.app.ui.button
 import de.yuuto.aimtune.app.ui.caps
-import de.yuuto.aimtune.app.ui.frame
 import de.yuuto.aimtune.app.ui.label
 import de.yuuto.aimtune.app.ui.progressBar
 import java.util.Locale
 
-private const val CARD_WIDTH = 300f
-private const val CARD_GAP = 16f
-private const val CARD_PADDING = 24f
-private const val BAR_WIDTH = 640f
-private const val SECTION_GAP = 40f
-private const val FOOTER_BUTTON_HEIGHT = 64f
+private const val WELL_PADDING = 20f
+private const val STAT_GAP = 48f
+private const val ROW_GAP = 24f
 
 /**
- * Shown after every blind round: what the round looked like and how sure the optimizer is. The
- * sensitivity is never shown; the confidence arrives when the background analysis has finished.
+ * The overlay after every blind round: what the round looked like and how sure the optimizer is. The
+ * sensitivity is never shown; the confidence arrives when the background analysis has finished. The
+ * countdown holds back while the result asks the player to decide (target reached, scores drifting).
  */
-class BetweenRoundsScreen(ctx: AppContext, private val run: BlindRun) : UiScreen(ctx) {
+class BetweenRoundsScreen(ctx: AppContext, private val run: BlindRun) : RoundOverlayScreen(ctx) {
     private var resultShown = run.test.isReady
 
-    override fun build(): Actor {
-        val test = run.test
-        val content = Table()
-        content.add(ui.label(t("between.complete", ctx.i18n.t(run.completedRoundLabel())), Styles.HEADING)).left().padBottom(SECTION_GAP).row()
-        test.lastOutcome?.let {
-            content.add(ui.caps(ctx.i18n.scenarioName(it.scenario))).left().padBottom(12f).row()
-            content.add(statCards(it)).left().padBottom(24f).row()
+    override val phaseName: String get() = run.test.lastOutcome?.let { ctx.i18n.scenarioName(it.scenario) } ?: ""
+    override val heading: String get() = t("between.complete", ctx.i18n.t(run.completedRoundLabel()))
+    override val roundsDone: Int get() = run.test.totalRounds
+    override val primaryText: String get() = t("common.next_round")
+    override val stopText: String get() = t("between.stop")
+
+    override val countdownWanted: Boolean
+        get() {
+            val result = run.test.resultOrNull() ?: return true
+            return !result.driftDetected && result.confidencePercent < TARGET_PERCENT
         }
-        content.add(ui.label(t("between.hidden"), Styles.CAPTION_MUTED)).left().padBottom(SECTION_GAP).row()
-        content.add(confidenceBlock()).left()
 
-        val footer = Table()
-        footer.add(ui.button(t("between.stop"), Styles.SECONDARY) { ctx.stopBlindTest(run) }).left().height(FOOTER_BUTTON_HEIGHT).padLeft(8f)
-        footer.add().expandX()
-        footer.addButton(ui.button(t("common.next_round"), Styles.PRIMARY) { ctx.showBlindRound(run) }, minWidth = 220f)
-        return frame(content, footer, Chrome.MINIMAL)
-    }
+    override fun next(autoStart: Boolean) = ctx.showBlindRound(run, autoStart)
 
-    override fun render(delta: Float) {
+    override fun stopRun() = ctx.stopBlindTest(run)
+
+    override fun beforeFrame() {
         if (!resultShown && run.test.isReady) {
             resultShown = true
             rebuild()
         }
-        super.render(delta)
     }
 
-    override fun onEnter() = ctx.showBlindRound(run)
+    override fun body(width: Float): Actor {
+        val body = Table()
+        run.test.lastOutcome?.let { body.add(statWell(it)).left().growX().padBottom(ROW_GAP).row() }
+        body.add(confidenceBlock(width)).left().growX().padBottom(ROW_GAP).row()
+        body.add(ui.label(t("between.hidden"), Styles.CAPTION_MUTED, wrap = true)).left().width(width)
+        return body
+    }
 
-    override fun onEscape() = ctx.stopBlindTest(run)
-
-    private fun statCards(outcome: RoundOutcome): Table {
-        val row = Table()
+    private fun statWell(outcome: RoundOutcome): Table {
+        val well = Table()
+        well.background(ui.skin.getDrawable(Styles.WELL))
+        well.pad(WELL_PADDING)
         if (!outcome.scenario.usesClicks) {
             val onTarget = outcome.trackingOnTargetRatio?.let { "%.0f %%".format(Locale.ROOT, it * 100) } ?: "-"
-            row.add(statCard(t("between.time_on_target"), onTarget)).width(CARD_WIDTH)
-            return row
+            well.add(stat(t("between.time_on_target"), onTarget)).left()
+        } else {
+            val time = outcome.meanTimeToHitMs?.let { "%.0f ms".format(Locale.ROOT, it) } ?: "-"
+            well.add(stat(t("between.hits"), "${outcome.hits} / ${outcome.shots}")).left().padRight(STAT_GAP)
+            well.add(stat(t("between.accuracy"), "%.0f %%".format(Locale.ROOT, outcome.accuracy * 100))).left().padRight(STAT_GAP)
+            well.add(stat(t("between.time_to_hit"), time)).left()
         }
-        val time = outcome.meanTimeToHitMs?.let { "%.0f ms".format(Locale.ROOT, it) } ?: "-"
-        row.add(statCard(t("between.hits"), "${outcome.hits} / ${outcome.shots}")).width(CARD_WIDTH).padRight(CARD_GAP)
-        row.add(statCard(t("between.accuracy"), "%.0f %%".format(Locale.ROOT, outcome.accuracy * 100))).width(CARD_WIDTH).padRight(CARD_GAP)
-        row.add(statCard(t("between.time_to_hit"), time)).width(CARD_WIDTH)
-        return row
+        well.add().expandX()
+        return well
     }
 
-    private fun statCard(name: String, value: String): Table {
-        val card = Table()
-        card.background(ui.skin.getDrawable(Styles.CARD))
-        card.pad(CARD_PADDING)
-        card.left()
-        card.add(ui.caps(name)).left().row()
-        card.add(ui.label(value, Styles.NUMBER_MD)).left().padTop(8f)
-        return card
+    private fun stat(name: String, value: String): Table {
+        val cell = Table()
+        cell.add(ui.caps(name)).left().row()
+        cell.add(ui.label(value, Styles.NUMBER_MD)).left().padTop(6f)
+        return cell
     }
 
-    private fun confidenceBlock(): Table {
+    private fun confidenceBlock(width: Float): Table {
         val block = Table()
-        block.add(ui.caps(t("between.confidence"))).left().padBottom(8f).row()
+        block.add(ui.caps(t("between.confidence"))).left().colspan(2).padBottom(6f).row()
         val result = run.test.resultOrNull()
         if (result == null) {
             val text = if (run.test.isReady) t("between.not_enough") else t("between.analysing")
             block.add(ui.label(text, Styles.BODY_MUTED)).left()
             return block
         }
-        val target = TARGET_PERCENT
-        block.add(ui.label("${result.confidencePercent} %", Styles.NUMBER_XL)).left().padBottom(8f).row()
-        block.add(ui.progressBar(result.confidencePercent / 100f, BAR_WIDTH)).left().padBottom(8f).row()
         val note = when {
             result.atRangeEdge -> t("between.note_edge")
             result.driftDetected -> t("between.note_drift")
-            result.confidencePercent >= target -> t("between.note_reached", target)
-            else -> t("between.note_more", roundsText(result.roundsToTarget), target)
+            result.confidencePercent >= TARGET_PERCENT -> t("between.note_reached", TARGET_PERCENT)
+            else -> t("between.note_more", roundsText(result.roundsToTarget), TARGET_PERCENT)
         }
-        block.add(ui.label(note, Styles.BODY_MUTED)).left()
+        block.add(ui.label("${result.confidencePercent} %", Styles.NUMBER_LG)).left().padRight(ROW_GAP)
+        block.add(ui.progressBar(result.confidencePercent / 100f, width * 2 / 3)).left().expandX().row()
+        block.add(ui.label(note, Styles.BODY_MUTED, wrap = true)).left().width(width).colspan(2).padTop(8f)
         return block
     }
 

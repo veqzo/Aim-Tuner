@@ -8,7 +8,9 @@ import de.yuuto.aimtune.input.RawMouseSource
  * never read the mouse.
  */
 class MouseGate(private val source: RawMouseSource) {
-    private var windowFocused = false
+    /** Whether our window has the focus; a round may only start without a click while it has. */
+    var windowFocused = false
+        private set
     private var allowed = false
 
     fun setWindowFocused(focused: Boolean) {

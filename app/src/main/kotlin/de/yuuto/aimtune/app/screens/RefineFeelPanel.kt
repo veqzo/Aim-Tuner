@@ -14,13 +14,15 @@ import de.yuuto.aimtune.core.accel.RefineFeel
 import de.yuuto.aimtune.core.accel.RefineParameter
 
 private const val PANEL_WIDTH = 1000f
+private const val VOTE_GAP = 16f
+private const val VOTE_MAX_WIDTH = 300f
 
 /**
  * The question after a refine round: how did it feel? The rating is kept next to the round and shown grouped at the end of a
  * stage and of the test; the score stays what a change is kept on. Empty when there is nothing to rate (or it is rated already
- * and only a short note is shown). [rebuild] redraws the screen after a rating.
+ * and only a short note is shown). [rebuild] redraws the screen after a rating; the panel is at most [width] wide.
  */
-fun refineFeelPanel(ctx: AppContext, run: RefineRun, rebuild: () -> Unit): Table {
+fun refineFeelPanel(ctx: AppContext, run: RefineRun, width: Float = PANEL_WIDTH, rebuild: () -> Unit): Table {
     val ui = ctx.ui.skin
     val panel = Table()
     val last = run.engine.rounds.lastOrNull() ?: return panel
@@ -28,8 +30,9 @@ fun refineFeelPanel(ctx: AppContext, run: RefineRun, rebuild: () -> Unit): Table
         panel.add(ui.label(ctx.i18n.t("refine.feel.saved"), Styles.CAPTION_MUTED)).left()
         return panel
     }
-    panel.add(ui.label(ctx.i18n.t("refine.feel.ask"), Styles.BODY, wrap = true)).left().width(PANEL_WIDTH).padBottom(12f).row()
+    panel.add(ui.label(ctx.i18n.t("refine.feel.ask"), Styles.BODY, wrap = true)).left().width(width).padBottom(12f).row()
     val buttons = Table()
+    val voteWidth = minOf(VOTE_MAX_WIDTH, (width - 3 * VOTE_GAP) / 3)
     for ((vote, key) in listOf(FeelVote.BETTER to "refine.feel.better", FeelVote.SAME to "refine.feel.same", FeelVote.WORSE to "refine.feel.worse")) {
         buttons.addButton(
             ui.button(ctx.i18n.t(key), Styles.SECONDARY) {
@@ -37,8 +40,8 @@ fun refineFeelPanel(ctx: AppContext, run: RefineRun, rebuild: () -> Unit): Table
                 ctx.processor.recordFeel(run.lastSeed, vote.value)
                 rebuild()
             },
-            minWidth = 300f,
-        ).padRight(16f)
+            minWidth = voteWidth,
+        ).width(voteWidth).padRight(VOTE_GAP)
     }
     panel.add(buttons).left()
     return panel

@@ -38,6 +38,7 @@ import de.yuuto.aimtune.app.screens.HistoryScreen
 import de.yuuto.aimtune.app.screens.MainMenuScreen
 import de.yuuto.aimtune.app.screens.ShareDataScreen
 import de.yuuto.aimtune.app.screens.StoredCounts
+import de.yuuto.aimtune.app.screens.RoundOverlayScreen
 import de.yuuto.aimtune.app.screens.TrainerScreen
 import de.yuuto.aimtune.core.scenario.ScenarioKind
 import de.yuuto.aimtune.storage.SessionKind
@@ -103,17 +104,23 @@ class ScreenshotTour(private val ctx: AppContext, private val dir: Path, private
         Step("accel-draft") { ctx.trainerConfig()?.let(::sampleDraftRun)?.let(ctx::showAccelStep) },
         Step("accel-last") { accelSample(AccelPhase.ANALYSIS)?.let { ctx.showLastAccelAnalysis(LastCalibration(it.dpi, it.baseCm360, PriorCalibration(it.calibrationDone, it.calibrationSamples))) } },
         Step("accel-last-search") { accelSample(AccelPhase.SEARCH_RESULT)?.let { ctx.showLastSearch(LastSearch(it.dpi, it.baseCm360, it.searchRounds, 2, it.searchResult)) } },
-        Step("accel-calibration") { accelSample(AccelPhase.CALIBRATION)?.let(ctx::showAccelStep) },
         Step("accel-analysis") { accelSample(AccelPhase.ANALYSIS)?.let(ctx::showAccelStep) },
-        Step("accel-search") { accelSample(AccelPhase.SEARCH)?.let(ctx::showAccelStep) },
         Step("accel-search-result") { accelSample(AccelPhase.SEARCH_RESULT)?.let(ctx::showAccelStep) },
-        Step("accel-test") { accelSample(AccelPhase.TEST)?.let(ctx::showAccelStep) },
         Step("accel-result") { accelSample(AccelPhase.DONE)?.let(ctx::showAccelStep) },
         Step("refine-import") { ctx.switchTo(RefineImportScreen(ctx, sampleRefineText())) },
         Step("refine-stage") { ctx.trainerConfig()?.let(::sampleRefineRun)?.let(ctx::showRefineStep) },
         Step("blind-ready") { sample?.let(ctx::showBlindRound) },
         Step("blind-running") { (ctx.currentScreen as? TrainerScreen)?.startRoundForTour() },
-        Step("between-rounds") { sample?.let(ctx::showBetweenRounds) },
+        Step("between-rounds") {
+            // The overlay screens draw the room of this round behind them, so they follow it directly.
+            (ctx.currentScreen as? TrainerScreen)?.captureBackdropForTour()
+            sample?.let(ctx::showBetweenRounds)
+            freezeOverlay()
+        },
+        Step("accel-calibration") { accelSample(AccelPhase.CALIBRATION)?.let(ctx::showAccelStep); freezeOverlay() },
+        Step("accel-search") { accelSample(AccelPhase.SEARCH)?.let(ctx::showAccelStep); freezeOverlay() },
+        Step("accel-test") { accelSample(AccelPhase.TEST)?.let(ctx::showAccelStep); freezeOverlay() },
+        Step("refine-between") { ctx.trainerConfig()?.let { sampleRefineRun(it, maxRounds = 2) }?.let(ctx::showRefineStep); freezeOverlay() },
         Step("results") { sample?.let(ctx::stopBlindTest) },
         Step("history") { ctx.switchTo(HistoryScreen(ctx, CompletableFuture.completedFuture(sampleHistory()))) },
         Step("settings-range") { showRangeSettings() },
@@ -146,6 +153,10 @@ class ScreenshotTour(private val ctx: AppContext, private val dir: Path, private
         val source = sampleRefineText()?.let { RefineImport.parse(it, "settings.json").getOrNull() }
         ctx.hub.useSample(source?.let { ImportedProfile(it, it.file.profileNames.first()) })
         show(CompletableFuture.completedFuture(sampleSettingsAnalyses()))
+    }
+
+    private fun freezeOverlay() {
+        (ctx.currentScreen as? RoundOverlayScreen)?.freezeCountdownForTour()
     }
 
     private fun accelSample(until: AccelPhase) = ctx.trainerConfig()?.let { sampleAccelRun(it, until) }
