@@ -56,6 +56,9 @@ object Styles {
 
     // Button (container with its own labels) and cards
     const val CARD_BUTTON = "cardButton"
+
+    /** A recessed readout that is also a button (the setup pill). */
+    const val WELL_BUTTON = "wellButton"
     const val CARD = "card"
     const val CARD_CAUTION = "cardCaution"
 
@@ -95,8 +98,11 @@ class UiSkin(val tokens: Tokens, framebufferHeight: Int) : Disposable {
     /** A white [icon] of [size] units, cached per skin; tint it with the actor color. */
     fun icon(icon: Icon, size: Float = ICON_SIZE): Drawable = icons.getOrPut(icon to size) { shapes.icon(icon, size) }
 
-    /** A filled circle of [diameter] design units, owned by this skin (chart dots, legend marks). */
-    fun dot(color: Color, diameter: Float): Drawable = shapes.circle(diameter, color)
+    private val dots = mutableMapOf<Pair<Int, Float>, Drawable>()
+
+    /** A filled circle of [diameter] design units, cached per skin (chart dots, legend marks, LEDs). */
+    fun dot(color: Color, diameter: Float): Drawable =
+        dots.getOrPut(Color.rgba8888(color) to diameter) { shapes.circle(diameter, color) }
 
     /** Filled and empty segments of the step indicator. */
     val stepOn: Drawable = shapes.pill(STEP_HEIGHT, tokens.accent)
@@ -205,6 +211,13 @@ class UiSkin(val tokens: Tokens, framebufferHeight: Int) : Disposable {
             checked = shapes.roundedRect(CHIP_RADIUS, tokens.well, tokens.neutral(700), HAIRLINE)
             checkedOver = checked
         }, TextButton.TextButtonStyle::class.java)
+        // A recessed readout that opens something: the setup pill in the top bar.
+        skin.add(Styles.WELL_BUTTON, Button.ButtonStyle().apply {
+            up = shapes.bevel(CHIP_RADIUS, tokens.well, tokens.moduleLo, tokens.neutral(900))
+            over = shapes.roundedRect(CHIP_RADIUS, tokens.well, tokens.neutral(700), HAIRLINE)
+            down = shapes.roundedRect(CHIP_RADIUS, tokens.well, tokens.accent(700), HAIRLINE)
+            checked = shapes.roundedRect(CHIP_RADIUS, tokens.well, tokens.accent(600), HAIRLINE)
+        }, Button.ButtonStyle::class.java)
         skin.add(Styles.CARD_BUTTON, Button.ButtonStyle().apply {
             up = keyUp(r)
             over = shapes.bevel(r, tokens.neutral(900), tokens.neutral(700), tokens.moduleLo)

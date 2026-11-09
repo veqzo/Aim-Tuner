@@ -46,7 +46,7 @@ class RawAccelExportScreen(ctx: AppContext, private val analysesFuture: Completa
             content.add(ui.label(t("hub.export.intro", copy.exportName), Styles.BODY_MUTED, wrap = true)).left().width(TEXT_WIDTH).padBottom(24f).row()
             content.add(changesCard(copy)).left().width(CARD_WIDTH)
         }
-        return ui.frame(null, content, footer(copy))
+        return frame(content, footer(copy))
     }
 
     private fun footer(copy: PatchedCopy?): Table {

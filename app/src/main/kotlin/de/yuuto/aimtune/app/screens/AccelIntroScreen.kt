@@ -78,7 +78,7 @@ class AccelIntroScreen(
         val search = ui.button(t("accel.start_search"), Styles.PRIMARY) { if (canStart()) ctx.startAccelRun(search = true) }
         search.isDisabled = !canStart()
         footer.addButton(search, minWidth = 340f)
-        return ui.frame(null, content, footer)
+        return frame(content, footer)
     }
 
     override fun onEscape() = ctx.showRawAccelHub()

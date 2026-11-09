@@ -66,7 +66,7 @@ class MainMenuScreen(ctx: AppContext) : UiScreen(ctx) {
         footer.add(ui.label(t("menu.footer"), Styles.CAPTION_MUTED)).left().bottom().padBottom(ITEM_PADDING)
         footer.add().expandX()
         footer.add(ui.button(t("menu.exit"), Styles.SECONDARY) { Gdx.app.exit() }).right().bottom().height(FOOTER_BUTTON_HEIGHT).minWidth(EXIT_BUTTON_WIDTH)
-        return ui.frame(null, content, footer)
+        return frame(content, footer)
     }
 
     override fun onEnter() = ctx.showStart()

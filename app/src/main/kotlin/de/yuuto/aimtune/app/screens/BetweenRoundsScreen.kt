@@ -45,7 +45,7 @@ class BetweenRoundsScreen(ctx: AppContext, private val run: BlindRun) : UiScreen
         footer.add(ui.button(t("between.stop"), Styles.SECONDARY) { ctx.stopBlindTest(run) }).left().height(FOOTER_BUTTON_HEIGHT).padLeft(8f)
         footer.add().expandX()
         footer.addButton(ui.button(t("common.next_round"), Styles.PRIMARY) { ctx.showBlindRound(run) }, minWidth = 220f)
-        return ui.frame(null, content, footer)
+        return frame(content, footer, Chrome.MINIMAL)
     }
 
     override fun render(delta: Float) {

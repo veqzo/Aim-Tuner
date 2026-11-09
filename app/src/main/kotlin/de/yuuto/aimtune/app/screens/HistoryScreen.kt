@@ -36,6 +36,8 @@ private val DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-M
  * ([entriesFuture]) because every session needs its own model fit; the screen fills in when they are done.
  */
 class HistoryScreen(ctx: AppContext, private val entriesFuture: CompletableFuture<List<HistoryEntry>>) : UiScreen(ctx) {
+    override val utility = Utility.HISTORY
+
     private var entries: List<HistoryEntry>? = null
     private var gameFilter: String? = null
 
@@ -52,7 +54,7 @@ class HistoryScreen(ctx: AppContext, private val entriesFuture: CompletableFutur
         footer.add(ui.button(t("common.back"), Styles.TEXT) { ctx.showMenu() }).left().height(FOOTER_BUTTON_HEIGHT).padLeft(8f)
         footer.add().expandX()
         footer.add(ui.button(t("history.share"), Styles.SECONDARY) { ctx.showShareData() }).height(FOOTER_BUTTON_HEIGHT).minWidth(300f)
-        return ui.frame(null, content, footer)
+        return frame(content, footer)
     }
 
     override fun render(delta: Float) {

@@ -42,7 +42,7 @@ class UpdateScreen(ctx: AppContext, private val release: ReleaseInfo, initial: U
         footer.add().expandX()
         footer.addButton(ui.button(t("update.open_page"), Styles.SECONDARY) { ctx.openUrl(release.url) }, minWidth = 300f).padRight(16f)
         if (!busy && canUpdate()) footer.addButton(ui.button(t("update.start"), Styles.PRIMARY) { start() }, minWidth = 300f)
-        return ui.frame(null, content, footer)
+        return frame(content, footer)
     }
 
     override fun onEscape() = leave()

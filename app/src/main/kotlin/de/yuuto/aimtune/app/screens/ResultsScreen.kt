@@ -67,7 +67,7 @@ class ResultsScreen(ctx: AppContext, private val data: ResultsData) : UiScreen(c
             content.add(columns).left().padBottom(32f).row()
             content.add(chartBlock(result)).left().grow()
         }
-        return ui.frame(null, content, footer(recommendedSensitivity))
+        return frame(content, footer(recommendedSensitivity))
     }
 
     override fun onEscape() = ctx.showMenu()

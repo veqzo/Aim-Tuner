@@ -47,7 +47,7 @@ class AccelResultScreen(ctx: AppContext, private val run: AccelRun) : UiScreen(c
             footer.addButton(ui.button(t("common.save_as"), Styles.SECONDARY) { saveAs() }, minWidth = 240f).padRight(16f)
             footer.addButton(ui.button(t("accel.result.export"), Styles.PRIMARY) { export() }, minWidth = 300f)
         }
-        return ui.frame(null, content, footer)
+        return frame(content, footer)
     }
 
     override fun onEscape() = ctx.showMenu()

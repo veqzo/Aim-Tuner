@@ -67,6 +67,8 @@ private const val CODE_BUTTON_WIDTH = 225f
  * the settings; Save keeps them, Back and Esc drop them. The selected profile is the one all scenarios draw.
  */
 class CrosshairScreen(ctx: AppContext) : UiScreen(ctx) {
+    override val utility = Utility.CROSSHAIR
+
     private var working: AppSettings = ctx.settings.current.let { if (it.crosshairs.isEmpty()) it.withNewCrosshair(t("crosshair.default_name", 1), Crosshair().toCode().format()) else it }
     private var code: CrosshairCode = CrosshairCode.parse(selected().code)
     private var crosshair: Crosshair = Crosshair.fromCode(code)
@@ -84,7 +86,7 @@ class CrosshairScreen(ctx: AppContext) : UiScreen(ctx) {
         content.add(generalColumn()).top().left().width(GENERAL_WIDTH).padRight(COLUMN_GAP)
         content.add(linesColumn(inner = true)).top().left().width(LINES_WIDTH).padRight(COLUMN_GAP)
         content.add(linesColumn(inner = false)).top().left().width(LINES_WIDTH)
-        return ui.frame(null, content, footer())
+        return frame(content, footer())
     }
 
     override fun onEscape() = ctx.showMenu()

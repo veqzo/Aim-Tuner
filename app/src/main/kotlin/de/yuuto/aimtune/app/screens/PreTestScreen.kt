@@ -50,7 +50,7 @@ class PreTestScreen(ctx: AppContext, private val rangeMode: Boolean = false) : U
         footer.add().expandX()
         footer.addButton(ui.button(t("pretest.recheck"), Styles.SECONDARY) { recheck() }, minWidth = 180f).padRight(16f)
         footer.addButton(ui.button(t("pretest.start"), Styles.PRIMARY) { ctx.startBlindTest(rangeMode) }, minWidth = 220f)
-        return ui.frame(null, content, footer)
+        return frame(content, footer, Chrome.MINIMAL)
     }
 
     override fun onEscape() = ctx.showMenu()

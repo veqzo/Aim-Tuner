@@ -73,6 +73,8 @@ import de.yuuto.aimtune.app.screens.UpdateScreen
 import de.yuuto.aimtune.app.screens.UiScreen
 import de.yuuto.aimtune.app.setup.SetupDraft
 import de.yuuto.aimtune.app.setup.SetupStep
+import de.yuuto.aimtune.app.ui.Motion
+import de.yuuto.aimtune.app.ui.ScreenTransition
 import de.yuuto.aimtune.app.ui.UiHolder
 import de.yuuto.aimtune.core.accel.AbStatus
 import de.yuuto.aimtune.core.accel.AccelFit
@@ -180,6 +182,9 @@ class AppContext(
 
     /** What the Raw Accel hub keeps: the imported profile, the last refine result, the ticked recommendations and the analyses. */
     val hub = HubSession(settings, processor::settingsAnalyses, { processor.storedCount })
+
+    /** Fades the old screen out over the new one; [AimTuneApp] draws it after each frame. */
+    val transition = ScreenTransition(ui.tokens.motionBase)
 
     /** Where the open settings screen returns to (a screen that linked to it), or null for the menu; the sound screen passes it on. */
     var settingsReturn: (() -> Unit)? = null
@@ -598,6 +603,7 @@ class AppContext(
     /** Shows [screen] and disposes the one it replaces. */
     fun switchTo(screen: Screen) {
         val old = game.screen
+        if (old is UiScreen && screen is UiScreen && !Motion.instant) transition.start(old.snapshot())
         game.screen = screen
         old?.dispose()
     }

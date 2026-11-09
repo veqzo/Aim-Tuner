@@ -33,6 +33,8 @@ private const val VOLUME_STEP = 5f
  * screen is left.
  */
 class SoundSettingsScreen(ctx: AppContext) : UiScreen(ctx) {
+    override val utility = Utility.SETTINGS
+
     private val current = ctx.settings.current
     private var flashVolume = current.flashVolumePercent
     private var hitVolume = current.hitVolumePercent
@@ -54,7 +56,7 @@ class SoundSettingsScreen(ctx: AppContext) : UiScreen(ctx) {
         footer.add().expandX()
         message?.let { footer.add(ui.label(it, Styles.OK)).right().padRight(32f) }
         footer.addButton(ui.button(t("settings.reset"), Styles.SECONDARY) { reset() }, minWidth = 280f)
-        return ui.frame(null, content, footer)
+        return frame(content, footer)
     }
 
     override fun onEscape() = leave()

@@ -62,7 +62,7 @@ class AccelAnalysisScreen(ctx: AppContext, private val run: AccelRun) : AccelFit
         if (candidate != null) {
             footer.addButton(ui.button(t("accel.analysis.test_blind"), Styles.PRIMARY) { start() }, minWidth = 260f).padLeft(16f)
         }
-        return ui.frame(null, content, footer)
+        return frame(content, footer, Chrome.MINIMAL)
     }
 
     override fun onEscape() = ctx.showMenu()

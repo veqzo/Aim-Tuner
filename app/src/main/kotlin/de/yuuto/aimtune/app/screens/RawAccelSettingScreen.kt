@@ -68,7 +68,7 @@ class RawAccelSettingScreen(ctx: AppContext, private val setting: RawAccelSettin
         val footer = Table()
         footer.add(ui.button(t("common.back"), Styles.TEXT) { ctx.showRawAccelHub(analysesFuture) }).left().height(FOOTER_BUTTON_HEIGHT).padLeft(8f)
         footer.add().expandX()
-        return ui.frame(null, content, footer)
+        return frame(content, footer)
     }
 
     private fun innerWidth(width: Float) = width - 2 * CARD_PADDING

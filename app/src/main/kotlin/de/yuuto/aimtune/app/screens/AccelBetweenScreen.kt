@@ -54,7 +54,7 @@ class AccelBetweenScreen(ctx: AppContext, private val run: AccelRun) : UiScreen(
             footer.addButton(ui.button(t("accel.between.finish_search"), Styles.SECONDARY) { finishSearchNow() }, minWidth = 220f).padRight(16f)
         }
         footer.addButton(ui.button(if (done == 0) t("common.start") else t("common.next_round"), Styles.PRIMARY) { ctx.showAccelRound(run) }, minWidth = 220f)
-        return ui.frame(null, content, footer)
+        return frame(content, footer, Chrome.MINIMAL)
     }
 
     private fun finishSearchNow() {

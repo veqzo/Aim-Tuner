@@ -87,7 +87,7 @@ class OnboardingScreen(
             SetupStep.STYLE -> styleStep()
             SetupStep.PAD -> padStep()
         }
-        val root = ui.frame(stepIndicator(), content, footer())
+        val root = frame(content, footer(), Chrome.MINIMAL, stepIndicator())
         refresh()
         return root
     }

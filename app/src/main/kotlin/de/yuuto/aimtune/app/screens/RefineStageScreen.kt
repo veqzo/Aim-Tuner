@@ -47,7 +47,7 @@ class RefineStageScreen(ctx: AppContext, private val run: RefineRun) : UiScreen(
         }
         val nextLabel = if (lastStage) t("refine.stage.finish") else t("refine.stage.next", parameterName(engine.stages[engine.stageNumber + 1]))
         footer.addButton(ui.button(nextLabel, Styles.PRIMARY) { next() }, minWidth = 340f)
-        return ui.frame(null, content, footer)
+        return frame(content, footer, Chrome.MINIMAL)
     }
 
     override fun onEnter() = next()

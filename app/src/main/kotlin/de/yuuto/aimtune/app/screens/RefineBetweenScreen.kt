@@ -52,7 +52,7 @@ class RefineBetweenScreen(ctx: AppContext, private val run: RefineRun) : UiScree
             footer.addButton(ui.button(t("refine.between.finish_stage"), Styles.SECONDARY) { finishStage() }, minWidth = 240f).padRight(16f)
         }
         footer.addButton(ui.button(if (done == 0) t("common.start") else t("common.next_round"), Styles.PRIMARY) { ctx.showRefineRound(run) }, minWidth = 220f)
-        return ui.frame(null, content, footer)
+        return frame(content, footer, Chrome.MINIMAL)
     }
 
     private fun skipWarmup() {

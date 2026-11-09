@@ -61,7 +61,7 @@ class RawAccelHubScreen(ctx: AppContext, private val analysesFuture: Completable
             content.add(left).top().left().width(width).row()
             content.add(right).top().left().width(width).padTop(SECTION_GAP)
         }
-        return ui.frame(null, content, footer())
+        return frame(content, footer())
     }
 
     override fun render(delta: Float) {

@@ -52,7 +52,7 @@ class RefineResultScreen(ctx: AppContext, private val run: RefineRun) : UiScreen
             footer.addButton(ui.button(t("common.save_as"), Styles.SECONDARY) { saveAs() }, minWidth = 240f).padRight(16f)
             footer.addButton(ui.button(t("refine.result.export", run.exportName), Styles.PRIMARY) { export() }, minWidth = 420f)
         }
-        return ui.frame(null, content, footer)
+        return frame(content, footer)
     }
 
     override fun render(delta: Float) {

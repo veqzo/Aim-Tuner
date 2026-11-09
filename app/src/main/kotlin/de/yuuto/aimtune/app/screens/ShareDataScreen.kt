@@ -53,7 +53,7 @@ class ShareDataScreen(ctx: AppContext, private val counts: CompletableFuture<Sto
         val button = ui.button(t("share.export"), Styles.PRIMARY) { startExport() }
         button.isDisabled = rounds == 0 || busy
         footer.addButton(button, minWidth = 260f)
-        return ui.frame(null, content, footer)
+        return frame(content, footer)
     }
 
     override fun render(delta: Float) {

@@ -53,7 +53,7 @@ class AccelLastAnalysisScreen(ctx: AppContext, private val last: LastCalibration
         footer.add(ui.button(t("common.back"), Styles.TEXT) { ctx.showRawAccelHub() }).left().height(FOOTER_BUTTON_HEIGHT).padLeft(8f)
         footer.add().expandX()
         fit?.recommended?.let { addCurveActions(footer, it, checkNotNull(last).dpi, last.cm360) }
-        return ui.frame(null, content, footer)
+        return frame(content, footer)
     }
 
     override fun onEscape() = ctx.showRawAccelHub()

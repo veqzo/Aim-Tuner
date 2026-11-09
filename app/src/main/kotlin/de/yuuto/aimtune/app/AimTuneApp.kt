@@ -123,6 +123,7 @@ class AimTuneApp(private val options: LaunchOptions) : Game() {
     override fun render() {
         if (tour == null) toggleFullscreenOnF11()
         super.render()
+        context?.transition?.drawOver(Gdx.graphics.deltaTime)
         tour?.afterRender()
     }
 
@@ -130,6 +131,7 @@ class AimTuneApp(private val options: LaunchOptions) : Game() {
         super.dispose()
         screen?.dispose()
         context?.let {
+            it.transition.dispose()
             it.disposeAudio()
             it.ui.dispose()
             it.source.close()

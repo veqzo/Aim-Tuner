@@ -82,7 +82,7 @@ class RefineImportScreen(ctx: AppContext, sampleText: String? = null, imported: 
         val start = ui.button(t("refine.import.start"), Styles.PRIMARY) { start(choice) }
         start.isDisabled = !canStart(choice)
         footer.addButton(start, minWidth = 340f)
-        return ui.frame(null, content, footer)
+        return frame(content, footer)
     }
 
     override fun onEscape() = ctx.showRawAccelHub()

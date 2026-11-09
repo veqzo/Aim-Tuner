@@ -61,6 +61,8 @@ private val METRIC_KEYS = mapOf(
  * [returnTo] when another screen linked here (the Raw Accel hub), else to the menu.
  */
 class SettingsScreen(ctx: AppContext, private val returnTo: (() -> Unit)? = null) : UiScreen(ctx) {
+    override val utility = Utility.SETTINGS
+
     private val exit = SettingsExit(returnTo, ctx::showMenu)
     private var draft = SetupDraft.fromSettings(ctx.settings.current)
     private var roundSeconds = ctx.settings.current.roundSeconds
@@ -103,7 +105,7 @@ class SettingsScreen(ctx: AppContext, private val returnTo: (() -> Unit)? = null
         val content = Table()
         content.add(left).top().left()
         content.add(right).top().left().padLeft(COLUMN_GAP).padTop(ui.tokens.footerHeight)
-        return ui.frame(null, content, footer())
+        return frame(content, footer())
     }
 
     override fun onEscape() = exit.leave()

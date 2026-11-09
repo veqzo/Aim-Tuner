@@ -42,7 +42,7 @@ class AccelSearchResultScreen(ctx: AppContext, private val run: AccelRun) : Acce
         if (offer != null) {
             footer.addButton(ui.button(t("accel.analysis.test_blind"), Styles.PRIMARY) { test() }, minWidth = 260f)
         }
-        return ui.frame(null, content, footer)
+        return frame(content, footer)
     }
 
     override fun onEscape() = leave()
