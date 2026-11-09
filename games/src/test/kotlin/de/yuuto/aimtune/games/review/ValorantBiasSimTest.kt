@@ -93,12 +93,16 @@ class ValorantBiasSimTest {
         val metric = RoundScorer(MetricWeights.DEFAULT)
         val duelSetup = Setup("new geometry, flick only, duel", new.geometry, flickOnly, RoundScorer(MetricWeights.DEFAULT, checkNotNull(new.geometry.duel).scorer()))
         val out = StringBuilder()
-        for (hand in listOf(50.0)) {
-            val player = SimulatedPlayer.forHeadSizedTargets(hand)
+        for (rush in listOf(0.0, 0.6)) {
+            val hand = 50.0
+            val player = SimulatedPlayer.forHeadSizedTargets(hand).copy(rushClickChance = rush)
             val rounds = GRID.flatMapIndexed { g, cm360 -> (0 until SWEEP_ROUNDS).map { i -> play(duelSetup, player, cm360, i, 11L * 100_003L + g * 1_000L + i) } }
             val duelScores = scores(duelSetup, rounds)
             val metricScores = metric.scoreRounds(rounds.map { it.inputs }, rounds.map { it.kind.id }, rounds.map { null })
-            out.appendLine("hand %.0f, new geometry, flick only; first shot = first click of a reach, per grid point over $SWEEP_ROUNDS rounds".format(hand))
+            val clean = rounds.flatMap { it.engagements.orEmpty() }.filter { it.firstShotHit && !it.lost }.mapNotNull { it.firstShotNanos?.div(1e6) }
+            val cleanMean = clean.average()
+            out.appendLine("hand %.0f, rush chance %.1f, new geometry, flick only; first shot = first click of a reach, per grid point over $SWEEP_ROUNDS rounds".format(hand, rush))
+            out.appendLine("opponent (all clean first-shot hits of the sweep): median %.0f ms, SD %.0f ms".format(clean.sorted()[clean.size / 2], kotlin.math.sqrt(clean.sumOf { (it - cleanMean) * (it - cleanMean) } / (clean.size - 1))))
             out.appendLine("%8s %8s %9s %10s %10s %7s %7s %8s".format("cm360", "reaches", "1st hit%", "hit t ms", "miss t ms", "lost%", "duel", "metric"))
             for ((g, cm360) in GRID.withIndex()) {
                 val slice = g * SWEEP_ROUNDS until (g + 1) * SWEEP_ROUNDS
@@ -130,6 +134,33 @@ class ValorantBiasSimTest {
         println(out)
         Files.createDirectories(Path.of("build", "reports"))
         Files.writeString(Path.of("build", "reports", "valorant-duel-diagnosis.txt"), out.toString())
+    }
+
+    /**
+     * The same comparison with a hand under time pressure ([SimulatedPlayer.rushClickChance]): the patient hand nearly never
+     * misses a first shot, so the duel score could not price a miss. Sweep only. Writes build/reports/valorant-bias-rush.txt.
+     */
+    @Test
+    fun `the M23 setup with a hand that rushes its first shot`() {
+        val mixMetric = Setup("M23 mix, metric", new.geometry, new.schedule, RoundScorer(MetricWeights.DEFAULT))
+        val setups = listOf(old, mixMetric, new)
+        val out = StringBuilder()
+        out.appendLine("Sweep optimum (cm/360) per rush chance, setup and hand; ${GRID.size} points x $SWEEP_ROUNDS rounds")
+        out.appendLine("%-6s %-18s %s %s".format("rush", "setup", HANDS.joinToString("") { "%9.0f".format(it) }, "  ratio to before M23"))
+        for (rush in listOf(0.0, 0.3, 0.6, 1.0)) {
+            val optima = setups.associateWith { setup ->
+                HANDS.toList().parallelStream().map { sweepOptimum(setup, SimulatedPlayer.forHeadSizedTargets(it).copy(rushClickChance = rush), 11L) }.toList()
+            }
+            for (setup in setups) {
+                val ratios = optima.getValue(setup).zip(optima.getValue(old)) { a, b -> a / b }
+                out.appendLine(
+                    "%-6.1f %-18s %s   %s".format(rush, setup.name, optima.getValue(setup).joinToString("") { "%9.1f".format(it) }, ratios.joinToString(" ") { "x%.2f".format(it) }),
+                )
+            }
+        }
+        println(out)
+        Files.createDirectories(Path.of("build", "reports"))
+        Files.writeString(Path.of("build", "reports", "valorant-bias-rush.txt"), out.toString())
     }
 
     private class Played(val cm360: Double, val kind: ScenarioKind, val inputs: Map<ScoreMetric, Double>, val engagements: List<Engagement>?)
