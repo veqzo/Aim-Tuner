@@ -224,7 +224,7 @@ Gate for every task: tests green, before/after tables from the gated harness (`g
 - [x] d Settings "Start over": back up the DB to `%APPDATA%/AimTune/backups/`, clear it, keep the settings; test
 - [x] e `valorant.json` geometry: head Ø 0.24 m, bot 1.96 m, eye 1.75/1.35 m, run 5.4 m/s, walk 2.97 m/s, with sources
 - [x] f Movement model in `core` (accel, friction, counter-strafe, walk), own code with tests
-- [ ] g Scenarios sample from the distributions; new score weights and mix, the same for finder and curve
+- [x] g Scenarios sample from the distributions; new score weights and mix, the same for finder and curve
   - [x] g1 click targets: heads of 0.24 m at the flash-drill distances, flash-group flick bins, off-level share 0.27, far wall 64 m, targets without fog
   - [x] g2 strafe and tracking motion through `Locomotion`: strafe legs of 1.0-1.75 m with open-aim's acceleration and braking, pauses 0.2-0.65 s; tracking speeds from walk to run
   - [x] g3 mix flick 4 : strafe 1 : flash 1 (flash scaled by FlashImportance), TRACKING 0: profile block `trainer.mix`, `ScenarioSchedule.forMix` in the sensitivity finder, `AccelScenarios.forMix` in the curve search, the curve test and Refine
