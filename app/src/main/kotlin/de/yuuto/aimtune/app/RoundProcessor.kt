@@ -376,4 +376,4 @@ class RoundProcessor(private val database: Database?, private val exportDir: Pat
 
 /** The duels of a stored round for the duel score, read from its target events; null for tracking or an unknown scenario. */
 internal fun RoundRepository.engagementsOf(row: RoundRow): List<Engagement>? =
-    ScenarioKind.fromId(row.scenario)?.let { duelEngagements(it, loadTargetEvents(row.id)) }
+    ScenarioKind.fromId(row.scenario)?.let { duelEngagements(it, loadTargetEvents(row.id), roundEndNanos(row.id)) }

@@ -103,7 +103,8 @@ class ValorantBiasSimTest {
             val cleanMean = clean.average()
             out.appendLine("hand %.0f, rush chance %.1f, new geometry, flick only; first shot = first click of a reach, per grid point over $SWEEP_ROUNDS rounds".format(hand, rush))
             out.appendLine("opponent (all clean first-shot hits of the sweep): median %.0f ms, SD %.0f ms".format(clean.sorted()[clean.size / 2], kotlin.math.sqrt(clean.sumOf { (it - cleanMean) * (it - cleanMean) } / (clean.size - 1))))
-            out.appendLine("%8s %8s %9s %10s %10s %7s %7s %8s".format("cm360", "reaches", "1st hit%", "hit t ms", "miss t ms", "lost%", "duel", "metric"))
+            // over 3s%: closed reaches the duel limit turns into a loss; open%: reaches cut off by the round end (scored only over the limit).
+            out.appendLine("%8s %8s %9s %10s %10s %7s %9s %6s %7s %8s".format("cm360", "reaches", "1st hit%", "hit t ms", "miss t ms", "lost%", "over 3s%", "open%", "duel", "metric"))
             for ((g, cm360) in GRID.withIndex()) {
                 val slice = g * SWEEP_ROUNDS until (g + 1) * SWEEP_ROUNDS
                 val reaches = slice.flatMap { rounds[it].engagements.orEmpty() }
@@ -111,8 +112,9 @@ class ValorantBiasSimTest {
                 val misses = reaches.filter { !it.firstShotHit && !it.lost }.mapNotNull { it.firstShotNanos }.sorted()
                 fun ms(sorted: List<Long>) = if (sorted.isEmpty()) Double.NaN else sorted[sorted.size / 2] / 1e6
                 out.appendLine(
-                    "%8.1f %8d %9.1f %10.0f %10.0f %7.1f %7.1f %8.1f".format(
+                    "%8.1f %8d %9.1f %10.0f %10.0f %7.1f %9.1f %6.1f %7.1f %8.1f".format(
                         cm360, reaches.size / SWEEP_ROUNDS, 100.0 * hits.size / reaches.size, ms(hits), ms(misses), 100.0 * reaches.count { it.lost } / reaches.size,
+                        100.0 * reaches.count { !it.open && (it.reachNanos ?: 0L) > DUEL_LIMIT_NANOS } / reaches.size, 100.0 * reaches.count { it.open } / reaches.size,
                         slice.mapNotNull { duelScores[it] }.average(), slice.mapNotNull { metricScores[it] }.average(),
                     ),
                 )
@@ -168,7 +170,7 @@ class ValorantBiasSimTest {
     private fun play(setup: Setup, player: SimulatedPlayer, cm360: Double, index: Int, seed: Long): Played {
         val kind = setup.schedule.kindFor(index)
         val recording = HeadlessRound.of(kind, player, DPI, cm360, seed, ROUND_SECONDS, index * ROUND_SECONDS * 1_000_000_000L, geometry = setup.geometry)
-        return Played(cm360, kind, computeRoundMetrics(recording).scoreInputs(), duelEngagements(kind, recording.targetEvents))
+        return Played(cm360, kind, computeRoundMetrics(recording).scoreInputs(), duelEngagements(kind, recording.targetEvents, recording.endNanos))
     }
 
     private fun scores(setup: Setup, rounds: List<Played>): List<Double?> =
@@ -246,6 +248,8 @@ class ValorantBiasSimTest {
         const val BLIND_ROUNDS = 30
         const val SEEDS = 12L
         const val SWEEP_ROUNDS = 24
+        /** The Valorant duel limit (games/valorant.json trainer.duel.limitMs), only for the diagnosis columns. */
+        const val DUEL_LIMIT_NANOS = 3_000_000_000L
         const val UNKNOWN_SCORE = 50.0
         val RANGE = SearchRange(15.0, 200.0)
         val GRID = (0 until 15).map { 15.0 * (200.0 / 15.0).pow(it / 14.0) }

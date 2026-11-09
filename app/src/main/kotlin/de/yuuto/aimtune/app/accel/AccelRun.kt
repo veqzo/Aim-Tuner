@@ -237,12 +237,12 @@ class AccelRun(
             }
             AccelPhase.TEST -> {
                 val round = plan.round(outcomes.size)
-                outcomes += AbOutcome(round.pair, round.condition, metrics.scoreInputs(), round.scenario.id, duelEngagements(round.scenario, recording.targetEvents))
+                outcomes += AbOutcome(round.pair, round.condition, metrics.scoreInputs(), round.scenario.id, duelEngagements(round.scenario, recording.targetEvents, recording.endNanos))
                 if (outcomes.size % 2 == 0) decide()
             }
             AccelPhase.SEARCH -> {
                 val scenario = testScenarios[search.roundsPlayed % testScenarios.size]
-                search.record(currentStrength, scenario, metrics, duelEngagements(scenario, recording.targetEvents))
+                search.record(currentStrength, scenario, metrics, duelEngagements(scenario, recording.targetEvents, recording.endNanos))
                 if (search.roundsPlayed >= search.plannedRounds) finishSearch()
             }
             AccelPhase.ANALYSIS, AccelPhase.SEARCH_RESULT, AccelPhase.DONE -> error("no round is due in phase $phase")

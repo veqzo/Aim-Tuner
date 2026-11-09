@@ -355,16 +355,25 @@ private data class MixBlockDto(
     }
 }
 
-/** The `duel` block: how a duel of the game is decided; the value needs a source. */
+/** The `duel` block: how a duel of the game is decided; every value given needs a source. `limitMs` is optional. */
 @Serializable
 private data class DuelBlockDto(
     val missFollowUpMs: Double,
+    val limitMs: Double? = null,
     val valueNotes: Map<String, RangeValueNoteDto>,
 ) {
     fun toRules(): DuelRules {
-        val note = valueNotes["missFollowUpMs"]
-        require(note != null && note.source.isNotBlank()) { "duel.valueNotes needs a source for missFollowUpMs" }
-        return DuelRules((missFollowUpMs * 1_000_000.0).toLong(), verified = note.verified)
+        val keys = listOfNotNull("missFollowUpMs", "limitMs".takeIf { limitMs != null })
+        val notes = keys.map { key ->
+            val note = valueNotes[key]
+            require(note != null && note.source.isNotBlank()) { "duel.valueNotes needs a source for $key" }
+            note
+        }
+        return DuelRules(
+            (missFollowUpMs * 1_000_000.0).toLong(),
+            verified = notes.all { it.verified },
+            limitNanos = limitMs?.let { (it * 1_000_000.0).toLong() },
+        )
     }
 }
 

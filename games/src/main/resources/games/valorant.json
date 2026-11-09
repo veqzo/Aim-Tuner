@@ -319,8 +319,10 @@
     },
     "duel": {
       "missFollowUpMs": 308,
+      "limitMs": 3000,
       "valueNotes": {
-        "missFollowUpMs": { "verified": false, "source": "docs/VALORANT-WEIGHTS.md section 4, confirmed by the user (option A): Vandal at 9.75 rounds/s, four body shots kill 150 HP, so a first shot that misses the head kills three shot intervals later (308 ms). The least penalty for a miss over the tested weapons, so the least push toward slow." }
+        "missFollowUpMs": { "verified": false, "source": "docs/VALORANT-WEIGHTS.md section 4, confirmed by the user (option A): Vandal at 9.75 rounds/s, four body shots kill 150 HP, so a first shot that misses the head kills three shot intervals later (308 ms). The least penalty for a miss over the tested weapons, so the least push toward slow." },
+        "limitMs": { "verified": false, "source": "Assumption, chosen by the user (M23 duel-limit option 1): a reach at one target that lasts longer than 3 s is a lost duel, because an opponent who peeks has shot long before. This includes a reach that the round end cut off after more than 3 s, so a round in which the player gets stuck on one target scores 0 instead of being left out. Not measured in the game." }
       }
     },
     "verified": false

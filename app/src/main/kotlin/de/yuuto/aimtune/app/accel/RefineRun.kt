@@ -69,7 +69,7 @@ class RefineRun(
     }
 
     fun recordRound(recording: RoundRecording) =
-        engine.record(computeRoundMetrics(recording).scoreInputs(), duelEngagements(lastScenario, recording.targetEvents))
+        engine.record(computeRoundMetrics(recording).scoreInputs(), duelEngagements(lastScenario, recording.targetEvents, recording.endNanos))
 
     /** The fields the refined profile changes against the imported one. */
     fun changes(): List<FieldChange> = RefineDiff.changes(profile, engine.candidate)

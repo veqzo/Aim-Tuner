@@ -52,8 +52,8 @@ class RoundScorerTest {
 
     @Test
     fun `tracking rounds have no engagements and a round without engagements scores nothing yet`() {
-        assertNull(duelEngagements(ScenarioKind.TRACKING, emptyList()))
-        assertEquals(emptyList(), duelEngagements(ScenarioKind.FLICK, emptyList()))
+        assertNull(duelEngagements(ScenarioKind.TRACKING, emptyList(), null))
+        assertEquals(emptyList(), duelEngagements(ScenarioKind.FLICK, emptyList(), null))
         val scores = RoundScorer(weights, DuelScorer()).scoreRounds(inputs.take(3), scenarios.take(3), listOf(emptyList(), engagements[1], engagements[2]))
         assertNull(scores[0])
     }

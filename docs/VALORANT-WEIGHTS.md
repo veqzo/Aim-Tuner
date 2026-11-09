@@ -110,6 +110,7 @@ chance over its engagements.
 - Engagement with a first-shot hit at time t: win = G(t).
 - Engagement with a first-shot miss at time t₀: win = G(t₀ + Δ), Δ = 308 ms (the conservative end: least penalty for a miss, so the least push toward slow).
 - Target that leaves unshot: win = 0.
+- Reach longer than the duel limit (`limitMs`, 3 s, an assumption chosen by the user after the M23 bias check): win = 0, also when the round end cut the reach off. A shorter reach that the round end cut off is left out. Before this rule, a round in which the player got stuck on one target had no closed engagement and vanished from the score, so the worst rounds at a fast sensitivity were not counted.
 - Flash engagement not dodged (the player looked at the flash): win = 0. The flash blinds for 1.5 s in the profile, far longer than the 0.40 s bot reaction, so a blinded duel is lost. This replaces the separate FLASH_DODGE weight; the importance setting still scales flash rounds (section 5).
 - G(t) = 1 − Φ((t − μₒ) / σₒ). μₒ and σₒ are the median and spread of the user's first-shot-hit times in that scenario, over all their rounds. So the opponent is always "as good as you", and the metric needs no hand-set constant.
 

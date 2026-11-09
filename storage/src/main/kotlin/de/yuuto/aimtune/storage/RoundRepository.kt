@@ -146,6 +146,14 @@ class RoundRepository(private val database: Database) {
         }
     }
 
+    /** The end of a round on the clock of its events (start + duration); null for an unknown round. */
+    fun roundEndNanos(roundId: Long): Long? = database.transaction { c ->
+        c.prepareStatement("SELECT start_nanos + duration_nanos FROM round WHERE id = ?").use { s ->
+            s.setLong(1, roundId)
+            s.executeQuery().use { rs -> if (rs.next()) rs.getLong(1) else null }
+        }
+    }
+
     /**
      * The blind rounds (of any scenario) of every sensitivity session with this game and DPI, oldest
      * first: the data the optimizer merges across sessions. Rounds played without blinding are left out.

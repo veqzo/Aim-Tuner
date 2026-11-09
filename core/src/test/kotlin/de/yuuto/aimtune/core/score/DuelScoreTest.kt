@@ -17,7 +17,7 @@ class DuelScoreTest {
     @Test
     fun `first-shot hit and first-shot miss are timed from the spawn`() {
         val e = engagements(listOf(spawn(0, 1), hit(500, 1), spawn(1000, 2), miss(1400), miss(1500), hit(1700, 2)))
-        assertEquals(listOf(Engagement(500 * MS, true, false), Engagement(400 * MS, false, false)), e)
+        assertEquals(listOf(Engagement(500 * MS, true, false, 500 * MS), Engagement(400 * MS, false, false, 700 * MS)), e)
     }
 
     @Test
@@ -31,6 +31,37 @@ class DuelScoreTest {
         val blind = TargetEvent.FlashPop(0, flashId = 0, dodged = false, blindUntilNanos = 1500 * MS)
         val e = engagements(listOf(blind, spawn(1500, 1), hit(2000, 1), spawn(2500, 2), TargetEvent.Despawned(3500 * MS, 2), spawn(4000, 3)))
         assertEquals(listOf(true, true), e.map { it.lost })
+        assertEquals(listOf(500 * MS, 1000 * MS), e.map { it.reachNanos })
+    }
+
+    @Test
+    fun `with the round end an open reach is the last engagement`() {
+        val events = listOf(spawn(0, 1), hit(500, 1), spawn(1000, 2), miss(1200))
+        val e = engagements(events, roundEndNanos = 5000 * MS)
+        assertEquals(Engagement(200 * MS, false, false, 4000 * MS, open = true), e.last())
+        assertEquals(1, engagements(events).size, "without the round end the open reach is left out")
+        assertEquals(1, engagements(listOf(spawn(0, 1), hit(500, 1)), roundEndNanos = 5000 * MS).size, "no target alive, no open reach")
+    }
+
+    @Test
+    fun `a reach over the duel limit is lost, a short cut-off reach is left out`() {
+        val clean = listOf(400L, 500L, 600L).map { Engagement(it * MS, true, false, it * MS) }
+        val scorer = DuelScorer(limitNanos = 3000 * MS, minRounds = 2)
+        fun score(round: List<Engagement>) = scorer.scoreRounds(listOf(clean, round), listOf("flick", "flick"))[1]
+        assertEquals(0.0, score(listOf(Engagement(3500 * MS, true, false, 3500 * MS))), "a hit after the limit loses")
+        assertEquals(0.0, score(listOf(Engagement(null, false, false, 4000 * MS, open = true))), "stuck on a target until the round end")
+        assertNull(score(listOf(Engagement(null, false, false, 1000 * MS, open = true))), "the round timer cut a short reach off")
+        assertNull(DuelScorer(minRounds = 2).scoreRounds(listOf(clean, listOf(Engagement(null, false, false, 9000 * MS, open = true))), listOf("flick", "flick"))[1], "no limit: every cut-off reach is left out")
+        val withinLimit = assertNotNull(score(listOf(Engagement(500 * MS, true, false, 2900 * MS))))
+        assertEquals(50.0, withinLimit, 1e-6)
+    }
+
+    @Test
+    fun `a reach over the limit does not enter the opponent baseline`() {
+        // The slow hits are lost, so the baseline is built only from the three fast ones.
+        val round = listOf(400L, 500L, 600L, 4000L, 5000L).map { Engagement(it * MS, true, false, it * MS) }
+        val limited = DuelScorer(limitNanos = 3000 * MS, minRounds = 2).scoreRounds(listOf(round, round), listOf("flick", "flick"))[0]
+        assertEquals(100.0 * (0.5 * 3 + 0.0 * 2) / 5, assertNotNull(limited), 1e-6)
     }
 
     @Test

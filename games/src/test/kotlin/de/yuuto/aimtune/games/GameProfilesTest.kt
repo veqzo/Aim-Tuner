@@ -341,6 +341,7 @@ class GameProfilesTest {
     fun `valorant prices a missed first shot at the Vandal follow-up, and a duel block needs a source`() {
         val duel = assertNotNull(assertNotNull(bundled.find("valorant")).geometry.duel)
         assertEquals(308_000_000L, duel.missFollowUpNanos)
+        assertEquals(3_000_000_000L, duel.limitNanos)
         assertEquals(false, duel.verified)
         assertEquals(null, assertNotNull(bundled.find("cs2")).geometry.duel, "a game without duel rules keeps the metric weights")
 
@@ -348,5 +349,11 @@ class GameProfilesTest {
             valid.replace("\"sensitivity\"", "\"trainer\":{\"duel\":{\"missFollowUpMs\":300,\"valueNotes\":{\"missFollowUpMs\":{\"source\":\"$source\"}}}},\"sensitivity\"")
         assertEquals(300_000_000L, parseGameProfile(withDuel("test")).geometry.duel?.missFollowUpNanos)
         assertFailsWith<GameProfileException> { parseGameProfile(withDuel("")) }
+        assertEquals(null, parseGameProfile(withDuel("test")).geometry.duel?.limitNanos, "without limitMs there is no duel limit")
+        val limitWithoutSource = valid.replace(
+            "\"sensitivity\"",
+            "\"trainer\":{\"duel\":{\"missFollowUpMs\":300,\"limitMs\":3000,\"valueNotes\":{\"missFollowUpMs\":{\"source\":\"test\"}}}},\"sensitivity\"",
+        )
+        assertFailsWith<GameProfileException> { parseGameProfile(limitWithoutSource) }
     }
 }

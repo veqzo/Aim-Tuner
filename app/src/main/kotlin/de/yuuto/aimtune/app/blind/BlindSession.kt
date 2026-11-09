@@ -16,7 +16,7 @@ class BlindSession(private val ctx: AppContext, private val run: BlindRun) : Rou
     override val sessionKind = SessionKind.SENSITIVITY
 
     override fun onRoundFinished(config: TrainerConfig, recording: RoundRecording) {
-        run.test.recordRound(config.cm360, computeRoundMetrics(recording), config.scenario, duelEngagements(config.scenario, recording.targetEvents))
+        run.test.recordRound(config.cm360, computeRoundMetrics(recording), config.scenario, duelEngagements(config.scenario, recording.targetEvents, recording.endNanos))
     }
 
     override fun showNext() = ctx.showBetweenRounds(run)

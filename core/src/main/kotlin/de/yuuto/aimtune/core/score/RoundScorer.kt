@@ -30,6 +30,9 @@ class RoundScorer(val weights: MetricWeights, private val duel: DuelScorer? = nu
     }
 }
 
-/** The engagements of a round of [scenario] for the duel score; null for tracking, which has no first shots to duel with. */
-fun duelEngagements(scenario: ScenarioKind, events: List<TargetEvent>): List<Engagement>? =
-    if (scenario == ScenarioKind.TRACKING) null else engagements(events)
+/**
+ * The engagements of a round of [scenario] for the duel score; null for tracking, which has no first shots to duel with.
+ * [roundEndNanos] is the end of the round, so that a reach the round end cut off can count as a lost duel when it was too long.
+ */
+fun duelEngagements(scenario: ScenarioKind, events: List<TargetEvent>, roundEndNanos: Long?): List<Engagement>? =
+    if (scenario == ScenarioKind.TRACKING) null else engagements(events, roundEndNanos)

@@ -31,7 +31,8 @@ import kotlin.test.assertTrue
  * round-to-round spread is much smaller; these gates check that both still hold when the click rounds score duel wins.
  */
 class DuelGateTest {
-    private val duel = DuelScorer()
+    // The Valorant profile's rules (games/valorant.json trainer.duel): 308 ms miss follow-up, 3 s duel limit.
+    private val duel = DuelScorer(DuelScorer.VANDAL_FOLLOW_UP_NANOS, limitNanos = 3_000_000_000L)
     private val clickKinds = listOf(ScenarioKind.FLICK, ScenarioKind.SWITCHING, ScenarioKind.MICRO)
     private val wantsFallingGain = SimulatedPlayer(gainPreference = { v -> 1.0 - 0.3 * (1.0 - exp(-v / 6.0)) })
 
@@ -46,7 +47,7 @@ class DuelGateTest {
                 round.scenario, player, TEST_DPI, if (accelerated) baseCm360 / factor else baseCm360, roundSeed, 45,
                 sessionOffsetNanos = index * 45 * 1_000_000_000L, accel = if (accelerated) accel else null,
             )
-            AbOutcome(round.pair, round.condition, computeRoundMetrics(recording).scoreInputs(), round.scenario.id, duelEngagements(round.scenario, recording.targetEvents))
+            AbOutcome(round.pair, round.condition, computeRoundMetrics(recording).scoreInputs(), round.scenario.id, duelEngagements(round.scenario, recording.targetEvents, recording.endNanos))
         }
     }
 

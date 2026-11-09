@@ -61,7 +61,7 @@ fun playBlindTest(
         val played = if (accelOf != null) checkNotNull(playedCm360) else cm360
         val recording = HeadlessRound.of(kind, playerFor(index), TEST_DPI, played, roundSeed, roundSeconds, offset, accel = accelOf?.invoke(cm360), geometry = geometry)
         inputs += computeRoundMetrics(recording).scoreInputs()
-        engagements += duelEngagements(kind, recording.targetEvents)
+        engagements += duelEngagements(kind, recording.targetEvents, recording.endNanos)
         scenarios += kind.id
         cm360s += cm360
         val scores = calculator.scoreRounds(inputs, scenarios, engagements)

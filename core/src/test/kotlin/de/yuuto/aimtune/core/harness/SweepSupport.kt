@@ -41,7 +41,7 @@ fun meanScores(
         }
     }
     val scores = RoundScorer(MetricWeights.DEFAULT, duel).scoreRounds(
-        recordings.map { computeRoundMetrics(it).scoreInputs() }, null, recordings.map { duelEngagements(kind, it.targetEvents) },
+        recordings.map { computeRoundMetrics(it).scoreInputs() }, null, recordings.map { duelEngagements(kind, it.targetEvents, it.endNanos) },
     )
     return grid.indices.map { gi -> (0 until roundsEach).mapNotNull { scores[gi * roundsEach + it] }.average() }
 }
