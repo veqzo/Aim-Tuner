@@ -64,6 +64,13 @@ Base sensitivity of the curve runs is the player's configured game sensitivity (
 ### Results view
 Recommended sensitivity for the selected game, cm/360°, confidence; score vs cm/360° chart with uncertainty band; accel curve chart, A/B comparison, export; session history.
 
+### Research export and contributions
+History and Settings offer "Share data for research": all stored rounds go into one local file,
+`aimtune-research.json.gz`, without names, paths, dates or seeds (docs/RESEARCH-EXPORT.md). AimTune never uploads it.
+A temporary second step (on since v1.1.1, ADR 0007) lets the player show the file in Explorer
+and open a prefilled issue in the project's GitHub repository, each after a click; the player attaches the file
+themselves. The texts say that this is voluntary and public, and never call the data anonymous.
+
 ## Quality strategy
 Unit tests for converters (800 DPI, sens 0.249 → about 65.6 cm/360°), GP, acquisition, segmentation, curve fitting. A simulated player (Fitts' law + noise + known optimal sensitivity and gain curve) verifies convergence. Separation: core, input, app, games.
 

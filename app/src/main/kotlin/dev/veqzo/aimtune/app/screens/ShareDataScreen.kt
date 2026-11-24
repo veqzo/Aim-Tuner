@@ -4,6 +4,7 @@ import com.badlogic.gdx.Gdx
 import com.badlogic.gdx.scenes.scene2d.Actor
 import com.badlogic.gdx.scenes.scene2d.ui.Table
 import dev.veqzo.aimtune.app.AppContext
+import dev.veqzo.aimtune.app.contribute.ContributionAvailability
 import dev.veqzo.aimtune.app.ui.LedState
 import dev.veqzo.aimtune.app.ui.ModuleStatus
 import dev.veqzo.aimtune.app.ui.Styles
@@ -78,6 +79,13 @@ class ShareDataScreen(ctx: AppContext, private val back: () -> Unit, private val
             footer.addButton(ui.button(t("share.open_folder"), Styles.SECONDARY) { Gdx.net.openURI(saved.file.parent.toUri().toString()) }, minWidth = 240f).padRight(16f)
         }
         val busy = export != null && result == null
+        val counts = stored
+        if (ctx.contributions is ContributionAvailability.Enabled && counts != null) {
+            // Separate from the local export below, which stays as it is; the contribution screen comes back here.
+            val contribute = ui.button(t("contribute.button"), Styles.SECONDARY) { ctx.showContribute(counts) { ctx.showShareData(back) } }
+            contribute.isDisabled = counts.rounds == 0 || busy
+            footer.addButton(contribute, minWidth = 300f).padRight(16f)
+        }
         val button = ui.button(t("share.export"), Styles.PRIMARY) { startExport() }
         button.isDisabled = (stored?.rounds ?: 0) == 0 || busy
         footer.addButton(button, minWidth = 260f)

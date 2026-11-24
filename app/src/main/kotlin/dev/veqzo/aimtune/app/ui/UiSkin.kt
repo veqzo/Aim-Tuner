@@ -1,6 +1,8 @@
 package dev.veqzo.aimtune.app.ui
 
+import com.badlogic.gdx.Gdx
 import com.badlogic.gdx.graphics.Color
+import com.badlogic.gdx.graphics.Texture
 import com.badlogic.gdx.graphics.g2d.BitmapFont
 import com.badlogic.gdx.scenes.scene2d.ui.Button
 import com.badlogic.gdx.scenes.scene2d.ui.CheckBox
@@ -13,6 +15,7 @@ import com.badlogic.gdx.scenes.scene2d.ui.Slider
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton
 import com.badlogic.gdx.scenes.scene2d.ui.TextField
 import com.badlogic.gdx.scenes.scene2d.utils.Drawable
+import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable
 import com.badlogic.gdx.utils.Disposable
 import dev.veqzo.aimtune.app.Fonts
 
@@ -77,9 +80,11 @@ class UiSkin(val tokens: Tokens, framebufferHeight: Int) : Disposable {
     private val shapes = DrawableFactory(fonts.scale)
     val skin = Skin()
 
-    /** Drawables that other code needs by name (logo, cards). */
-    val logoRing: Drawable = shapes.roundedRect(LOGO_SIZE / 2, null, tokens.accent, LOGO_RING)
-    val logoDot: Drawable = shapes.circle(LOGO_DOT, tokens.accent)
+    /** Drawables that other code needs by name (logo, cards). The logo is the app icon (docs/design/icon). */
+    private val logoTexture = Texture(Gdx.files.classpath(LOGO_PATH), true).apply {
+        setFilter(Texture.TextureFilter.MipMapLinearLinear, Texture.TextureFilter.Linear)
+    }
+    val logo: Drawable = TextureRegionDrawable(logoTexture)
     val whiteSolid: Drawable = shapes.solid(Color.WHITE)
 
     /** White soft disc for LED glows and halos; tint it with the actor color. */
@@ -335,13 +340,12 @@ class UiSkin(val tokens: Tokens, framebufferHeight: Int) : Disposable {
     override fun dispose() {
         fonts.dispose()
         shapes.dispose()
+        logoTexture.dispose()
     }
 
     companion object {
         const val ICON_SIZE = 20f
-        private const val LOGO_SIZE = 28f
-        private const val LOGO_RING = 2.5f
-        private const val LOGO_DOT = 8f
+        private const val LOGO_PATH = "assets/icon/aimtune-128.png"
         private const val GLOW_SIZE = 64f
         private const val SCRIM_ALPHA = 0.62f
         private const val OUTLINE = 2f

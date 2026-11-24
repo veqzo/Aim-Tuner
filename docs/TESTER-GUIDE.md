@@ -57,7 +57,7 @@ Enter the recommended value in your game and play with it for a few days before 
 ## 6. Share your data
 
 1. Open **History** (key **H**) or **Settings** in AimTune.
-2. Click **Share data for research**. This writes one file named `aimtune-research-<date>.json.gz` to `%APPDATA%\AimTune\exports\research\`. Paste that path into the Explorer address bar to open the folder directly.
+2. Click **Share data for research**. This writes one file named `aimtune-research.json.gz` (a new export replaces it) to `%APPDATA%\AimTune\exports\research\`. Paste that path into the Explorer address bar to open the folder directly.
 3. Send that file to the developer. It contains no name, file paths or clock times, only your rounds, DPI and sensitivity. Nothing is uploaded automatically.
 4. Please also send a short note with:
    - your results (recommended sensitivity, cm/360°, confidence)

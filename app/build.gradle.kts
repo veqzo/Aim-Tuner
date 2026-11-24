@@ -66,6 +66,10 @@ tasks.processResources {
     val version = appVersionName
     inputs.property("appVersion", version)
     filesMatching("version.properties") { expand("appVersion" to version.get()) }
+    // "Contribute training data" (ADR 0007): the switch, the repository and the issue form, from gradle.properties.
+    val contribution = listOf("enabled", "repository", "template").associateWith { providers.gradleProperty("aimtune.contribution.$it").orElse("") }
+    contribution.forEach { (key, value) -> inputs.property("contribution.$key", value) }
+    filesMatching("contribution.properties") { expand(contribution.mapValues { it.value.get() }) }
     from(rootProject.file("docs/design/tokens.json")) { into("assets/ui") }
 }
 
@@ -87,6 +91,9 @@ tasks.register<Exec>("jpackage") {
     val type = providers.gradleProperty("installerType").orElse("app-image")
     // The release workflow passes the tag (v1.2.3 -> 1.2.3); jpackage needs a numeric version.
     val appVersion = appVersionName.get()
+    // Made from docs/design/icon by tools/icon/make_icons.py.
+    val icon = layout.projectDirectory.file("packaging/AimTune.ico")
+    inputs.file(icon)
     // Gradle's own delete also removes the read-only files jpackage leaves; the service is injected for the configuration cache.
     val fileSystem = objects.newInstance<Injected>().fileSystem
     doFirst { fileSystem.delete { delete(outDir) } }
@@ -97,6 +104,7 @@ tasks.register<Exec>("jpackage") {
         "--app-version", appVersion,
         "--vendor", "AimTune contributors",
         "--description", "Finds the mouse sensitivity you aim best with",
+        "--icon", icon.asFile.path,
         "--input", install.get().destinationDir.resolve("lib").path,
         "--main-jar", tasks.jar.get().archiveFileName.get(),
         "--main-class", application.mainClass.get(),

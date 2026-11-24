@@ -57,7 +57,7 @@ Der Results-Screen zeigt:
 ## 6. Daten teilen
 
 1. In AimTune **History** (Taste **H**) oder **Settings** öffnen.
-2. **Share data for research** (Daten für die Forschung teilen) anklicken. Dabei entsteht eine Datei `aimtune-research-<datum>.json.gz` im Ordner `%APPDATA%\AimTune\exports\research\`. Diesen Pfad in die Adressleiste des Explorers einfügen, dann öffnet sich der Ordner direkt.
+2. **Share data for research** (Daten für die Forschung teilen) anklicken. Dabei entsteht eine Datei `aimtune-research.json.gz` (ein neuer Export ersetzt sie) im Ordner `%APPDATA%\AimTune\exports\research\`. Diesen Pfad in die Adressleiste des Explorers einfügen, dann öffnet sich der Ordner direkt.
 3. Diese Datei an den Entwickler schicken. Sie enthält keinen Namen, keine Dateipfade und keine Uhrzeiten, nur deine Runden, DPI und Sensitivity. Es wird nichts automatisch hochgeladen.
 4. Bitte zusätzlich eine kurze Notiz schicken mit:
    - deinen Ergebnissen (empfohlene Sensitivity, cm/360°, Sicherheit)

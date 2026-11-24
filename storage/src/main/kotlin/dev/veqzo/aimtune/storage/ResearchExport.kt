@@ -8,8 +8,7 @@ import java.io.OutputStreamWriter
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
+import java.nio.file.StandardCopyOption
 import java.util.zip.GZIPOutputStream
 
 /** What a research export contains; [rounds] counts only rounds that could be read. */
@@ -20,25 +19,46 @@ data class ResearchExportResult(val file: Path, val sessions: Int, val rounds: I
  * (docs/history/ASSESSMENT.md D4: the method has never been run on other people's recordings). It holds, per
  * round, the raw mouse counts with their times, the target spawns, hits and misses, the sensitivity
  * and DPI, the game id and the metrics. It holds no name, no machine or user name, no clock times
- * (sessions only get a day index relative to the first one, rounds an offset within their session)
- * and no file paths. Written as a stream, since a round has tens of thousands of mouse reports.
+ * (sessions only get a day index relative to the first one, rounds an offset within their session),
+ * no file paths and no scenario seeds (the seed starts from the system timer, so it would show the
+ * uptime of the PC and link exports; the target events already hold every spawn). The file name holds
+ * no date either, and gzip stores no time or name. Written as a stream, since a round has tens of
+ * thousands of mouse reports.
  */
 object ResearchExport {
     const val FORMAT = "aimtune-research"
-    const val FORMAT_VERSION = 1
+    const val FORMAT_VERSION = 2
+
+    /** The same name for every export, so it shows no date; a new export replaces the old one. */
+    const val FILE_NAME = "aimtune-research.json.gz"
     private const val MILLIS_PER_DAY = 86_400_000.0
     private const val MILLIS_PER_SECOND = 1000.0
-    private val stamp = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")
 
-    /** Writes `aimtune-research-<time>.json.gz` into [dir] and returns what was written. */
-    fun write(dir: Path, repository: RoundRepository, appVersion: String, now: LocalDateTime = LocalDateTime.now()): ResearchExportResult {
+    /**
+     * Writes [FILE_NAME] into [dir] and returns what was written. The file is written next to it first and then moved over the
+     * old one, so a failed export leaves the previous file as it was.
+     */
+    fun write(dir: Path, repository: RoundRepository, appVersion: String): ResearchExportResult {
         Files.createDirectories(dir)
-        val file = dir.resolve("aimtune-research-${stamp.format(now)}.json.gz")
-        var counts = 0 to 0
-        BufferedWriter(OutputStreamWriter(GZIPOutputStream(Files.newOutputStream(file)), StandardCharsets.UTF_8)).use { out ->
-            counts = writeTo(out, repository, appVersion)
+        val file = dir.resolve(FILE_NAME)
+        val partial = dir.resolve("$FILE_NAME.partial")
+        try {
+            val counts = BufferedWriter(OutputStreamWriter(GZIPOutputStream(Files.newOutputStream(partial)), StandardCharsets.UTF_8)).use { out ->
+                writeTo(out, repository, appVersion)
+            }
+            moveOver(partial, file)
+            return ResearchExportResult(file, counts.first, counts.second, Files.size(file))
+        } finally {
+            Files.deleteIfExists(partial)
         }
-        return ResearchExportResult(file, counts.first, counts.second, Files.size(file))
+    }
+
+    private fun moveOver(from: Path, to: Path) {
+        try {
+            Files.move(from, to, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+        } catch (e: java.nio.file.AtomicMoveNotSupportedException) {
+            Files.move(from, to, StandardCopyOption.REPLACE_EXISTING)
+        }
     }
 
     /** The same JSON as text; returns the numbers of sessions and rounds written. */
@@ -81,7 +101,6 @@ object ResearchExport {
     private fun writeRound(out: Appendable, r: RoundRecording, row: RoundRow, sessionStartMs: Long) {
         val origin = r.startNanos
         out.append("{\"scenario\":").append(quote(r.scenarioId))
-        out.append(",\"seed\":").append(r.seed.toString())
         out.append(",\"cm360\":").append(number(r.cm360))
         out.append(",\"dpi\":").append(number(r.dpi))
         out.append(",\"blind\":").append(row.blind.toString())

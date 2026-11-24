@@ -59,6 +59,7 @@ Dashboard ─ SENS: Find my sens (Enter) ─▶ [not set up: Onboarding] ─▶ 
 | Settings (`SettingsScreen`) | App options only: language, sounds (volume, Play, flash brightness), updates (version, auto check, check now), "Your rounds" (share data, start over with two clicks). Every change is saved at once; Reset restores sounds, levels and the update check |
 | Crosshair (`CrosshairScreen`) | Profiles and the code left; the big preview in a well in the centre (background tiles above, the error note below); option groups right (color, outlines, center dot, inner lines, outer lines), one open at a time. Save keeps the working copy |
 | Update, Share data | Opened modules: text left, a well right (download progress, or what the file holds). The head LED shows ready, running, failed or "release page only" (update) and the stored counts (share). Share data goes back to the screen that opened it |
+| Contribute training data (`ContributeScreen`, build switch, ADR 0007) | Opened module from Share data: why it helps, voluntary, the three steps and the state left; the well right lists what the file contains, what it does not, and what sharing on GitHub means. Footer: Create file, then Show file and Open issue on GitHub (Copy link after a browser failure). The head LED shows the counts, ready or failed |
 
 Keyboard: Enter starts the main action of the screen, Esc goes back (closes the setup panel first), A opens the curve, F / G flip the modules, M switches the Range variant, R results, H history, C crosshair, S settings, U update. Tab navigation stays in all forms.
 
@@ -121,6 +122,7 @@ Deviations from the original mockup (`AimTune.pdf`) that still apply:
 | Label letter spacing +10 % | Dropped | `BitmapFont` has no tracking |
 | Greek letters in formulas | Words ("angle") and × ÷ ° · | The font atlas has no theta or pi |
 | Game tiles for five games | Only games with verified yaw and FOV | Never guess values |
+| Logo: amber ring with a dot | The app icon (`docs/design/icon/aimtune-icon.png`): a dark tile with a bell curve and a crosshair at the peak, gradient from amber over orange to magenta. The top bar, the window, the exe and the README banner use it | The maintainer chose it for v1.1.1; the orange and magenta exist only in the icon, the UI stays amber. `tools/icon/make_icons.py` (Pillow, dev-only) makes the PNG and ICO files from it |
 
 ## Open design questions
 

@@ -39,6 +39,10 @@ import dev.veqzo.aimtune.app.screens.RefineImportScreen
 import dev.veqzo.aimtune.app.screens.HistoryScreen
 import dev.veqzo.aimtune.app.screens.MainMenuScreen
 import dev.veqzo.aimtune.app.screens.ShareDataScreen
+import dev.veqzo.aimtune.app.contribute.ContributeScreen
+import dev.veqzo.aimtune.app.contribute.ContributionConfig
+import dev.veqzo.aimtune.app.contribute.ContributionFlow
+import dev.veqzo.aimtune.storage.ResearchExportResult
 import dev.veqzo.aimtune.app.screens.StoredCounts
 import dev.veqzo.aimtune.app.screens.RoundOverlayScreen
 import dev.veqzo.aimtune.app.screens.TrainerScreen
@@ -125,10 +129,19 @@ class ScreenshotTour(private val ctx: AppContext, private val dir: Path, private
         Step("history") { ctx.switchTo(HistoryScreen(ctx, CompletableFuture.completedFuture(sampleHistory()))) },
         Step("menu-range") { showRangeMenu() },
         Step("share-data") { ctx.switchTo(ShareDataScreen(ctx, { ctx.showHistory() }, CompletableFuture.completedFuture(StoredCounts(3, 42)))) },
+        // The contribution screen whatever the build switch says; the tour writes no file and opens nothing.
+        Step("contribute") { ctx.switchTo(ContributeScreen(ctx, { ctx.showHistory() }, StoredCounts(3, 42), sampleContribution())) },
+        Step("contribute-ready") { ctx.switchTo(ContributeScreen(ctx, { ctx.showHistory() }, StoredCounts(3, 42), sampleContribution().also { it.start() })) },
         // The URL is never opened by the tour; the screen only needs one for its button.
         Step("update") { ctx.showUpdate(ReleaseInfo(Version(9, 9, 0), "https://example.invalid/release")) },
     )
     private val sample by lazy { ctx.trainerConfig()?.let(::sampleBlindRun) }
+
+    private fun sampleContribution() = ContributionFlow(
+        ContributionConfig("example/example", "training-data.yml"), "0.0.0",
+        export = { CompletableFuture.completedFuture(Result.success(ResearchExportResult(java.nio.file.Paths.get("aimtune-research.json.gz"), 3, 42, 2_150_000))) },
+        reveal = { false }, browse = { false },
+    )
     private var index = -1
     private var frames = 0
 
