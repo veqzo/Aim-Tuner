@@ -266,6 +266,7 @@ Gate for every task: tests green, before/after tables from the gated harness (`g
 
 ## Last session
 
+- CI speed (2026-11-24): the Gradle cache was never written (setup-gradle writes only on the default branch, and CI did not run on `main`). CI now runs on pushes to `main` and `dev`, both write the cache, and the Gradle build cache and parallel builds are on, so unchanged modules skip their tests. Parallel test forks were tried and dropped: the sim gates already use all cores.
 - App icon (2026-11-24): the maintainer supplied the artwork; window icon (`setWindowIcon`), exe icon (jpackage `--icon`, checked in the built `AimTune.exe`), top bar logo and README banner use it.
 - Contributions switched on for v1.1.1 (2026-11-24): the maintainer tested the flow locally and the issue form in a scratch repo; PR to `main`, then tag v1.1.1.
 - Training data contributions (2026-11-24): voluntary GitHub contributions, off by a build switch until the legal questions are settled. The research export is now format 2 (no seeds, fixed name `aimtune-research.json.gz`). AimTune makes no request for it: the player creates the file, shows it in Explorer and opens a prefilled issue, each after a click. Build green; screenshots checked (contribute, contribute-ready; EN, DE, 720). Not tested by hand: Explorer with a path that contains spaces.
