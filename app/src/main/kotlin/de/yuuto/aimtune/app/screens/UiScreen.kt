@@ -61,7 +61,7 @@ abstract class UiScreen(protected val ctx: AppContext) : Screen {
     private var setupEditor: SetupEditor? = null
 
     /** Opens the setup panel from the pill; without a setup yet, the onboarding is the better place. */
-    protected fun openSetup() {
+    internal fun openSetup() {
         if (!ctx.isSetUp) {
             ctx.showOnboarding(afterFinish = ctx::showMenu)
             return
@@ -69,9 +69,6 @@ abstract class UiScreen(protected val ctx: AppContext) : Screen {
         setupEditor = SetupEditor(SetupDraft.fromSettings(ctx.settings.current))
         rebuild()
     }
-
-    /** Screenshot tour: the setup panel over this screen. */
-    internal fun openSetupForTour() = openSetup()
 
     private fun closeSetup() {
         stage.unfocusAll()

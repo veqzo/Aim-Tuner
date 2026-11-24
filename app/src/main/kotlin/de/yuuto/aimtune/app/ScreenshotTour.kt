@@ -1,5 +1,7 @@
 package de.yuuto.aimtune.app
 
+import de.yuuto.aimtune.app.update.ReleaseInfo
+import de.yuuto.aimtune.core.update.Version
 import com.badlogic.gdx.Gdx
 import com.badlogic.gdx.graphics.Pixmap
 import com.badlogic.gdx.graphics.PixmapIO
@@ -74,7 +76,6 @@ class ScreenshotTour(private val ctx: AppContext, private val dir: Path, private
         Step("onboarding-empty") { ctx.showOnboarding(draft = SetupDraft()) },
         Step("pretest") { ctx.showPreTest() },
         Step("settings") { ctx.showSettings() },
-        Step("sound-settings") { ctx.showSoundSettings() },
         Step("crosshair") { ctx.showCrosshair() },
         Step("trainer-ready") { ctx.showTrainer() },
         Step("trainer-running") { (ctx.currentScreen as? TrainerScreen)?.startRoundForTour() },
@@ -92,7 +93,7 @@ class ScreenshotTour(private val ctx: AppContext, private val dir: Path, private
         Step("hub-export") { showHub { ctx.hub.setTicked(RawAccelSetting.ROTATION, true); ctx.showPatchedExport(it) } },
         Step("dashboard-curve") { showHub { ctx.showMenu() } },
         Step("dashboard-backs") { (ctx.currentScreen as? MainMenuScreen)?.showSidesForTour(sensBack = true, curveBack = true) },
-        Step("setup-panel") { (ctx.currentScreen as? MainMenuScreen)?.let { it.showSidesForTour(false, false); it.openSetupForTour() } },
+        Step("setup-panel") { (ctx.currentScreen as? MainMenuScreen)?.let { it.showSidesForTour(false, false); it.openSetup() } },
         Step("accel-intro") { ctx.showAccel() },
         Step("accel-intro-prior") { ctx.showAccel(AccelBaseline(48.7, "0.335", "Valorant", FinderResult(34.4, 61, 40, "0.474", searchRounds = 50), gameSearchRounds = 12)) },
         Step("accel-intro-plan") {
@@ -123,10 +124,11 @@ class ScreenshotTour(private val ctx: AppContext, private val dir: Path, private
         Step("refine-between") { ctx.trainerConfig()?.let { sampleRefineRun(it, maxRounds = 2) }?.let(ctx::showRefineStep); freezeOverlay() },
         Step("results") { sample?.let(ctx::stopBlindTest) },
         Step("history") { ctx.switchTo(HistoryScreen(ctx, CompletableFuture.completedFuture(sampleHistory()))) },
-        Step("settings-range") { showRangeSettings() },
-        Step("menu-range") { ctx.showMenu() },
+        Step("menu-range") { showRangeMenu() },
         Step("range-pretest") { ctx.showRangePreTest() },
-        Step("share-data") { ctx.switchTo(ShareDataScreen(ctx, CompletableFuture.completedFuture(StoredCounts(3, 42)))) },
+        Step("share-data") { ctx.switchTo(ShareDataScreen(ctx, { ctx.showHistory() }, CompletableFuture.completedFuture(StoredCounts(3, 42)))) },
+        // The URL is never opened by the tour; the screen only needs one for its button.
+        Step("update") { ctx.showUpdate(ReleaseInfo(Version(9, 9, 0), "https://example.invalid/release")) },
     )
     private val sample by lazy { ctx.trainerConfig()?.let(::sampleBlindRun) }
     private var index = -1
@@ -142,10 +144,10 @@ class ScreenshotTour(private val ctx: AppContext, private val dir: Path, private
     }
 
     /** The settings of a game with Range mode and the Range tile switched on, which shows the extra row of options. */
-    private fun showRangeSettings() {
+    private fun showRangeMenu() {
         val current = ctx.settings.current
         ctx.settings.save(current.copy(gameId = "valorant", scenarios = (current.scenarios + ScenarioKind.RANGE.id).distinct()))
-        ctx.showSettings()
+        ctx.showMenu()
     }
 
     /** The hub and its pages with made-up analyses and the sample profile imported; the tick on the rotation is cleared again. */

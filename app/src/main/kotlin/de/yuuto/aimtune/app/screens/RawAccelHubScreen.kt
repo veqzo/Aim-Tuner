@@ -47,7 +47,7 @@ class RawAccelHubScreen(ctx: AppContext, private val analysesFuture: Completable
         val width = columnWidth()
         val left = Table().top().left()
         left.add(ui.label(t("hub.title"), Styles.HEADING)).left().padBottom(SECTION_GAP).row()
-        left.add(ctx.runsUseCard(ctx.runsUse(), width) { ctx.showRawAccelHub(analysesFuture) }).left().width(width).padBottom(16f).row()
+        left.add(ctx.runsUseCard(ctx.runsUse(), width)).left().width(width).padBottom(16f).row()
         left.add(ui.label(profileLine(), Styles.CAPTION_MUTED, wrap = true)).left().width(width).padBottom(SECTION_GAP).row()
         left.add(curveSection(width)).left().width(width)
         val right = Table().top().left()

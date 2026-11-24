@@ -150,7 +150,7 @@ class RefineImportScreen(ctx: AppContext, sampleText: String? = null, imported: 
         val below = Table()
         below.add(choice?.let(::facts) ?: Table()).top().left().width(SIDE_WIDTH)
         val setup = Table().top().left()
-        setup.add(ctx.runsUseBlock(ctx.runsUse(), SIDE_WIDTH) { ctx.showRefine() }).left().width(SIDE_WIDTH).row()
+        setup.add(ctx.runsUseBlock(ctx.runsUse(), SIDE_WIDTH)).left().width(SIDE_WIDTH).row()
         setup.add(ui.label(t("refine.import.raw_accel_off"), Styles.CAPTION_MUTED, wrap = true)).left().width(SIDE_WIDTH).padTop(CURVE_SECTION_GAP)
         below.add(setup).top().left().width(SIDE_WIDTH).padLeft(SIDE_GAP)
         below.add().expandX()

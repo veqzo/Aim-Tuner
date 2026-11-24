@@ -56,7 +56,6 @@ internal class CurveModule(
     private val state: CurveState,
     private val width: Float,
     private val analysesFuture: CompletableFuture<SettingsAnalyses>,
-    private val returnTo: () -> Unit,
 ) {
     private fun t(key: String, vararg args: Any?) = ctx.i18n.t(key, *args)
 
@@ -116,7 +115,7 @@ internal class CurveModule(
     fun back(): Actor {
         val column = (width - COLUMN_GAP) / 2
         val left = Table().top().left()
-        left.add(ctx.runsUseBlock(ctx.runsUse(), column, returnTo)).left().width(column).padBottom(GAP).row()
+        left.add(ctx.runsUseBlock(ctx.runsUse(), column)).left().width(column).padBottom(GAP).row()
         left.add(ui.caps(t("hub.section.curve"))).left().padBottom(CAPTION_GAP).row()
         listOf(
             Triple(t("dash.curve.import"), imported?.let { t("hub.profile.line", it.profileName, it.fileLabel) } ?: t("hub.profile.none")) { ctx.showRefine() },

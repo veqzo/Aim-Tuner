@@ -42,7 +42,7 @@ class RefineStageScreen(ctx: AppContext, private val run: RefineRun) : AccelFitS
         right.add(display).grow().row()
         right.add(refineFeelPanel(ctx, run, FEEL_WIDTH) { rebuild() }).left().padTop(CURVE_SECTION_GAP).row()
         result?.let { right.add(refineFeelStageCard(ctx, run, it.parameter, FEEL_WIDTH)).left().padTop(CURVE_SMALL_GAP).row() }
-        right.add(ctx.runsUseLine(run.runsUse, FEEL_WIDTH, { ctx.showRefineStep(run) })).left().width(FEEL_WIDTH).padTop(CURVE_SECTION_GAP)
+        right.add(ctx.runsUseLine(run.runsUse, FEEL_WIDTH)).left().width(FEEL_WIDTH).padTop(CURVE_SECTION_GAP)
 
         val content = Table()
         content.add(curvePanel(status(), left, right)).grow()

@@ -74,7 +74,7 @@ class HistoryScreen(ctx: AppContext, private val entriesFuture: CompletableFutur
         val footer = Table()
         footer.add(ui.button(t("common.back"), Styles.TEXT) { ctx.showMenu() }).left().height(FOOTER_BUTTON_HEIGHT).padLeft(8f)
         footer.add().expandX()
-        footer.add(ui.button(t("history.share"), Styles.SECONDARY) { ctx.showShareData() }).height(FOOTER_BUTTON_HEIGHT).minWidth(300f)
+        footer.add(ui.button(t("history.share"), Styles.SECONDARY) { ctx.showShareData(back = { ctx.showHistory() }) }).height(FOOTER_BUTTON_HEIGHT).minWidth(300f)
         return frame(content, footer)
     }
 

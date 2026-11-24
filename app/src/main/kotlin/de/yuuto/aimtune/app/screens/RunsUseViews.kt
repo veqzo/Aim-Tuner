@@ -23,15 +23,16 @@ private fun AppContext.sourceText(use: RunsUse): String = when (val source = use
     RunsSource.Running -> i18n.t("hub.runs.source_running")
 }
 
-private fun AppContext.link(returnTo: () -> Unit) =
-    ui.skin.button(i18n.t("hub.runs.change"), Styles.TEXT) { showSettings(returnTo) }
+/** Opens the setup panel over the screen that shows the values. */
+private fun AppContext.link() =
+    ui.skin.button(i18n.t("hub.runs.change"), Styles.TEXT) { (currentScreen as? UiScreen)?.openSetup() }
 
 /**
  * The "Runs use" card: game, game sensitivity, cm/360° and DPI that every Raw Accel run is played at, where they come from,
- * and the link to the settings (which return to [returnTo] on Save and Back). [use] null means the setup is not finished.
+ * and the link to the setup panel. [use] null means the setup is not finished.
  * [width] is the card's outer width.
  */
-fun AppContext.runsUseCard(use: RunsUse?, width: Float, returnTo: () -> Unit): Table {
+fun AppContext.runsUseCard(use: RunsUse?, width: Float): Table {
     val skin = ui.skin
     val card = Table()
     card.background(skin.skin.getDrawable(if (use == null) Styles.CARD_CAUTION else Styles.CARD))
@@ -39,7 +40,7 @@ fun AppContext.runsUseCard(use: RunsUse?, width: Float, returnTo: () -> Unit): T
     val inner = width - 2 * CARD_PADDING
     card.add(skin.caps(i18n.t("hub.runs.title"))).left()
     card.add().expandX()
-    card.add(link(returnTo)).right().height(LINK_HEIGHT).row()
+    card.add(link()).right().height(LINK_HEIGHT).row()
     if (use == null) {
         card.add(skin.label(i18n.t("accel.baseline_none"), Styles.TITLE)).left().colspan(3).padTop(ROW_GAP).row()
         card.add(skin.label(i18n.t("accel.baseline_none_help"), Styles.CAPTION_MUTED, wrap = true)).left().width(inner).colspan(3).padTop(4f)
@@ -64,10 +65,10 @@ fun AppContext.runsUseCard(use: RunsUse?, width: Float, returnTo: () -> Unit): T
 
 /**
  * The same information as two short lines for the flow screens: the values, then the source with the
- * settings link on the right. The link shares the second line so the first one fits a narrow card in
+ * setup link on the right. The link shares the second line so the first one fits a narrow card in
  * every language.
  */
-fun AppContext.runsUseLine(use: RunsUse?, width: Float, returnTo: () -> Unit): Table {
+fun AppContext.runsUseLine(use: RunsUse?, width: Float): Table {
     val skin = ui.skin
     val line = Table()
     line.add(skin.caps(i18n.t("hub.runs.title"))).left().padRight(STAT_GAP / 2)
@@ -75,19 +76,19 @@ fun AppContext.runsUseLine(use: RunsUse?, width: Float, returnTo: () -> Unit): T
     line.add(skin.label(values ?: i18n.t("accel.baseline_none"), Styles.MONO)).left().expandX().row()
     val below = Table()
     if (use != null) below.add(skin.label(sourceText(use), Styles.CAPTION_MUTED, wrap = true)).left().growX() else below.add().expandX()
-    below.add(link(returnTo)).right().height(LINK_HEIGHT).padLeft(STAT_GAP / 2)
+    below.add(link()).right().height(LINK_HEIGHT).padLeft(STAT_GAP / 2)
     line.add(below).left().width(width).colspan(2).padTop(4f)
     return line
 }
 
-/** The same information stacked for a narrow column (the CURVE back): title, values, source, then the settings link. */
-fun AppContext.runsUseBlock(use: RunsUse?, width: Float, returnTo: () -> Unit): Table {
+/** The same information stacked for a narrow column (the CURVE back): title, values, source, then the setup link. */
+fun AppContext.runsUseBlock(use: RunsUse?, width: Float): Table {
     val skin = ui.skin
     val block = Table().left()
     block.add(skin.caps(i18n.t("hub.runs.title"))).left().row()
     val values = use?.let { i18n.t("hub.runs.values", it.gameName, it.sensitivityText, "%.1f".format(Locale.ROOT, it.cm360), SetupDraft.formatNumber(it.dpi)) }
     block.add(skin.label(values ?: i18n.t("accel.baseline_none"), Styles.MONO, wrap = true)).left().width(width).padTop(ROW_GAP / 2).row()
     if (use != null) block.add(skin.label(sourceText(use), Styles.CAPTION_MUTED, wrap = true)).left().width(width).padTop(4f).row()
-    block.add(link(returnTo).also { it.pad(0f) }).left().height(LINK_HEIGHT)
+    block.add(link().also { it.pad(0f) }).left().height(LINK_HEIGHT)
     return block
 }

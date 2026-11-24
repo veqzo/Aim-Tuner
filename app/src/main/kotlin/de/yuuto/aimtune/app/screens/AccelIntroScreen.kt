@@ -64,6 +64,9 @@ class AccelIntroScreen(
 
     override fun onEscape() = ctx.showMenu()
 
+    // The baseline and the plan come from the setup, so a saved setup opens the screen again with new ones.
+    override fun onSetupSaved() = ctx.showAccel()
+
     override fun onEnter() {
         if (canStart()) ctx.startAccelRun(search = true)
     }
@@ -105,7 +108,7 @@ class AccelIntroScreen(
     /** The display on top; under it the sensitivity of the runs and the options, side by side, so the status column stays short. */
     private fun right(animate: Boolean): Table {
         val setup = Table().top().left()
-        setup.add(ctx.runsUseBlock(ctx.runsUse(baseline), SIDE_WIDTH) { ctx.showAccel() }).top().left().width(SIDE_WIDTH).row()
+        setup.add(ctx.runsUseBlock(ctx.runsUse(baseline), SIDE_WIDTH)).top().left().width(SIDE_WIDTH).row()
         plan?.let { setup.add(planBlock(it)).left().padTop(CURVE_SECTION_GAP).row() }
         val below = Table()
         below.add(setup).top().left().width(SIDE_WIDTH)

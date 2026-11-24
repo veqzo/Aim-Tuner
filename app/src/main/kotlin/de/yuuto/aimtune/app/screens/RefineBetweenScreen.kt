@@ -51,7 +51,7 @@ class RefineBetweenScreen(ctx: AppContext, private val run: RefineRun) : RoundOv
 
     override fun body(width: Float): Actor {
         val body = Table()
-        body.add(ctx.runsUseLine(run.runsUse, width, { ctx.showRefineStep(run) })).left().width(width).padBottom(ROW_GAP).row()
+        body.add(ctx.runsUseLine(run.runsUse, width)).left().width(width).padBottom(ROW_GAP).row()
         body.add(ui.progressBar(done.toFloat() / total, width)).left().padBottom(8f).row()
         body.add(ui.label(t("refine.between.progress", done, total), Styles.BODY_MUTED)).left().padBottom(ROW_GAP).row()
         body.add(ui.label(explanation(), Styles.CAPTION_MUTED, wrap = true)).left().width(width).row()

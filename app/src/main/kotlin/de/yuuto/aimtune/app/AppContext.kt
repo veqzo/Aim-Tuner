@@ -50,7 +50,6 @@ import de.yuuto.aimtune.app.screens.AccelBetweenScreen
 import de.yuuto.aimtune.app.screens.AccelIntroScreen
 import de.yuuto.aimtune.app.screens.AccelLastAnalysisScreen
 import de.yuuto.aimtune.app.screens.AccelLastSearchScreen
-import de.yuuto.aimtune.app.screens.SoundSettingsScreen
 import de.yuuto.aimtune.app.screens.AccelResultScreen
 import de.yuuto.aimtune.app.screens.AccelSearchResultScreen
 import de.yuuto.aimtune.app.history.HistoryEntry
@@ -191,9 +190,6 @@ class AppContext(
     /** The trainer room of the last round, behind the overlay between rounds; dropped when a screen outside the run shows. */
     val roundBackdrop = RoundBackdrop()
 
-    /** Where the open settings screen returns to (a screen that linked to it), or null for the menu; the sound screen passes it on. */
-    var settingsReturn: (() -> Unit)? = null
-        private set
 
     private val flashSoundsDelegate = lazy { FlashSounds() }
     private val hitSoundsDelegate = lazy { HitSounds() }
@@ -210,12 +206,11 @@ class AppContext(
         if (hitSoundsDelegate.isInitialized()) hitSoundsDelegate.value.dispose()
     }
     private var loadedI18n: I18n? = null
-    private var languageOverride: Language? = null
 
     /** The texts in the language of the settings; reloaded when the language changes. */
     val i18n: I18n
         get() {
-            val language = languageOverride ?: Language.fromCode(settings.current.language)
+            val language = Language.fromCode(settings.current.language)
             return loadedI18n?.takeIf { it.language == language } ?: I18n.load(language).also { loadedI18n = it }
         }
 
@@ -240,14 +235,8 @@ class AppContext(
     /** Config for a trainer session at the current sensitivity, or null until setup is complete. */
     fun trainerConfig(): TrainerConfig? = trainerConfigFor(settings.current, profiles, nextSeed.also { nextSeed++ })
 
-    /** Shows the UI in [language] before it is saved (the settings screen); cleared when the menu or settings open again. */
-    fun previewLanguage(language: Language) {
-        languageOverride = language
-    }
-
     /** The dashboard; [curveBack] opens it with the CURVE module turned to its back (the Raw Accel settings), where the setting pages came from. */
     fun showMenu(curveBack: Boolean = false) {
-        languageOverride = null
         switchTo(MainMenuScreen(this, curveBack))
     }
 
@@ -268,17 +257,10 @@ class AppContext(
     /** Whether the configured game has a Range mode. */
     fun hasRangeMode(): Boolean = trainerConfig()?.profile?.geometry?.range != null
 
-    /** The settings; Save, Back and Escape go to [returnTo] when given (the screen that linked here), else to the menu. */
-    fun showSettings(returnTo: (() -> Unit)? = null) {
-        languageOverride = null
-        settingsReturn = returnTo
-        if (isSetUp) switchTo(SettingsScreen(this, returnTo)) else showOnboarding(afterFinish = returnTo ?: { showMenu() })
-    }
+    /** The app options: language, sound and flash, updates, the stored rounds. */
+    fun showSettings() = switchTo(SettingsScreen(this))
 
-    fun showCrosshair() {
-        languageOverride = null
-        switchTo(CrosshairScreen(this))
-    }
+    fun showCrosshair() = switchTo(CrosshairScreen(this))
 
     /** Starts a new blind test run, merging the stored rounds of this game and DPI; onboarding first if needed. */
     fun startBlindTest(rangeMode: Boolean = false) {
@@ -380,9 +362,6 @@ class AppContext(
         )
     }
 
-    /** Volume of the flash and hit sounds and the brightness of the flash white-out. */
-    fun showSoundSettings() = switchTo(SoundSettingsScreen(this))
-
     fun showAccel(baseline: AccelBaseline? = accelBaseline()) = switchTo(AccelIntroScreen(this, baseline))
 
     /** The sensitivity every Raw Accel run is played at, with where it comes from; null until the setup is complete. */
@@ -411,9 +390,9 @@ class AppContext(
     /** The analysis of the stored calibration rounds, computed again from them. */
     fun showLastAccelAnalysis(last: LastCalibration? = processor.lastCalibration()) = switchTo(AccelLastAnalysisScreen(this, last))
 
-    /** The screen that exports the stored rounds for a researcher; the counts are read in the background. */
-    fun showShareData() = switchTo(
-        ShareDataScreen(this, CompletableFuture.supplyAsync { processor.storedHistory().let { StoredCounts(it.sessions.size, it.rounds.size) } }),
+    /** The screen that exports the stored rounds for a researcher, left by [back]; the counts are read in the background. */
+    fun showShareData(back: () -> Unit) = switchTo(
+        ShareDataScreen(this, back, CompletableFuture.supplyAsync { processor.storedHistory().let { StoredCounts(it.sessions.size, it.rounds.size) } }),
     )
 
     /**

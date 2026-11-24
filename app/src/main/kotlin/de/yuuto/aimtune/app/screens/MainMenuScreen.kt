@@ -43,7 +43,7 @@ class MainMenuScreen(ctx: AppContext, curveBack: Boolean = false) : UiScreen(ctx
         val inner = width - 2 * MODULE_PADDING
         val animate = !entered
         val sens = SensModule(ctx, ui, sensState, inner, animate, ::rebuild)
-        val curve = CurveModule(ctx, ui, curveState, inner, analysesFuture) { ctx.showMenu() }
+        val curve = CurveModule(ctx, ui, curveState, inner, analysesFuture)
         val sensRack = RackModule(ui, t("dash.sens.title"), sens.status, t("dash.flip.tune") to t("dash.flip.back"), sens::front, sens::back, sensState.flipped) { sensState.flipped = it }
         val curveRack = RackModule(ui, t("dash.curve.title"), curve.status, t("dash.flip.tune") to t("dash.flip.back"), curve::front, curve::back, curveState.flipped) { curveState.flipped = it }
         sensModule = sensRack
@@ -109,7 +109,7 @@ class MainMenuScreen(ctx: AppContext, curveBack: Boolean = false) : UiScreen(ctx
     override fun onEscape() = Gdx.app.exit()
 
     override fun onKey(keycode: Int): Boolean = when (keycode) {
-        Input.Keys.A -> true.also { CurveModule(ctx, ui, curveState, 0f, analysesFuture) { ctx.showMenu() }.start() }
+        Input.Keys.A -> true.also { CurveModule(ctx, ui, curveState, 0f, analysesFuture).start() }
         Input.Keys.F -> true.also { sensModule?.flip() }
         Input.Keys.G -> true.also { curveModule?.flip() }
         Input.Keys.M -> sens().toggleRange()
