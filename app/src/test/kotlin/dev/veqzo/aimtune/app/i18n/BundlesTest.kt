@@ -40,7 +40,7 @@ class BundlesTest {
 
     @Test
     fun `every key the code refers to exists`() {
-        val keyLike = Regex(""""((?:hub|accel|refine|between|common|hud|menu|metric|onboarding|pretest|results|round|scenario|settings|setup|history|crosshair|update)\.[a-z_.]+)"""")
+        val keyLike = Regex(""""((?:hub|accel|refine|between|common|hud|menu|metric|onboarding|pretest|results|round|scenario|settings|setup|history|crosshair|update|share|contribute)\.[a-z_.]+)"""")
         val sources = File("src/main/kotlin").walkTopDown().filter { it.extension == "kt" }.toList()
         assertTrue(sources.isNotEmpty(), "source folder not found from ${File(".").absolutePath}")
         val used = sources.flatMap { file -> keyLike.findAll(file.readText()).map { it.groupValues[1] to file.name }.toList() }

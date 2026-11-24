@@ -59,6 +59,10 @@ import dev.veqzo.aimtune.app.screens.BetweenRoundsScreen
 import dev.veqzo.aimtune.app.screens.CrosshairScreen
 import dev.veqzo.aimtune.app.screens.HistoryScreen
 import dev.veqzo.aimtune.app.screens.ShareDataScreen
+import dev.veqzo.aimtune.app.contribute.ContributeScreen
+import dev.veqzo.aimtune.app.contribute.ContributionAvailability
+import dev.veqzo.aimtune.app.contribute.ContributionFlow
+import dev.veqzo.aimtune.app.contribute.Contributions
 import dev.veqzo.aimtune.app.screens.StoredCounts
 import dev.veqzo.aimtune.app.screens.MainMenuScreen
 import dev.veqzo.aimtune.app.screens.OnboardingScreen
@@ -124,6 +128,8 @@ class AppContext(
     val importDir: Path? = null,
     /** The native open and save dialogs; a fake in the screenshot tour and in tests. */
     val fileDialogs: FileDialogs = TinyfdFileDialogs(),
+    /** Whether Share data offers "Contribute training data"; set in the build (ADR 0007). */
+    val contributions: ContributionAvailability = Contributions.current,
 ) {
     private var nextSeed = options.seed ?: System.nanoTime()
     /** A newer release than this build, found by the update check; null when none is known. Set on the render thread. */
@@ -172,6 +178,18 @@ class AppContext(
 
     /** The screen that offers to install [release] from inside the app. */
     fun showUpdate(release: ReleaseInfo) = switchTo(UpdateScreen(this, release))
+
+    /**
+     * Shows [file] selected in Windows Explorer, or opens its folder elsewhere; false when neither worked. Explorer's exit code
+     * says nothing about success, so only the start counts.
+     */
+    fun revealFile(file: Path): Boolean {
+        val path = file.toAbsolutePath().toString()
+        if (System.getProperty("os.name").orEmpty().startsWith("Windows")) {
+            if (runCatching { ProcessBuilder("explorer.exe", "/select,", path).start() }.isSuccess) return true
+        }
+        return runCatching { Gdx.net.openURI(file.toAbsolutePath().parent.toUri().toString()) }.getOrDefault(false)
+    }
 
     /** Opens [url] in the browser; false when neither libGDX nor the Windows shell could. Only pages of the repository are ever passed. */
     fun openUrl(url: String): Boolean {
@@ -374,6 +392,12 @@ class AppContext(
     fun showShareData(back: () -> Unit) = switchTo(
         ShareDataScreen(this, back, CompletableFuture.supplyAsync { processor.storedHistory().let { StoredCounts(it.sessions.size, it.rounds.size) } }),
     )
+
+    /** "Contribute training data", left by [back] (to Share data); only reachable when [contributions] is enabled. */
+    fun showContribute(stored: StoredCounts, back: () -> Unit) {
+        val enabled = contributions as? ContributionAvailability.Enabled ?: return
+        switchTo(ContributeScreen(this, back, stored, ContributionFlow(enabled.config, APP_VERSION, ::exportResearch, ::revealFile, ::openUrl)))
+    }
 
     /**
      * Settings "Start over": backs up the database, then clears all rounds; the settings stay. [onResult] runs on the UI thread.

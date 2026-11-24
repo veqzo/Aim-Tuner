@@ -1,0 +1,41 @@
+# Issue form for "Contribute training data" (ADR 0007). Inactive here on purpose: GitHub only uses forms in
+# .github/ISSUE_TEMPLATE/ on the default branch. Move it there only when the feature is switched on
+# (docs/RESEARCH-EXPORT.md "Contributions"). The field id "summary" is filled by the link the app opens.
+name: Training data
+description: Share an AimTune training data file (voluntary, public).
+title: "Training data"
+labels: ["training-data"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for helping to tune AimTune's first guesses. Sharing is voluntary.
+
+        **This issue is public.** It shows your GitHub account. Anyone can download the file and keep a copy.
+        If you delete the issue or the file later, copies that others made can stay. The file holds no name,
+        but movement data is personal, so it is not called anonymous. See docs/RESEARCH-EXPORT.md for what it holds.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Filled in by AimTune (versions and counts only). You can edit it.
+    validations:
+      required: false
+  - type: textarea
+    id: file
+    attributes:
+      label: File
+      description: |
+        Attach aimtune-research.json.gz here (drag it into this field, up to 25 MB),
+        or paste a link to a copy in your own GitHub account (a gist or a repository).
+    validations:
+      required: true
+  - type: checkboxes
+    id: consent
+    attributes:
+      label: Before you submit
+      options:
+        - label: I share this file voluntarily.
+          required: true
+        - label: I understand that this issue and the file are public, that others can keep copies, and that deleting them later may not remove those copies.
+          required: true

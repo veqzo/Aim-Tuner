@@ -10,6 +10,12 @@ Single source of truth for project status. Update at the end of every task and b
 
 ## Checklist
 
+### Training data contributions (branch `feature/training-data-contributions`; plan approved 2026-11-24; ADR 0007)
+- [x] Privacy audit of the research export: format 2 without round seeds (they showed the PC's uptime) and with a fixed file name (no date); gzip header checked (no time, no name)
+- [x] `app/contribute`: config from `contribution.properties` (build switch, off), encoded issue link without measurements or paths, flow state machine, `ContributeScreen` (en, de), button in Share data, Explorer reveal
+- [x] Inactive issue form in `docs/contribution/training-data.yml`; tests for privacy, link, config, flow, texts and no network code; docs (RESEARCH-EXPORT, SPEC, ARCHITECTURE, DESIGN, ADR 0007, tester guides)
+- [ ] Legal questions settled, then activation (docs/RESEARCH-EXPORT.md "Turn it on")
+
 ### M24 UI redesign "Rack" (branch `feature/m24-ui-redesign`; plan approved 2026-11-09)
 - [x] 1 Foundation: Rack tokens (graphite, signal amber `#FFB020`, LED colours, motion durations), `Tokens.kt`, Inter Display for titles, `Icons.kt` (procedural line icons), bevel, glow and icon drawables, `LayeredDrawable`, `UiSkin` v2 (all old style names kept, new STRONG, READOUT, MONO_SMALL, CHIP, GHOST, MODULE, WELL), `Motion.kt` (fade, pulse, count-up, flip, press, `Reveal`), sentence-case labels; the screenshot tour sets `Motion.instant`
 - [x] 2 Shell and screen transitions: `UiScreen.frame()` with `Chrome.FULL` (top bar with setup pill and utility bar History, Crosshair, Settings; the active tool is marked) and `Chrome.MINIMAL` inside runs and onboarding; `Led`, `IconButton`, `WELL_BUTTON` style; `ScreenTransition` (snapshot of the old screen fades out and recedes over the new one, only between UI screens, off in the tour). The setup pill opens Settings until step 3 brings the setup panel
@@ -258,6 +264,8 @@ Gate for every task: tests green, before/after tables from the gated harness (`g
 
 ## Last session
 
+- Training data contributions (2026-11-24): voluntary GitHub contributions, off by a build switch until the legal questions are settled. The research export is now format 2 (no seeds, fixed name `aimtune-research.json.gz`). AimTune makes no request for it: the player creates the file, shows it in Explorer and opens a prefilled issue, each after a click. Build green; screenshots checked (contribute, contribute-ready; EN, DE, 720). Not tested by hand: Explorer with a path that contains spaces.
+
 - main hardened (2026-11-24): GitHub rulesets "main protection" (no deletion, no force push, changes only through a pull request with merge commits, required check `build` from GitHub Actions on an up-to-date branch, resolved conversations, no bypass) and "release tags" (`v*` tags cannot be moved or deleted). CI runs on every pull request without a path filter (a skipped required check would block the merge) and has a read-only token. The release workflow stops unless the tag points to a commit on `main`. Review count is 0: GitHub does not let the PR author approve their own PR, the user approves by merging. Next: PR `dev` -> `main`, then tag v1.1.0.
 - Roadmap cleanup (2026-11-24): the user confirmed every milestone except M22 and M23 as tested and working; open boxes closed. M15 closed (no clips). Find-a-curve step 6 dropped. The curve finder audit questions and the find-a-curve product questions were already settled by M16-M18, M22 and the redesign steps. Package rename `de.yuuto.aimtune` -> `dev.veqzo.aimtune` in all modules; `UpdateChecker.REPO` and the README links now point to `veqzo/Aim-Tuner` (the old name made the release URL check fail, so the update check found nothing).
 - M24 docs: README rewritten in the Rack look (SVG banner `docs/screenshots/banner.svg` with system font fallbacks, flat badges in the Rack colours, feature grid, mermaid in Rack colours, current flow and keys); `docs/screenshots/` refreshed from the tour (`menu.png` replaced by `dashboard.png`; new onboarding, between-rounds, setup-panel). Tester guides (EN, DE) and NEXT-STEPS.de.md describe the dashboard, the one-screen setup and the countdown. Countdown decision: no setting to turn it off, the user keeps it as it is.
@@ -458,6 +466,8 @@ Gate for every task: tests green, before/after tables from the gated harness (`g
 - see docs/history/REVIEW.md: C1-C4 (targets too large, spurious first movements, consistency metric bias, no validation on real people), M1-M9. M4 UI has only been checked through rendered screenshots.
 
 ## Open questions
+
+- Training data contributions (ADR 0007): before activation, settle whether a public collection through GitHub issues needs an Impressum or a data protection notice from the maintainer, and how to meet that without a residential address. Until then `aimtune.contribution.enabled=false` and the issue form stays in `docs/contribution/`.
 
 - WM_INPUT `wParam` (RIM_INPUT vs RIM_INPUTSINK) semantics for a message-only window are unverified; it is counted but not used for gating (ADR 0002).
 - Trainer FOV assumes the game's FOV value refers to a 16:9 window and keeps the vertical FOV fixed when the window aspect changes. Real per-game aspect behavior is verified in M4.

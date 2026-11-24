@@ -66,6 +66,10 @@ tasks.processResources {
     val version = appVersionName
     inputs.property("appVersion", version)
     filesMatching("version.properties") { expand("appVersion" to version.get()) }
+    // "Contribute training data" (ADR 0007): the switch, the repository and the issue form, from gradle.properties.
+    val contribution = listOf("enabled", "repository", "template").associateWith { providers.gradleProperty("aimtune.contribution.$it").orElse("") }
+    contribution.forEach { (key, value) -> inputs.property("contribution.$key", value) }
+    filesMatching("contribution.properties") { expand(contribution.mapValues { it.value.get() }) }
     from(rootProject.file("docs/design/tokens.json")) { into("assets/ui") }
 }
 
