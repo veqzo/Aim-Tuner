@@ -1,12 +1,15 @@
 name: CI
 
-# main only receives merges of dev, which CI has already built, and the release workflow builds again on a tag.
+# main only receives pull requests from dev. The ruleset on main requires the "build" check, so pull requests run
+# without a path filter: a skipped required check would block the merge.
 on:
   push:
     branches: [dev]
     paths-ignore: ["docs/**", "**.md"]
   pull_request:
-    paths-ignore: ["docs/**", "**.md"]
+
+permissions:
+  contents: read
 
 # A newer push to the same branch makes the older run pointless.
 concurrency:
