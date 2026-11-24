@@ -28,6 +28,29 @@ class TrainerGeometryTest {
     }
 
     @Test
+    fun `with measured distances every click target is a head whose size follows from its distance`() {
+        val body = AgentBody(0.24, 1.96, 1.75, 1.35, 5.4, 2.97, 1.62)
+        val curve = QuantileCurve(listOf(QuantilePoint(0.0, 4.0), QuantilePoint(0.5, 18.0), QuantilePoint(1.0, 60.0)))
+        val heads = geometry.copy(body = body, clickTargetDistanceQuantiles = curve, arena = geometry.arena.copy(wallDistanceMeters = 64.0))
+        assertEquals(PositiveRange(4.0, 60.0), heads.clickDistanceBounds)
+        for (kind in listOf(ScenarioKind.FLICK, ScenarioKind.SWITCHING, ScenarioKind.MICRO)) {
+            val targets = (1L..10L).flatMap { seed ->
+                val s = kind.create(60 * second, seed, heads)
+                s.start(0L)
+                repeat(40) { i -> s.targets.minByOrNull { it.id }?.let { t -> s.fire(Vec3.ZERO, t.center.normalized(), (i + 1) * second / 2) } }
+                s.events.filterIsInstance<TargetEvent.Spawned>().map { it.target }
+            }
+            assertTrue(targets.size > 20, "$kind: ${targets.size} targets")
+            assertTrue(targets.all { it.radius == 0.12 }, "$kind: every target is a 0.24 m head")
+            assertTrue(targets.all { it.center.length in 4.0 * 0.999..60.0 * 1.001 }, "$kind: distance out of the curve")
+            val far = targets.maxBy { it.center.length }
+            assertEquals(2 * Math.toDegrees(atan(0.12 / far.center.length)), angularDiameter(far), 1e-4)
+        }
+        assertFailsWith<IllegalArgumentException> { geometry.copy(clickTargetDistanceQuantiles = curve) }
+        assertFailsWith<IllegalArgumentException> { geometry.copy(body = body, clickTargetDistanceQuantiles = curve) }
+    }
+
+    @Test
     fun `click targets have the angular size of the geometry whatever their distance`() {
         for (kind in listOf(ScenarioKind.FLICK, ScenarioKind.MICRO, ScenarioKind.SWITCHING)) {
             val targets = (1L..20L).flatMap { spawned(kind, it, 30) }

@@ -1,5 +1,7 @@
 package de.yuuto.aimtune.app
 
+import de.yuuto.aimtune.app.update.ReleaseInfo
+import de.yuuto.aimtune.core.update.Version
 import com.badlogic.gdx.Gdx
 import com.badlogic.gdx.graphics.Pixmap
 import com.badlogic.gdx.graphics.PixmapIO
@@ -10,7 +12,21 @@ import de.yuuto.aimtune.app.accel.LastCalibration
 import de.yuuto.aimtune.app.accel.LastSearch
 import de.yuuto.aimtune.app.accel.PriorCalibration
 import de.yuuto.aimtune.app.accel.SettingsAnalyses
+import de.yuuto.aimtune.app.accel.StageProgress
 import de.yuuto.aimtune.app.accel.sampleAccelRun
+import de.yuuto.aimtune.app.accel.sampleDraftRun
+import de.yuuto.aimtune.app.accel.sampleOwnCurve
+import de.yuuto.aimtune.app.screens.AccelIntroScreen
+import de.yuuto.aimtune.app.setup.SetupDraft
+import de.yuuto.aimtune.app.ui.Motion
+import de.yuuto.aimtune.core.accel.FeltStage
+import de.yuuto.aimtune.core.accel.FeltStepFamily
+import de.yuuto.aimtune.core.accel.HoldReason
+import de.yuuto.aimtune.core.accel.PlanState
+import de.yuuto.aimtune.core.accel.StageAction
+import de.yuuto.aimtune.core.accel.StageDecision
+import de.yuuto.aimtune.core.accel.StageMisfit
+import de.yuuto.aimtune.core.accel.StageSession
 import de.yuuto.aimtune.app.blind.sampleBlindRun
 import de.yuuto.aimtune.app.history.HistoryEntry
 import de.yuuto.aimtune.app.accel.sampleRefineRun
@@ -21,10 +37,11 @@ import de.yuuto.aimtune.app.accel.RefineImport
 import de.yuuto.aimtune.app.accel.sampleSettingsAnalyses
 import de.yuuto.aimtune.app.screens.RefineImportScreen
 import de.yuuto.aimtune.app.screens.HistoryScreen
+import de.yuuto.aimtune.app.screens.MainMenuScreen
 import de.yuuto.aimtune.app.screens.ShareDataScreen
 import de.yuuto.aimtune.app.screens.StoredCounts
+import de.yuuto.aimtune.app.screens.RoundOverlayScreen
 import de.yuuto.aimtune.app.screens.TrainerScreen
-import de.yuuto.aimtune.app.setup.SetupStep
 import de.yuuto.aimtune.core.scenario.ScenarioKind
 import de.yuuto.aimtune.storage.SessionKind
 import java.nio.file.Files
@@ -47,15 +64,17 @@ class ScreenshotTour(private val ctx: AppContext, private val dir: Path, private
     private class Step(val name: String, val show: () -> Unit)
 
     private val log = System.getLogger("aimtune.screenshots")
+
+    init {
+        // Screenshots show the end state of every reveal, never a frame in the middle of one.
+        Motion.instant = true
+    }
+
     private val steps = listOf(
         Step("menu") { ctx.showMenu() },
-        Step("onboarding-1-dpi") { ctx.showOnboarding(SetupStep.DPI) },
-        Step("onboarding-2-game") { ctx.showOnboarding(SetupStep.GAME) },
-        Step("onboarding-3-style") { ctx.showOnboarding(SetupStep.STYLE) },
-        Step("onboarding-4-pad") { ctx.showOnboarding(SetupStep.PAD) },
-        Step("pretest") { ctx.showPreTest() },
+        Step("onboarding") { ctx.showOnboarding() },
+        Step("onboarding-empty") { ctx.showOnboarding(draft = SetupDraft()) },
         Step("settings") { ctx.showSettings() },
-        Step("sound-settings") { ctx.showSoundSettings() },
         Step("crosshair") { ctx.showCrosshair() },
         Step("trainer-ready") { ctx.showTrainer() },
         Step("trainer-running") { (ctx.currentScreen as? TrainerScreen)?.startRoundForTour() },
@@ -67,31 +86,47 @@ class ScreenshotTour(private val ctx: AppContext, private val dir: Path, private
         Step("switching-running") { (ctx.currentScreen as? TrainerScreen)?.startRoundForTour() },
         Step("range-ready") { showScenario(ScenarioKind.RANGE) },
         Step("range-running") { (ctx.currentScreen as? TrainerScreen)?.startRoundForTour() },
-        Step("hub") { showHub { ctx.showRawAccelHub(it) } },
+        Step("hub") { showHub { ctx.showMenu(curveBack = true) } },
         Step("hub-setting-info") { showHub { ctx.showRawAccelSetting(RawAccelSetting.SNAP, it) } },
         Step("hub-setting-analysis") { showHub { ctx.showRawAccelSetting(RawAccelSetting.ROTATION, it) } },
         Step("hub-export") { showHub { ctx.hub.setTicked(RawAccelSetting.ROTATION, true); ctx.showPatchedExport(it) } },
+        Step("dashboard-curve") { showHub { ctx.showMenu() } },
+        Step("dashboard-backs") { (ctx.currentScreen as? MainMenuScreen)?.showSidesForTour(sensBack = true, curveBack = true) },
+        Step("setup-panel") { (ctx.currentScreen as? MainMenuScreen)?.let { it.showSidesForTour(false, false); it.openSetup() } },
         Step("accel-intro") { ctx.showAccel() },
         Step("accel-intro-prior") { ctx.showAccel(AccelBaseline(48.7, "0.335", "Valorant", FinderResult(34.4, 61, 40, "0.474", searchRounds = 50), gameSearchRounds = 12)) },
+        Step("accel-intro-plan") {
+            val stage = FeltStepFamily(sampleOwnCurve, 800.0).table(0.08, 9.0, 22.0)
+            val state = PlanState(1, listOf(StageSession(StageMisfit(-0.02, 0.01), 50.0, 15, 0L)), StageDecision(StageAction.HOLD, HoldReason.SESSIONS))
+            val baseline = AccelBaseline(48.7, "0.335", "Valorant", gameSearchRounds = 0, ownCurve = sampleOwnCurve, ownCurveLabel = "settings.json: default", settingsDpi = 800.0)
+            ctx.switchTo(AccelIntroScreen(ctx, baseline, StageProgress(state, stage, FeltStage(0.08, 9.0, 22.0), mapOf(0 to 3, 1 to 1))))
+        },
+        Step("accel-draft") { ctx.trainerConfig()?.let(::sampleDraftRun)?.let(ctx::showAccelStep) },
         Step("accel-last") { accelSample(AccelPhase.ANALYSIS)?.let { ctx.showLastAccelAnalysis(LastCalibration(it.dpi, it.baseCm360, PriorCalibration(it.calibrationDone, it.calibrationSamples))) } },
         Step("accel-last-search") { accelSample(AccelPhase.SEARCH_RESULT)?.let { ctx.showLastSearch(LastSearch(it.dpi, it.baseCm360, it.searchRounds, 2, it.searchResult)) } },
-        Step("accel-calibration") { accelSample(AccelPhase.CALIBRATION)?.let(ctx::showAccelStep) },
         Step("accel-analysis") { accelSample(AccelPhase.ANALYSIS)?.let(ctx::showAccelStep) },
-        Step("accel-search") { accelSample(AccelPhase.SEARCH)?.let(ctx::showAccelStep) },
         Step("accel-search-result") { accelSample(AccelPhase.SEARCH_RESULT)?.let(ctx::showAccelStep) },
-        Step("accel-test") { accelSample(AccelPhase.TEST)?.let(ctx::showAccelStep) },
         Step("accel-result") { accelSample(AccelPhase.DONE)?.let(ctx::showAccelStep) },
         Step("refine-import") { ctx.switchTo(RefineImportScreen(ctx, sampleRefineText())) },
         Step("refine-stage") { ctx.trainerConfig()?.let(::sampleRefineRun)?.let(ctx::showRefineStep) },
         Step("blind-ready") { sample?.let(ctx::showBlindRound) },
         Step("blind-running") { (ctx.currentScreen as? TrainerScreen)?.startRoundForTour() },
-        Step("between-rounds") { sample?.let(ctx::showBetweenRounds) },
+        Step("between-rounds") {
+            // The overlay screens draw the room of this round behind them, so they follow it directly.
+            (ctx.currentScreen as? TrainerScreen)?.captureBackdropForTour()
+            sample?.let(ctx::showBetweenRounds)
+            freezeOverlay()
+        },
+        Step("accel-calibration") { accelSample(AccelPhase.CALIBRATION)?.let(ctx::showAccelStep); freezeOverlay() },
+        Step("accel-search") { accelSample(AccelPhase.SEARCH)?.let(ctx::showAccelStep); freezeOverlay() },
+        Step("accel-test") { accelSample(AccelPhase.TEST)?.let(ctx::showAccelStep); freezeOverlay() },
+        Step("refine-between") { ctx.trainerConfig()?.let { sampleRefineRun(it, maxRounds = 2) }?.let(ctx::showRefineStep); freezeOverlay() },
         Step("results") { sample?.let(ctx::stopBlindTest) },
         Step("history") { ctx.switchTo(HistoryScreen(ctx, CompletableFuture.completedFuture(sampleHistory()))) },
-        Step("settings-range") { showRangeSettings() },
-        Step("menu-range") { ctx.showMenu() },
-        Step("range-pretest") { ctx.showRangePreTest() },
-        Step("share-data") { ctx.switchTo(ShareDataScreen(ctx, CompletableFuture.completedFuture(StoredCounts(3, 42)))) },
+        Step("menu-range") { showRangeMenu() },
+        Step("share-data") { ctx.switchTo(ShareDataScreen(ctx, { ctx.showHistory() }, CompletableFuture.completedFuture(StoredCounts(3, 42)))) },
+        // The URL is never opened by the tour; the screen only needs one for its button.
+        Step("update") { ctx.showUpdate(ReleaseInfo(Version(9, 9, 0), "https://example.invalid/release")) },
     )
     private val sample by lazy { ctx.trainerConfig()?.let(::sampleBlindRun) }
     private var index = -1
@@ -107,10 +142,10 @@ class ScreenshotTour(private val ctx: AppContext, private val dir: Path, private
     }
 
     /** The settings of a game with Range mode and the Range tile switched on, which shows the extra row of options. */
-    private fun showRangeSettings() {
+    private fun showRangeMenu() {
         val current = ctx.settings.current
         ctx.settings.save(current.copy(gameId = "valorant", scenarios = (current.scenarios + ScenarioKind.RANGE.id).distinct()))
-        ctx.showSettings()
+        ctx.showMenu()
     }
 
     /** The hub and its pages with made-up analyses and the sample profile imported; the tick on the rotation is cleared again. */
@@ -118,6 +153,10 @@ class ScreenshotTour(private val ctx: AppContext, private val dir: Path, private
         val source = sampleRefineText()?.let { RefineImport.parse(it, "settings.json").getOrNull() }
         ctx.hub.useSample(source?.let { ImportedProfile(it, it.file.profileNames.first()) })
         show(CompletableFuture.completedFuture(sampleSettingsAnalyses()))
+    }
+
+    private fun freezeOverlay() {
+        (ctx.currentScreen as? RoundOverlayScreen)?.freezeCountdownForTour()
     }
 
     private fun accelSample(until: AccelPhase) = ctx.trainerConfig()?.let { sampleAccelRun(it, until) }

@@ -1,5 +1,7 @@
 package de.yuuto.aimtune.games
 
+import de.yuuto.aimtune.core.scenario.Gait
+import de.yuuto.aimtune.core.scenario.StrafeConfig
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
@@ -114,12 +116,31 @@ class GameProfilesTest {
     }
 
     @Test
+    fun `valorant click targets are heads at the distances of open-aim's flash drills`() {
+        val g = assertNotNull(bundled.find("valorant")).geometry
+        val curve = assertNotNull(g.clickTargetDistanceQuantiles)
+        assertTrue(g.headsFromDistance)
+        assertEquals(18.253, curve.valueAt(0.5), 1e-9)
+        // VALORANT-WEIGHTS.md section 6: 33 / 45 / 23 percent at 0-15 / 15-30 / 30+ m; the straight lines between the quantiles keep that within 2 points.
+        assertEquals(0.33, curve.shareBelow(15.0), 0.02)
+        assertEquals(0.45, curve.shareBelow(30.0) - curve.shareBelow(15.0), 0.03)
+        assertEquals(listOf(0.18, 0.21, 0.24, 0.18, 0.19), g.flickAngles.map { it.weight })
+        assertTrue(g.clickDistanceBounds.max < g.arena.wallDistanceMeters)
+        val noSource = valid.replace(
+            "\"sensitivity\"",
+            "\"trainer\":{\"clickTargetDistanceQuantiles\":{\"points\":[{\"share\":0.0,\"meters\":5.0},{\"share\":1.0,\"meters\":20.0}],\"source\":\" \"}},\"sensitivity\"",
+        )
+        assertFailsWith<GameProfileException> { parseGameProfile(noSource) }
+    }
+
+    @Test
     fun `the vertical distribution comes from the profile and can be switched back to the old uniform field`() {
         val valorant = assertNotNull(bundled.find("valorant"))
         assertEquals(1.5, valorant.geometry.elevation.spreadDegrees)
-        assertEquals(0.12, valorant.geometry.elevation.offLevelShare)
+        assertEquals(0.27, valorant.geometry.elevation.offLevelShare)
         assertEquals(false, valorant.geometry.elevation.uniform)
-        assertEquals(1.6, valorant.geometry.eyeHeightMeters)
+        assertEquals(1.75, valorant.geometry.eyeHeightMeters)
+        assertEquals(1.75, valorant.geometry.headHeightMeters)
         assertEquals(false, parseGameProfile(valid).geometry.elevation.uniform)
         val uniform = parseGameProfile(valid.replace("\"sensitivity\"", "\"trainer\":{\"elevation\":{\"uniform\":true},\"headHeightMeters\":1.7},\"sensitivity\""))
         assertEquals(true, uniform.geometry.elevation.uniform)
@@ -170,7 +191,8 @@ class GameProfilesTest {
         assertNull(range.lifetimeSeconds(de.yuuto.aimtune.core.scenario.RangeSpeed.NONE))
         assertEquals(-50.0, range.bearingMinDegrees)
         assertEquals(80.0, range.bearingMaxDegrees)
-        assertEquals(1.8, range.botHeightMeters)
+        assertEquals(1.87, range.botHeightMeters)
+        assertEquals(0.24, range.headDiameterMeters)
         assertEquals(4, range.bodyHitsToKill(armor = true))
         assertEquals(3, range.bodyHitsToKill(armor = false))
         assertEquals(false, range.verified)
@@ -194,5 +216,144 @@ class GameProfilesTest {
         assertTrue("killRule" in error.message.orEmpty())
         assertFailsWith<GameProfileException> { parseGameProfile(valid.replace("\"sensitivity\"", "\"trainer\":{\"range\":{\"botHeightMeters\":1.8}},\"sensitivity\"")) }
         assertFailsWith<GameProfileException> { parseGameProfile(withRange(allNotes).replace("\"botHeightMeters\":1.7", "\"botHeightMeters\":0.4")) }
+    }
+
+    private val bodyBlock = """
+        "body":{"headDiameterMeters":0.2,"capsuleHeightMeters":1.9,"eyeStandMeters":1.7,"eyeCrouchMeters":1.3,
+         "runSpeedMetersPerSecond":5.0,"walkSpeedMetersPerSecond":2.5,"crouchSpeedMetersPerSecond":1.5,"valueNotes":{NOTES}}
+    """.trimIndent()
+
+    private val bodyNotes = listOf(
+        "headDiameterMeters", "capsuleHeightMeters", "eyeStandMeters", "eyeCrouchMeters",
+        "runSpeedMetersPerSecond", "walkSpeedMetersPerSecond", "crouchSpeedMetersPerSecond",
+    )
+
+    private fun withBody(notes: List<String>, verified: Boolean = false): String {
+        val entries = notes.joinToString(",") { "\"$it\":{\"verified\":$verified,\"source\":\"test\"}" }
+        return valid.replace("\"sensitivity\"", "\"trainer\":{${bodyBlock.replace("{NOTES}", "{$entries}")}},\"sensitivity\"")
+    }
+
+    @Test
+    fun `the body block of valorant has open-aim's player size and speeds, matching the eye and the range bot`() {
+        val geometry = assertNotNull(bundled.find("valorant")).geometry
+        val body = assertNotNull(geometry.body)
+        assertEquals(0.24, body.headDiameterMeters)
+        assertEquals(1.96, body.capsuleHeightMeters)
+        assertEquals(1.75, body.eyeStandMeters)
+        assertEquals(1.35, body.eyeCrouchMeters)
+        assertEquals(5.4, body.runSpeedMetersPerSecond)
+        assertEquals(5.4 * 0.55, body.walkSpeedMetersPerSecond, 1e-9)
+        assertEquals(5.4 * 0.3, body.crouchSpeedMetersPerSecond, 1e-9)
+        assertEquals(false, body.verified)
+        assertEquals(body.eyeStandMeters, geometry.eyeHeightMeters)
+        val range = assertNotNull(geometry.range)
+        assertEquals(body.standingShape, range.shape)
+    }
+
+    @Test
+    fun `a profile without a body block has none, and a body block needs a source for every value`() {
+        assertNull(parseGameProfile(valid).geometry.body)
+        val body = assertNotNull(parseGameProfile(withBody(bodyNotes)).geometry.body)
+        assertEquals(1.3, body.eyeCrouchMeters)
+        assertEquals(false, body.verified)
+        assertEquals(true, assertNotNull(parseGameProfile(withBody(bodyNotes, verified = true)).geometry.body).verified)
+        val error = assertFailsWith<GameProfileException> { parseGameProfile(withBody(bodyNotes - "walkSpeedMetersPerSecond")) }
+        assertTrue("walkSpeedMetersPerSecond" in error.message.orEmpty())
+        assertFailsWith<GameProfileException> { parseGameProfile(withBody(bodyNotes).replace("\"walkSpeedMetersPerSecond\":2.5", "\"walkSpeedMetersPerSecond\":6.0")) }
+    }
+
+    private val movementKeys = listOf(
+        "accel", "friction", "brakingFriction", "frictionMin", "aboveMaxSpeedDecay",
+        "walkAccelFactor", "walkBrakingFactor", "crouchAccelFactor", "crouchFrictionFactor", "crouchFrictionMinFactor",
+    )
+
+    private fun withMovement(notes: List<String>, body: Boolean = true): String {
+        val values = movementKeys.joinToString(",") { "\"$it\":${if (it.endsWith("Factor")) 0.5 else 10.0}" }
+        val entries = notes.joinToString(",") { "\"$it\":{\"verified\":false,\"source\":\"test\"}" }
+        val bodyEntries = bodyNotes.joinToString(",") { "\"$it\":{\"verified\":false,\"source\":\"test\"}" }
+        val bodyPart = if (body) bodyBlock.replace("{NOTES}", "{$bodyEntries}") + "," else ""
+        return valid.replace("\"sensitivity\"", "\"trainer\":{$bodyPart\"movement\":{$values,\"valueNotes\":{$entries}}},\"sensitivity\"")
+    }
+
+    @Test
+    fun `valorant has open-aim's ground movement, and a runner reaches its top speed in about 0,3 s`() {
+        val geometry = assertNotNull(bundled.find("valorant")).geometry
+        val movement = assertNotNull(geometry.movement)
+        assertEquals(18.0, movement.accel)
+        assertEquals(21.5, movement.brakingFriction)
+        assertEquals(false, movement.verified)
+        val motion = assertNotNull(geometry.locomotion)
+        assertEquals(0.3, motion.ticksToTopSpeed(Gait.RUN) * motion.tickSeconds, 0.01)
+    }
+
+    @Test
+    fun `a movement block needs a body block and a source for every value`() {
+        assertNull(parseGameProfile(valid).geometry.locomotion)
+        assertNotNull(parseGameProfile(withMovement(movementKeys)).geometry.locomotion)
+        val error = assertFailsWith<GameProfileException> { parseGameProfile(withMovement(movementKeys - "frictionMin")) }
+        assertTrue("frictionMin" in error.message.orEmpty())
+        assertFailsWith<GameProfileException> { parseGameProfile(withMovement(movementKeys, body = false)) }
+    }
+
+    @Test
+    fun `valorant strafes with open-aim's leg lengths and pauses, and a strafe block needs a source for every value`() {
+        val geometry = assertNotNull(bundled.find("valorant")).geometry
+        val strafe = assertNotNull(geometry.strafe)
+        assertEquals(1.0, strafe.travelMeters.min)
+        assertEquals(1.75, strafe.travelMeters.max)
+        assertEquals(0.65, strafe.dwellSeconds.max)
+        assertEquals(false, strafe.verified)
+        assertNotNull(StrafeConfig.from(geometry).locomotion)
+
+        val keys = listOf("travelMeters", "dwellSeconds", "reverseProbability", "maxOffsetMeters")
+        fun withStrafe(notes: List<String>): String {
+            val entries = notes.joinToString(",") { "\"$it\":{\"verified\":false,\"source\":\"test\"}" }
+            val block = "\"strafe\":{\"travelMeters\":{\"min\":1.0,\"max\":1.5},\"dwellSeconds\":{\"min\":0.2,\"max\":0.5}," +
+                "\"reverseProbability\":0.5,\"maxOffsetMeters\":2.0,\"valueNotes\":{$entries}},"
+            return withMovement(movementKeys).replace("\"movement\":", "$block\"movement\":")
+        }
+        assertNotNull(parseGameProfile(withStrafe(keys)).geometry.strafe)
+        val error = assertFailsWith<GameProfileException> { parseGameProfile(withStrafe(keys - "dwellSeconds")) }
+        assertTrue("dwellSeconds" in error.message.orEmpty())
+    }
+
+    @Test
+    fun `valorant plays flick 4 to strafe 1 and no tracking, and a mix block needs a source for every part`() {
+        val mix = assertNotNull(assertNotNull(bundled.find("valorant")).geometry.mix)
+        assertEquals(4.0, mix.standingParts)
+        assertEquals(1.0, mix.movingParts)
+        assertEquals(0.0, mix.trackingParts)
+        assertEquals(false, mix.verified)
+        assertEquals(null, assertNotNull(bundled.find("cs2")).geometry.mix, "a game without a mix keeps the weight schedule")
+
+        val keys = listOf("standingParts", "movingParts", "trackingParts")
+        fun withMix(notes: List<String>, standing: Double = 4.0): String {
+            val entries = notes.joinToString(",") { "\"$it\":{\"verified\":false,\"source\":\"test\"}" }
+            return valid.replace("\"sensitivity\"", "\"trainer\":{\"mix\":{\"standingParts\":$standing,\"movingParts\":1,\"valueNotes\":{$entries}}},\"sensitivity\"")
+        }
+        assertNotNull(parseGameProfile(withMix(keys)).geometry.mix)
+        val error = assertFailsWith<GameProfileException> { parseGameProfile(withMix(keys - "movingParts")) }
+        assertTrue("movingParts" in error.message.orEmpty())
+        assertFailsWith<GameProfileException> { parseGameProfile(withMix(keys, standing = -1.0)) }
+    }
+
+    @Test
+    fun `valorant prices a missed first shot at the Vandal follow-up, and a duel block needs a source`() {
+        val duel = assertNotNull(assertNotNull(bundled.find("valorant")).geometry.duel)
+        assertEquals(308_000_000L, duel.missFollowUpNanos)
+        assertEquals(3_000_000_000L, duel.limitNanos)
+        assertEquals(false, duel.verified)
+        assertEquals(null, assertNotNull(bundled.find("cs2")).geometry.duel, "a game without duel rules keeps the metric weights")
+
+        fun withDuel(source: String) =
+            valid.replace("\"sensitivity\"", "\"trainer\":{\"duel\":{\"missFollowUpMs\":300,\"valueNotes\":{\"missFollowUpMs\":{\"source\":\"$source\"}}}},\"sensitivity\"")
+        assertEquals(300_000_000L, parseGameProfile(withDuel("test")).geometry.duel?.missFollowUpNanos)
+        assertFailsWith<GameProfileException> { parseGameProfile(withDuel("")) }
+        assertEquals(null, parseGameProfile(withDuel("test")).geometry.duel?.limitNanos, "without limitMs there is no duel limit")
+        val limitWithoutSource = valid.replace(
+            "\"sensitivity\"",
+            "\"trainer\":{\"duel\":{\"missFollowUpMs\":300,\"limitMs\":3000,\"valueNotes\":{\"missFollowUpMs\":{\"source\":\"test\"}}}},\"sensitivity\"",
+        )
+        assertFailsWith<GameProfileException> { parseGameProfile(limitWithoutSource) }
     }
 }

@@ -55,6 +55,8 @@ private val MIGRATIONS = listOf(
     """.trimIndent(),
     // Version 2: the acceleration curve a round was played with (AccelSpec text), null for none.
     "ALTER TABLE round ADD COLUMN accel TEXT;",
+    // Version 3: how the player rated a refine round after playing it (-1 worse, 0 same, 1 better); a note next to the score, not a metric.
+    "CREATE TABLE round_feel (round_id INTEGER PRIMARY KEY REFERENCES round(id) ON DELETE CASCADE, vote INTEGER NOT NULL);",
 )
 
 /** One SQLite connection guarded by a lock; the app is single-user so one writer is enough. */
@@ -76,6 +78,22 @@ class Database private constructor(private val connection: Connection) : AutoClo
         get() = synchronized(this) {
             connection.createStatement().use { s -> s.executeQuery("PRAGMA user_version").use { it.next(); it.getInt(1) } }
         }
+
+    /**
+     * Writes a consistent copy of the whole database to [target], which must not exist yet (SQLite `VACUUM INTO`). VACUUM cannot
+     * run inside a transaction, so the connection is in auto-commit mode while it runs; the lock keeps every other use out.
+     */
+    fun backupTo(target: Path) = synchronized(this) {
+        require(!Files.exists(target)) { "backup file already exists: $target" }
+        target.toAbsolutePath().parent?.let { Files.createDirectories(it) }
+        connection.commit()
+        connection.autoCommit = true
+        try {
+            connection.prepareStatement("VACUUM INTO ?").use { it.setString(1, target.toAbsolutePath().toString()); it.execute() }
+        } finally {
+            connection.autoCommit = false
+        }
+    }
 
     override fun close() = synchronized(this) { connection.close() }
 

@@ -4,6 +4,7 @@ import com.badlogic.gdx.Gdx
 import com.badlogic.gdx.graphics.Color
 import com.badlogic.gdx.graphics.OrthographicCamera
 import com.badlogic.gdx.graphics.g2d.BitmapFont
+import com.badlogic.gdx.graphics.g2d.GlyphLayout
 import com.badlogic.gdx.graphics.g2d.SpriteBatch
 import com.badlogic.gdx.utils.Align
 import com.badlogic.gdx.utils.Disposable
@@ -18,7 +19,9 @@ import java.util.Locale
 
 /**
  * The trainer's on-screen text: round timer, hits, crosshair and the round summary. Drawn in
- * design units (1080 high, like the Scene2D screens) with the shared [Fonts] and token colors.
+ * design units (1080 high, like the Scene2D screens) with the shared [Fonts] and the rack colors:
+ * uppercase labels in the accent, numbers in mono, hints in a muted neutral. The scene itself keeps
+ * its look, because it is a test condition.
  * The debug overlay exists to verify raw input. With a [roundLabel] the HUD is the blind one:
  * it shows "Round 4 / 10" and never the sensitivity (no debug overlay either, it prints deg/count).
  */
@@ -38,8 +41,8 @@ class Hud(
     var showDebug = roundLabel == null
 
     private val text = tokens.text
-    private val muted = tokens.neutral(500)
-    private val highlight = tokens.accent(400)
+    private val muted = tokens.neutral(400)
+    private val highlight = tokens.accent
 
     fun resize() {
         height = tokens.screenHeight
@@ -79,11 +82,12 @@ class Hud(
     }
 
     private fun drawBlindReady(label: String, fonts: Fonts) {
-        draw(fonts.title, label, width / 2, height * 0.62f, highlight, Align.center)
-        draw(fonts.bodyLg, i18n.t("hud.click_to_start"), width / 2, height * 0.54f, text, Align.center)
+        draw(fonts.label, label.uppercase(), width / 2, height * 0.64f, highlight, Align.center)
+        draw(fonts.title, i18n.t("hud.click_to_start"), width / 2, height * 0.58f, text, Align.center)
         draw(fonts.body, i18n.t("hud.blind_info", config.roundSeconds, i18n.scenarioRound(config.scenario)), width / 2, height * 0.49f, muted, Align.center)
-        draw(fonts.body, instruction(), width / 2, height * 0.44f, muted, Align.center)
-        draw(fonts.body, i18n.t("hud.blind_stop"), width / 2, height * 0.40f, muted, Align.center)
+        // The instruction wraps (the flash one is longer than a 1080p line); the stop line moves down by the extra lines.
+        val wrapped = drawWrapped(fonts.body, instruction(), height * 0.44f, muted)
+        draw(fonts.body, i18n.t("hud.blind_stop"), width / 2, height * 0.40f - (wrapped.height - fonts.body.capHeight), muted, Align.center)
     }
 
     private fun instruction(): String = when (config.scenario) {
@@ -100,7 +104,7 @@ class Hud(
     private fun drawRunning(trainer: Trainer, fonts: Fonts) {
         val seconds = (trainer.timeLeftNanos() / 1_000_000_000L).toInt()
         draw(fonts.numberMd, "%d:%02d".format(Locale.ROOT, seconds / 60, seconds % 60), width / 2, height - MARGIN, text, Align.center)
-        draw(fonts.label, i18n.scenarioName(config.scenario).uppercase(), MARGIN, height - MARGIN, muted, Align.left)
+        draw(fonts.label, i18n.scenarioName(config.scenario).uppercase(), MARGIN, height - MARGIN, highlight, Align.left)
         val shots = when {
             config.scenario == ScenarioKind.RANGE -> i18n.t("hud.kills", trainer.hits, trainer.hits + trainer.misses)
             config.scenario.usesClicks -> i18n.t("hud.hits_misses", trainer.hits, trainer.misses)
@@ -108,19 +112,19 @@ class Hud(
         }
         val right = roundLabel ?: shots
         draw(fonts.mono, right, width - MARGIN, height - MARGIN, text, Align.right)
-        draw(fonts.body, i18n.t("hud.abort"), MARGIN, MARGIN + fonts.body.lineHeight, muted, Align.left)
+        draw(fonts.caption, i18n.t("hud.abort"), MARGIN, MARGIN + fonts.caption.lineHeight, muted, Align.left)
     }
 
     private fun drawFinished(trainer: Trainer, report: RoundReport?, fonts: Fonts) {
         val s = trainer.summary ?: return
-        draw(fonts.title, i18n.t("hud.round_complete"), width / 2, height * 0.66f, highlight, Align.center)
+        draw(fonts.label, i18n.t("hud.round_complete").uppercase(), width / 2, height * 0.66f, highlight, Align.center)
         if (config.scenario.usesClicks) {
             val ttk = s.meanTimeToHitNanos?.let { "%.0f ms".format(Locale.ROOT, it / 1e6) } ?: "-"
             draw(fonts.mono, i18n.t("hud.hits_accuracy", s.hits, s.shots, "%.0f".format(Locale.ROOT, s.accuracy * 100)), width / 2, height * 0.58f, text, Align.center)
             draw(fonts.mono, i18n.t("hud.time_to_hit", ttk), width / 2, height * 0.54f, text, Align.center)
         }
         drawReport(report, height * 0.48f, fonts)
-        draw(fonts.body, i18n.t("hud.next"), width / 2, height * 0.30f, muted, Align.center)
+        draw(fonts.caption, i18n.t("hud.next"), width / 2, height * 0.30f, muted, Align.center)
     }
 
     /** Analysis lines under the round summary: first-movement error, corrections, path efficiency, save state. */
@@ -176,6 +180,13 @@ class Hud(
         font.draw(batch, s, x, y, 0f, align, false)
     }
 
+    /** Draws [s] centered and wrapped to at most [INSTRUCTION_WIDTH] of the window width; returns the layout for its height. */
+    private fun drawWrapped(font: BitmapFont, s: String, y: Float, color: Color): GlyphLayout {
+        val wrapWidth = minOf(width * INSTRUCTION_WIDTH, width - 2 * MARGIN)
+        font.color = color
+        return font.draw(batch, s, (width - wrapWidth) / 2, y, wrapWidth, Align.center, true)
+    }
+
     override fun dispose() {
         batch.dispose()
         crosshairRenderer.dispose()
@@ -183,5 +194,8 @@ class Hud(
 
     private companion object {
         const val MARGIN = 72f
+
+        /** Widest instruction line, as a share of the window width. */
+        const val INSTRUCTION_WIDTH = 0.6f
     }
 }

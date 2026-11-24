@@ -71,6 +71,11 @@ class RoundRepository(private val database: Database) {
         }
     }
 
+    /** Deletes every session; the foreign keys delete their rounds, events, metrics and ratings. Use [startOver], which backs up first. */
+    internal fun clearAll() = database.transaction { c ->
+        c.createStatement().use { it.executeUpdate("DELETE FROM session") }
+    }
+
     fun sessions(): List<SessionRow> = database.transaction { c ->
         c.createStatement().use { s ->
             s.executeQuery("SELECT id, started_at_ms, game_id, dpi, kind FROM session ORDER BY started_at_ms, id").use { rs ->
@@ -89,6 +94,26 @@ class RoundRepository(private val database: Database) {
             insertMetrics(c, roundId, metrics.toNamedValues())
             roundId
         }
+
+    /** Keeps the player's rating of a round: -1 worse, 0 same, 1 better. A new rating replaces the old one. */
+    fun setFeel(roundId: Long, vote: Int) {
+        require(vote in -1..1) { "a rating is -1, 0 or 1" }
+        database.transaction { c ->
+            c.prepareStatement("INSERT OR REPLACE INTO round_feel (round_id, vote) VALUES (?, ?)").use { s ->
+                s.setLong(1, roundId)
+                s.setInt(2, vote)
+                s.executeUpdate()
+            }
+        }
+    }
+
+    /** The rating of a round, or null when the player gave none. */
+    fun feelOf(roundId: Long): Int? = database.transaction { c ->
+        c.prepareStatement("SELECT vote FROM round_feel WHERE round_id = ?").use { s ->
+            s.setLong(1, roundId)
+            s.executeQuery().use { rs -> if (rs.next()) rs.getInt(1) else null }
+        }
+    }
 
     fun loadRecording(roundId: Long): RoundRecording? = database.transaction { c ->
         c.prepareStatement(
@@ -113,6 +138,22 @@ class RoundRepository(private val database: Database) {
         }
     }
 
+    /** The target events of a round without its mouse events (cheap, for the duel score); empty for an unknown round. */
+    fun loadTargetEvents(roundId: Long): List<TargetEvent> = database.transaction { c ->
+        c.prepareStatement("SELECT start_nanos FROM round WHERE id = ?").use { s ->
+            s.setLong(1, roundId)
+            s.executeQuery().use { rs -> if (rs.next()) loadTargetEvents(c, roundId, rs.getLong(1)) else emptyList() }
+        }
+    }
+
+    /** The end of a round on the clock of its events (start + duration); null for an unknown round. */
+    fun roundEndNanos(roundId: Long): Long? = database.transaction { c ->
+        c.prepareStatement("SELECT start_nanos + duration_nanos FROM round WHERE id = ?").use { s ->
+            s.setLong(1, roundId)
+            s.executeQuery().use { rs -> if (rs.next()) rs.getLong(1) else null }
+        }
+    }
+
     /**
      * The blind rounds (of any scenario) of every sensitivity session with this game and DPI, oldest
      * first: the data the optimizer merges across sessions. Rounds played without blinding are left out.
@@ -127,20 +168,32 @@ class RoundRepository(private val database: Database) {
      * [tolerance] (a share, 0.03 = 3 %) of [cm360], in one of [scenarios], newest first and at most [limit]. They are plain-sensitivity
      * movements like the calibration rounds, so a later run can analyse them together with the rounds it plays itself.
      */
-    fun plainAccelRoundIds(dpi: Double, cm360: Double, scenarios: List<String>, tolerance: Double, limit: Int): List<Long> {
+    fun plainAccelRoundIds(dpi: Double, cm360: Double, scenarios: List<String>, tolerance: Double, limit: Int): List<Long> =
+        accelRoundIds(null, dpi, cm360, scenarios, tolerance, limit)
+
+    /**
+     * Like [plainAccelRoundIds], but for rounds played with one exact curve: [spec] is the stored curve text
+     * ([AccelSpec.encodeModel]), null for plain. Refine sessions count for a curve (their warm-up and test rounds play the imported
+     * profile as it is), not for plain. A different curve, even one field apart, is a different base and never matches.
+     */
+    fun accelRoundIds(spec: String?, dpi: Double, cm360: Double, scenarios: List<String>, tolerance: Double, limit: Int): List<Long> {
         if (scenarios.isEmpty()) return emptyList()
         val marks = scenarios.joinToString(",") { "?" }
+        val kinds = if (spec == null) ACCEL_KINDS else "$ACCEL_KINDS, '${SessionKind.ACCEL_REFINE.id}'"
+        val curve = if (spec == null) "r.accel IS NULL" else "r.accel = ?"
         return database.transaction { c ->
             c.prepareStatement(
                 "SELECT r.id FROM round r JOIN session s ON s.id = r.session_id " +
-                    "WHERE s.kind IN ($ACCEL_KINDS) AND r.accel IS NULL AND ABS(r.dpi - ?) < 0.5 AND r.cm360 BETWEEN ? AND ? AND r.scenario IN ($marks) " +
+                    "WHERE s.kind IN ($kinds) AND $curve AND ABS(r.dpi - ?) < 0.5 AND r.cm360 BETWEEN ? AND ? AND r.scenario IN ($marks) " +
                     "ORDER BY r.started_at_ms DESC, r.id DESC LIMIT ?",
             ).use { s ->
-                s.setDouble(1, dpi)
-                s.setDouble(2, cm360 * (1 - tolerance))
-                s.setDouble(3, cm360 * (1 + tolerance))
-                scenarios.forEachIndexed { i, id -> s.setString(4 + i, id) }
-                s.setInt(4 + scenarios.size, limit)
+                var i = 1
+                if (spec != null) s.setString(i++, spec)
+                s.setDouble(i++, dpi)
+                s.setDouble(i++, cm360 * (1 - tolerance))
+                s.setDouble(i++, cm360 * (1 + tolerance))
+                scenarios.forEach { s.setString(i++, it) }
+                s.setInt(i, limit)
                 s.executeQuery().use { rs -> buildList { while (rs.next()) add(rs.getLong(1)) } }
             }
         }

@@ -5,6 +5,7 @@ import de.yuuto.aimtune.core.metrics.computeRoundMetrics
 import de.yuuto.aimtune.core.scenario.ScenarioKind
 import de.yuuto.aimtune.core.scenario.ScenarioSchedule
 import de.yuuto.aimtune.core.score.MetricWeights
+import de.yuuto.aimtune.core.score.RoundScorer
 import de.yuuto.aimtune.core.score.scoreInputs
 import de.yuuto.aimtune.core.sim.HeadlessRound
 import de.yuuto.aimtune.core.sim.SimulatedPlayer
@@ -36,7 +37,7 @@ class BlindTestTest {
 
     @Test
     fun `a run reports its progress and a result after a dozen rounds`() {
-        BlindTest(range, MetricWeights.DEFAULT, emptyList(), seed = 1).use { test ->
+        BlindTest(range, RoundScorer(MetricWeights.DEFAULT), emptyList(), seed = 1).use { test ->
             assertEquals(0, test.roundsPlayed)
             play(test, 12, seedBase = 100)
             assertEquals(12, test.roundsPlayed)
@@ -53,10 +54,10 @@ class BlindTestTest {
 
     @Test
     fun `a later run merges the rounds of the earlier one`() {
-        val firstRun = BlindTest(range, MetricWeights.DEFAULT, emptyList(), seed = 2).use { test ->
+        val firstRun = BlindTest(range, RoundScorer(MetricWeights.DEFAULT), emptyList(), seed = 2).use { test ->
             play(test, 14, seedBase = 200)
         }
-        BlindTest(range, MetricWeights.DEFAULT, firstRun, seed = 3).use { second ->
+        BlindTest(range, RoundScorer(MetricWeights.DEFAULT), firstRun, seed = 3).use { second ->
             assertEquals(14, second.totalRounds)
             // Before playing anything the model already knows 14 rounds and suggests from them.
             assertTrue(second.nextCm360() in range)
@@ -71,7 +72,7 @@ class BlindTestTest {
     @Test
     fun `a run that rotates scenarios scores each against its own rounds and keeps the outcome per scenario`() {
         val schedule = ScenarioSchedule(ScenarioKind.entries.toSet(), MetricWeights.DEFAULT)
-        BlindTest(range, MetricWeights.DEFAULT, emptyList(), seed = 5).use { test ->
+        BlindTest(range, RoundScorer(MetricWeights.DEFAULT), emptyList(), seed = 5).use { test ->
             repeat(16) { i ->
                 val kind = schedule.kindFor(i)
                 val cm360 = test.nextCm360()
@@ -91,7 +92,7 @@ class BlindTestTest {
     fun `the scenario of the next round follows the schedule and the sensitivity stays in range`() {
         val schedule = ScenarioSchedule(setOf(ScenarioKind.FLICK, ScenarioKind.TRACKING), MetricWeights.DEFAULT)
         val config = TrainerConfig(800.0, 45.0, checkNotNull(GameProfiles.load().find("valorant")), 20, seed = 1)
-        BlindTest(range, MetricWeights.DEFAULT, emptyList(), seed = 6).use { test ->
+        BlindTest(range, RoundScorer(MetricWeights.DEFAULT), emptyList(), seed = 6).use { test ->
             val run = BlindRun(test, runKey = 1, baseConfig = config, nextSeed = 100, schedule = schedule)
             repeat(6) { i ->
                 val next = run.nextRoundConfig()
@@ -105,10 +106,10 @@ class BlindTestTest {
 
     @Test
     fun `stored rounds alone give a result for the results screen`() {
-        val rounds = BlindTest(range, MetricWeights.DEFAULT, emptyList(), seed = 4).use { play(it, 12, seedBase = 400) }
-        val result = assertNotNull(BlindTest.analyzeStored(range, MetricWeights.DEFAULT, rounds))
+        val rounds = BlindTest(range, RoundScorer(MetricWeights.DEFAULT), emptyList(), seed = 4).use { play(it, 12, seedBase = 400) }
+        val result = assertNotNull(BlindTest.analyzeStored(range, RoundScorer(MetricWeights.DEFAULT), rounds))
         assertEquals(12, result.rounds)
-        assertNull(BlindTest.analyzeStored(range, MetricWeights.DEFAULT, emptyList()))
-        assertNull(BlindTest.analyzeStored(range, MetricWeights.DEFAULT, rounds.take(2)))
+        assertNull(BlindTest.analyzeStored(range, RoundScorer(MetricWeights.DEFAULT), emptyList()))
+        assertNull(BlindTest.analyzeStored(range, RoundScorer(MetricWeights.DEFAULT), rounds.take(2)))
     }
 }

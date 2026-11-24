@@ -115,6 +115,8 @@ Legend: **F** = blind finder, **P** = passive analysis of stored rounds (no new 
 
 ### Hub UI (`RawAccelHubScreen`)
 
+> Superseded by ADR 0006 (M24): `RawAccelHubScreen` is removed; the hub content is the back of the CURVE module on the dashboard.
+
 - **Main menu:** "Acceleration / Beschleunigung" becomes **"Raw Accel"** (same text in DE), with the subtitle "Curve, refine and every other setting" / "Kurve, Verfeinern und alle weiteren Einstellungen". Key **A** stays (R is taken by Results).
 - **Hub, top card "Runs use":** game name, game sensitivity, cm/360°, DPI, with a source line (settings, or the finder's optimum when that box is ticked in "Find a curve"). Button **"Change in Settings"** opens the settings screen with a return target, so Save and Back return to the hub. No sensitivity field.
 - **Section "Curve":** Find a curve (the existing `AccelIntroScreen`, without the Refine button and the Last cards), Refine my curve, Last search, Last analysis.

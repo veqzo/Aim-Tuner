@@ -4,29 +4,31 @@ import com.badlogic.gdx.graphics.Color
 import com.badlogic.gdx.graphics.g2d.Batch
 import com.badlogic.gdx.scenes.scene2d.Actor
 import com.badlogic.gdx.scenes.scene2d.ui.Table
-import de.yuuto.aimtune.app.setup.SetupDraft
 import de.yuuto.aimtune.core.units.doesTurnFitPad
-import java.util.Locale
 import kotlin.math.min
 
-private const val PANEL_PADDING = 28f
-private const val LINE_AREA_HEIGHT = 120f
+private const val LINE_AREA_HEIGHT = 40f
 private const val LINE_THICKNESS = 4f
 private const val TICK_HEIGHT = 22f
 private const val TICK_WIDTH = 3f
+private const val TEXT_GAP = 6f
 
 /**
- * "Fit check" of the mousepad step: draws the distance of one full turn against the pad width, in
- * the accent color when it fits and in the caution color (clipped to the pad) when it does not.
+ * "Fit check" of the setup: draws the distance of one full turn against the pad width, in the
+ * accent color when it fits and in the caution color (clipped to the pad) when it does not.
+ * [turnText] and [padText] are the two values as text in the user's language.
  */
-class FitCheckPanel(private val ui: UiSkin, private val cm360: Double, private val padWidthCm: Double) : Table() {
+class FitCheckPanel(
+    private val ui: UiSkin,
+    private val cm360: Double,
+    private val padWidthCm: Double,
+    turnText: String,
+    padText: String,
+) : Table() {
     init {
-        background(ui.skin.getDrawable(Styles.CARD))
-        pad(PANEL_PADDING)
-        add(TurnLine()).growX().height(LINE_AREA_HEIGHT).row()
-        add(ui.label("%.1f cm for 360°".format(Locale.ROOT, cm360), Styles.MONO)).left().row()
-        add().grow().row()
-        add(ui.label("${SetupDraft.formatNumber(padWidthCm)} cm", Styles.MONO_MUTED)).right()
+        add(TurnLine()).colspan(2).growX().height(LINE_AREA_HEIGHT).row()
+        add(ui.label(turnText, Styles.MONO_MUTED)).left().expandX().padTop(TEXT_GAP)
+        add(ui.label(padText, Styles.MONO_MUTED)).right().padTop(TEXT_GAP)
     }
 
     val fits: Boolean get() = doesTurnFitPad(cm360, padWidthCm)

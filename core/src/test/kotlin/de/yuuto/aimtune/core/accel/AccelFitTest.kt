@@ -90,6 +90,32 @@ class AccelFitTest {
     }
 
     @Test
+    fun `a rise that starts at an input offset is fitted by classic with an offset, which a plain classic cannot follow`() {
+        // Flat up to 9 in/s, then a rise: the shape of the player's own curve family (offset, cap), docs/FIND-CURVE-REDESIGN.md step 2.
+        val wish = ClassicCurve(acceleration = 0.12, exponent = 2.0, inputOffset = 9.0, cap = 1.45)
+        val analysis = AccelAnalysis(samples(900, 21, noise = 0.03) { v -> wish.multiplier(v) })
+        val result = fitAccel(analysis, withOffsetFamily = true)
+        val withOffset = result.fits.first { it.family == "classic+offset" }
+        val plain = result.fits.first { it.family == "classic" }
+        assertTrue(withOffset.chiSquare < plain.chiSquare * 0.5, "offset ${withOffset.chiSquare} vs without ${plain.chiSquare}")
+        val offset = (withOffset.curve as ClassicCurve).inputOffset
+        assertTrue(offset in 5.0..13.0, "the fitted offset $offset is near 9 in/s")
+        assertEquals("classic+offset", assertNotNull(result.recommended, result.reason).family)
+    }
+
+    @Test
+    fun `the offset family does not make flat players more likely to get a curve`() {
+        var with = 0
+        var without = 0
+        for (seed in 1L..60L) {
+            val analysis = AccelAnalysis(samples(400, seed) { 1.0 })
+            if (fitAccel(analysis, withOffsetFamily = true).recommended != null) with++
+            if (fitAccel(analysis, withOffsetFamily = false).recommended != null) without++
+        }
+        assertTrue(with <= without + 2, "$with of 60 flat players got a curve with the offset family, $without without it")
+    }
+
+    @Test
     fun `too few movements or a narrow speed range are explained`() {
         val few = fitAccel(AccelAnalysis(samples(40, 4, wantedGain = ::wanted)))
         assertNull(few.recommended)

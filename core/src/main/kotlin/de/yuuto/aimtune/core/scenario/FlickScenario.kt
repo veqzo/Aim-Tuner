@@ -111,13 +111,13 @@ class FlickScenario(private val config: FlickConfig, seed: Long) : Scenario {
     /** The next target [TrainerGeometry.drawFlickAngle] degrees from the previous one (from the starting view for the first). */
     private fun realisticTarget(g: TrainerGeometry, previous: Target?): Target {
         val (fromYaw, fromPitch) = previous?.let { anglesOf(it.center) } ?: (0.0 to 0.0)
-        val distance = g.clickTargetDistanceMeters.uniform(random)
+        val distance = g.drawClickDistance(random)
         val (drawnYaw, drawnPitch) = placeNearLevel(g, fromYaw, fromPitch, g.drawFlickAngle(random), distance, random, g.fieldYawDegrees, g.fieldPitchDegrees)
         val moved = ensureVisible(g, random, snapToFeature(g, random, Spot(drawnYaw, drawnPitch, distance)))
         // A snap or a sidestep must not turn a flick into a target on the crosshair.
         val tooClose = ViewAngles.directionOf(moved.yaw, moved.pitch).angleToDegrees(ViewAngles.directionOf(fromYaw, fromPitch)) < TrainerGeometry.MIN_FLICK_DEGREES
         val (yaw, pitch, atDistance) = if (tooClose && previous != null) ensureVisible(g, random, Spot(drawnYaw, drawnPitch, distance)) else moved
-        val radius = g.radiusFor(g.clickTargetDiameterDegrees.logUniform(random), atDistance)
+        val radius = g.clickTargetRadius(random, atDistance)
         return Target(nextId++, ViewAngles.directionOf(yaw, pitch) * atDistance, radius)
     }
 

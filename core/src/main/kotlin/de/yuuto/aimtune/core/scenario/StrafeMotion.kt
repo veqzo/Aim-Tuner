@@ -9,6 +9,10 @@ import kotlin.random.Random
  * spec"). The speed is a speed in meters per second across the line of sight, so the angular speed depends on the target's
  * distance. The target stays within [maxOffsetMeters] of where it spawned, and its yaw within [maxAbsYawDegrees] so it does not
  * leave the screen.
+ *
+ * With a [locomotion] (M23) a moving leg is not a constant speed for [movingSeconds]: the target holds the strafe key for
+ * [travelMeters] of way and lets go, so it accelerates to the gait's top speed and brakes as the game's player does.
+ * [speedMetersPerSecond] and [movingSeconds] are not used then.
  */
 data class StrafeConfig(
     val speedMetersPerSecond: Double = 2.2,
@@ -18,6 +22,9 @@ data class StrafeConfig(
     val reverseProbability: Double = 0.6,
     val maxOffsetMeters: Double = 2.0,
     val maxAbsYawDegrees: Double = 90.0,
+    val locomotion: Locomotion? = null,
+    val gait: Gait = Gait.RUN,
+    val travelMeters: PositiveRange = PositiveRange(1.0, 1.75),
 ) {
     init {
         require(speedMetersPerSecond > 0.0 && maxOffsetMeters > 0.0) { "speed and offset must be positive" }
@@ -26,9 +33,23 @@ data class StrafeConfig(
     }
 
     companion object {
-        /** The strafe of a game profile: targets stay on the screen, which is [FlashGeometry.halfFovDegrees] wide on each side. */
-        fun from(geometry: TrainerGeometry): StrafeConfig =
-            StrafeConfig(maxAbsYawDegrees = (geometry.flash.halfFovDegrees - SCREEN_EDGE_MARGIN_DEGREES).coerceAtLeast(5.0))
+        /**
+         * The strafe of a game profile: targets stay on the screen, which is [FlashGeometry.halfFovDegrees] wide on each side.
+         * A profile with a `strafe` block moves them with its [TrainerGeometry.locomotion].
+         */
+        fun from(geometry: TrainerGeometry): StrafeConfig {
+            val yawLimit = (geometry.flash.halfFovDegrees - SCREEN_EDGE_MARGIN_DEGREES).coerceAtLeast(5.0)
+            val pattern = geometry.strafe ?: return StrafeConfig(maxAbsYawDegrees = yawLimit)
+            return StrafeConfig(
+                stopSeconds = pattern.dwellSeconds,
+                reverseProbability = pattern.reverseProbability,
+                maxOffsetMeters = pattern.maxOffsetMeters,
+                maxAbsYawDegrees = yawLimit,
+                locomotion = checkNotNull(geometry.locomotion) { "a strafe pattern needs a movement model" },
+                gait = pattern.gait,
+                travelMeters = pattern.travelMeters,
+            )
+        }
 
         private const val SCREEN_EDGE_MARGIN_DEGREES = 6.0
     }
@@ -81,7 +102,10 @@ class StrafeMotion(
 
     private fun addLeg() {
         val last = points.last()
-        if (nextLegMoves) {
+        val locomotion = config.locomotion
+        if (nextLegMoves && locomotion != null) {
+            addDrivenLeg(locomotion, last)
+        } else if (nextLegMoves) {
             val seconds = config.movingSeconds.uniform(random)
             offsetMeters += step(config.speedMetersPerSecond * seconds)
             points += Point(last.timeNanos + toNanos(seconds), centerAt(offsetMeters))
@@ -91,6 +115,53 @@ class StrafeMotion(
             if (random.nextDouble() < config.reverseProbability) heading = -heading
         }
         nextLegMoves = !nextLegMoves
+    }
+
+    /**
+     * A leg with the game's movement: the key is held while the way left is more than the way the next tick and the braking
+     * after it need, then let go until the target stands. The path gets a point every few ticks while the speed changes and
+     * none while it is constant, so straight-line interpolation follows the acceleration and braking closely.
+     */
+    private fun addDrivenLeg(locomotion: Locomotion, last: Point) {
+        val signed = step(config.travelMeters.uniform(random))
+        if (signed == 0.0) {
+            points += Point(last.timeNanos + toNanos(config.stopSeconds.min), last.center)
+            return
+        }
+        val direction = if (signed > 0.0) 1.0 else -1.0
+        val dt = locomotion.tickSeconds
+        val target = abs(signed)
+        var speed = 0.0
+        var way = 0.0
+        var ticks = 0
+        var sinceMark = 0
+        var holding = true
+        fun mark() {
+            points += Point(last.timeNanos + toNanos(ticks * dt), centerAt(offsetMeters + direction * way))
+            sinceMark = 0
+        }
+        while ((holding || speed > 0.0) && ticks < MAX_LEG_TICKS) {
+            if (holding) {
+                val held = locomotion.step(speed, 1, config.gait)
+                if (way + (speed + held) / 2.0 * dt + locomotion.stop(held, config.gait).meters > target) {
+                    holding = false
+                    if (sinceMark > 0) mark()
+                }
+            }
+            val next = locomotion.step(speed, if (holding) 1 else 0, config.gait)
+            way += (speed + next) / 2.0 * dt
+            val changing = next != speed
+            speed = next
+            ticks++
+            sinceMark++
+            if (changing && sinceMark >= TICKS_PER_POINT) mark()
+        }
+        if (ticks == 0) {
+            points += Point(last.timeNanos + toNanos(config.stopSeconds.min), last.center)
+            return
+        }
+        if (sinceMark > 0) mark()
+        offsetMeters += direction * way
     }
 
     /** The signed move of [length] meters along the heading; a target at the edge of its range turns around, or stays if it cannot move either way. */
@@ -118,6 +189,10 @@ class StrafeMotion(
 
     companion object {
         private const val NANOS_PER_SECOND = 1_000_000_000.0
+
+        /** A point every 4 ticks (31 ms at 128 Hz) while the speed changes. */
+        private const val TICKS_PER_POINT = 4
+        private const val MAX_LEG_TICKS = 10_000
 
         /** A seed for the motion of target [targetId] of a round with [roundSeed]; every target moves on its own random stream. */
         fun seedFor(roundSeed: Long, targetId: Int): Long = roundSeed xor ((targetId + 1) * SEED_MIX)

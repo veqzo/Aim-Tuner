@@ -1,13 +1,20 @@
 package de.yuuto.aimtune.games
 
+import de.yuuto.aimtune.core.scenario.AgentBody
 import de.yuuto.aimtune.core.scenario.AngleBucket
 import de.yuuto.aimtune.core.scenario.ArenaFeature
 import de.yuuto.aimtune.core.scenario.ArenaFeatureKind
 import de.yuuto.aimtune.core.scenario.ArenaLayout
 import de.yuuto.aimtune.core.scenario.ElevationMix
 import de.yuuto.aimtune.core.scenario.FlashGeometry
+import de.yuuto.aimtune.core.scenario.GroundMovement
 import de.yuuto.aimtune.core.scenario.PositiveRange
+import de.yuuto.aimtune.core.scenario.QuantileCurve
+import de.yuuto.aimtune.core.scenario.QuantilePoint
 import de.yuuto.aimtune.core.scenario.RangeGeometry
+import de.yuuto.aimtune.core.scenario.ScenarioMix
+import de.yuuto.aimtune.core.score.DuelRules
+import de.yuuto.aimtune.core.scenario.StrafePattern
 import de.yuuto.aimtune.core.scenario.TrainerGeometry
 import de.yuuto.aimtune.core.units.Fov
 import de.yuuto.aimtune.core.units.FovType
@@ -89,6 +96,19 @@ private data class ArenaDto(
             featureShare = featureShare ?: d.featureShare,
             snapDegrees = snapDegrees ?: d.snapDegrees,
         )
+    }
+}
+
+/** One quantile of a measured distance: [share] of the engagements are at most [meters] away. */
+@Serializable
+private data class QuantilePointDto(val share: Double, val meters: Double)
+
+/** The `clickTargetDistanceQuantiles` block: measured engagement distances; [source] is required because the values are data, not guesses. */
+@Serializable
+private data class DistanceQuantilesDto(val points: List<QuantilePointDto>, val source: String, val verified: Boolean = false) {
+    fun toCurve(): QuantileCurve {
+        require(source.isNotBlank()) { "clickTargetDistanceQuantiles needs a source" }
+        return QuantileCurve(points.map { QuantilePoint(it.share, it.meters) })
     }
 }
 
@@ -201,6 +221,162 @@ private data class RangeBlockDto(
     }
 }
 
+/**
+ * The `body` block of the `trainer` block: size and speed of a player of the game (M23). Every field is required, and
+ * [valueNotes] names the source of each value, as in the `range` block.
+ */
+@Serializable
+private data class BodyBlockDto(
+    val headDiameterMeters: Double,
+    val capsuleHeightMeters: Double,
+    val eyeStandMeters: Double,
+    val eyeCrouchMeters: Double,
+    val runSpeedMetersPerSecond: Double,
+    val walkSpeedMetersPerSecond: Double,
+    val crouchSpeedMetersPerSecond: Double,
+    val valueNotes: Map<String, RangeValueNoteDto>,
+) {
+    fun toBody(): AgentBody {
+        val missing = REQUIRED_NOTES - valueNotes.keys
+        require(missing.isEmpty()) { "body.valueNotes is missing a source for ${missing.joinToString()}" }
+        require(valueNotes.values.all { it.source.isNotBlank() }) { "every body.valueNotes entry needs a source" }
+        return AgentBody(
+            headDiameterMeters = headDiameterMeters,
+            capsuleHeightMeters = capsuleHeightMeters,
+            eyeStandMeters = eyeStandMeters,
+            eyeCrouchMeters = eyeCrouchMeters,
+            runSpeedMetersPerSecond = runSpeedMetersPerSecond,
+            walkSpeedMetersPerSecond = walkSpeedMetersPerSecond,
+            crouchSpeedMetersPerSecond = crouchSpeedMetersPerSecond,
+            verified = valueNotes.values.all { it.verified },
+        )
+    }
+
+    companion object {
+        val REQUIRED_NOTES = setOf(
+            "headDiameterMeters", "capsuleHeightMeters", "eyeStandMeters", "eyeCrouchMeters",
+            "runSpeedMetersPerSecond", "walkSpeedMetersPerSecond", "crouchSpeedMetersPerSecond",
+        )
+    }
+}
+
+/**
+ * The `movement` block of the `trainer` block: ground acceleration and friction of a player (M23). It needs a `body` block
+ * for the top speeds. Every field is required, and [valueNotes] names the source of each value, as in the `body` block.
+ */
+@Serializable
+private data class MovementBlockDto(
+    val accel: Double,
+    val friction: Double,
+    val brakingFriction: Double,
+    val frictionMin: Double,
+    val aboveMaxSpeedDecay: Double,
+    val walkAccelFactor: Double,
+    val walkBrakingFactor: Double,
+    val crouchAccelFactor: Double,
+    val crouchFrictionFactor: Double,
+    val crouchFrictionMinFactor: Double,
+    val valueNotes: Map<String, RangeValueNoteDto>,
+) {
+    fun toMovement(): GroundMovement {
+        val missing = REQUIRED_NOTES - valueNotes.keys
+        require(missing.isEmpty()) { "movement.valueNotes is missing a source for ${missing.joinToString()}" }
+        require(valueNotes.values.all { it.source.isNotBlank() }) { "every movement.valueNotes entry needs a source" }
+        return GroundMovement(
+            accel = accel,
+            friction = friction,
+            brakingFriction = brakingFriction,
+            frictionMin = frictionMin,
+            aboveMaxSpeedDecay = aboveMaxSpeedDecay,
+            walkAccelFactor = walkAccelFactor,
+            walkBrakingFactor = walkBrakingFactor,
+            crouchAccelFactor = crouchAccelFactor,
+            crouchFrictionFactor = crouchFrictionFactor,
+            crouchFrictionMinFactor = crouchFrictionMinFactor,
+            verified = valueNotes.values.all { it.verified },
+        )
+    }
+
+    companion object {
+        val REQUIRED_NOTES = setOf(
+            "accel", "friction", "brakingFriction", "frictionMin", "aboveMaxSpeedDecay",
+            "walkAccelFactor", "walkBrakingFactor", "crouchAccelFactor", "crouchFrictionFactor", "crouchFrictionMinFactor",
+        )
+    }
+}
+
+/**
+ * The `strafe` block of the `trainer` block: how strafing click targets move with the game's movement model (M23). It needs
+ * a `body` and a `movement` block. Every field is required, and [valueNotes] names the source of each value.
+ */
+@Serializable
+private data class StrafeBlockDto(
+    val travelMeters: RangeDto,
+    val dwellSeconds: RangeDto,
+    val reverseProbability: Double,
+    val maxOffsetMeters: Double,
+    val valueNotes: Map<String, RangeValueNoteDto>,
+) {
+    fun toPattern(): StrafePattern {
+        val missing = REQUIRED_NOTES - valueNotes.keys
+        require(missing.isEmpty()) { "strafe.valueNotes is missing a source for ${missing.joinToString()}" }
+        require(valueNotes.values.all { it.source.isNotBlank() }) { "every strafe.valueNotes entry needs a source" }
+        return StrafePattern(
+            travelMeters = PositiveRange(travelMeters.min, travelMeters.max),
+            dwellSeconds = PositiveRange(dwellSeconds.min, dwellSeconds.max),
+            reverseProbability = reverseProbability,
+            maxOffsetMeters = maxOffsetMeters,
+            verified = valueNotes.values.all { it.verified },
+        )
+    }
+
+    companion object {
+        val REQUIRED_NOTES = setOf("travelMeters", "dwellSeconds", "reverseProbability", "maxOffsetMeters")
+    }
+}
+
+/** The `mix` block: how often the game's engagement types occur, in parts of the rounds; each part needs a source. */
+@Serializable
+private data class MixBlockDto(
+    val standingParts: Double,
+    val movingParts: Double,
+    val trackingParts: Double = 0.0,
+    val valueNotes: Map<String, RangeValueNoteDto>,
+) {
+    fun toMix(): ScenarioMix {
+        val missing = REQUIRED_NOTES - valueNotes.keys
+        require(missing.isEmpty()) { "mix.valueNotes is missing a source for ${missing.joinToString()}" }
+        require(valueNotes.values.all { it.source.isNotBlank() }) { "every mix.valueNotes entry needs a source" }
+        return ScenarioMix(standingParts, movingParts, trackingParts, verified = valueNotes.values.all { it.verified })
+    }
+
+    companion object {
+        val REQUIRED_NOTES = setOf("standingParts", "movingParts", "trackingParts")
+    }
+}
+
+/** The `duel` block: how a duel of the game is decided; every value given needs a source. `limitMs` is optional. */
+@Serializable
+private data class DuelBlockDto(
+    val missFollowUpMs: Double,
+    val limitMs: Double? = null,
+    val valueNotes: Map<String, RangeValueNoteDto>,
+) {
+    fun toRules(): DuelRules {
+        val keys = listOfNotNull("missFollowUpMs", "limitMs".takeIf { limitMs != null })
+        val notes = keys.map { key ->
+            val note = valueNotes[key]
+            require(note != null && note.source.isNotBlank()) { "duel.valueNotes needs a source for $key" }
+            note
+        }
+        return DuelRules(
+            (missFollowUpMs * 1_000_000.0).toLong(),
+            verified = notes.all { it.verified },
+            limitNanos = limitMs?.let { (it * 1_000_000.0).toLong() },
+        )
+    }
+}
+
 /** The `trainer` block of a profile; every field is optional and falls back to [TrainerGeometry.DEFAULT]. */
 @Serializable
 private data class TrainerDto(
@@ -208,6 +384,7 @@ private data class TrainerDto(
     val fieldPitchDegrees: Double? = null,
     val clickTargetDiameterDegrees: RangeDto? = null,
     val clickTargetDistanceMeters: RangeDto? = null,
+    val clickTargetDistanceQuantiles: DistanceQuantilesDto? = null,
     val flickAngles: List<AngleBucketDto>? = null,
     val microStepDegrees: RangeDto? = null,
     val switchingSeparationDegrees: Double? = null,
@@ -221,6 +398,11 @@ private data class TrainerDto(
     val elevation: ElevationDto? = null,
     val arena: ArenaDto? = null,
     val range: RangeBlockDto? = null,
+    val body: BodyBlockDto? = null,
+    val movement: MovementBlockDto? = null,
+    val strafe: StrafeBlockDto? = null,
+    val mix: MixBlockDto? = null,
+    val duel: DuelBlockDto? = null,
     val verified: Boolean = false,
 ) {
     fun toGeometry(horizontalFovDegrees: Double): TrainerGeometry {
@@ -231,6 +413,7 @@ private data class TrainerDto(
             fieldPitchDegrees = fieldPitchDegrees ?: d.fieldPitchDegrees,
             clickTargetDiameterDegrees = clickTargetDiameterDegrees?.range() ?: d.clickTargetDiameterDegrees,
             clickTargetDistanceMeters = clickTargetDistanceMeters?.range() ?: d.clickTargetDistanceMeters,
+            clickTargetDistanceQuantiles = clickTargetDistanceQuantiles?.toCurve(),
             flickAngles = flickAngles?.map { AngleBucket(it.maxDegrees, it.weight) } ?: d.flickAngles,
             microStepDegrees = microStepDegrees?.range() ?: d.microStepDegrees,
             switchingSeparationDegrees = switchingSeparationDegrees ?: d.switchingSeparationDegrees,
@@ -244,6 +427,11 @@ private data class TrainerDto(
             elevation = elevation?.toMix() ?: d.elevation,
             arena = arena?.toLayout() ?: d.arena,
             range = range?.toGeometry(),
+            body = body?.toBody(),
+            movement = movement?.toMovement(),
+            strafe = strafe?.toPattern(),
+            mix = mix?.toMix(),
+            duel = duel?.toRules(),
             verified = verified,
         )
     }

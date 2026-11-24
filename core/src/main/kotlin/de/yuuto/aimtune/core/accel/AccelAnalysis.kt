@@ -41,6 +41,12 @@ class AccelAnalysis(
     minSpeed: Double = MIN_SPEED,
     /** Upper limit of the number of speed bins; more, smaller bins approach a fit on every single movement. */
     private val maxBins: Int = MAX_BINS,
+    /**
+     * The gain the rounds were played with at a hand speed (in/s), when they were played with a curve of the player's own and not
+     * plain: a reach lands at `delivered / wanted` times its distance, so the delivered gain is divided out and the points say what
+     * the player wants. Only the shape counts (a constant factor changes nothing, the points are centred); null is plain.
+     */
+    private val delivered: ((Double) -> Double)? = null,
 ) {
     /**
      * Samples used: movements with a plausible ratio (the first movement went toward the target) and a hand
@@ -64,7 +70,8 @@ class AccelAnalysis(
     val speedRange: Double get() = if (points.size < 2) 1.0 else points.last().speed / points.first().speed
 
     init {
-        val logRatios = used.map { ln(1.0 + it.errorRatio) }
+        // ln(1 + e) is minus the log of the wanted gain when plain; with a delivered curve the delivered log gain is taken off first.
+        val logRatios = used.map { ln(1.0 + it.errorRatio) - (delivered?.let { d -> ln(d(it.speed)) } ?: 0.0) }
         val centerLog = if (logRatios.isEmpty()) 0.0 else median(logRatios)
         val bins = binCount(used.size)
         val sorted = used.indices.sortedBy { used[it].speed }

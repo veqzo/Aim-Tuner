@@ -3,7 +3,9 @@ package de.yuuto.aimtune.core.harness
 import de.yuuto.aimtune.core.metrics.computeRoundMetrics
 import de.yuuto.aimtune.core.scenario.ScenarioKind
 import de.yuuto.aimtune.core.score.MetricWeights
-import de.yuuto.aimtune.core.score.ScoreCalculator
+import de.yuuto.aimtune.core.score.DuelScorer
+import de.yuuto.aimtune.core.score.RoundScorer
+import de.yuuto.aimtune.core.score.duelEngagements
 import de.yuuto.aimtune.core.score.scoreInputs
 import de.yuuto.aimtune.core.sim.HeadlessRound
 import de.yuuto.aimtune.core.sim.SimulatedPlayer
@@ -28,15 +30,19 @@ fun meanScores(
     seed: Long,
     roundSeconds: Int = 45,
     kind: ScenarioKind = ScenarioKind.FLICK,
+    /** The game's duel score (M23g4); null scores by the default weights. */
+    duel: DuelScorer? = null,
 ): List<Double> {
-    val inputs = grid.flatMapIndexed { gi, cm ->
+    val recordings = grid.flatMapIndexed { gi, cm ->
         List(roundsEach) { r ->
             val roundSeed = seed * 1_000_003L + gi * 1_009L + r
             val offset = (gi * roundsEach + r) * roundSeconds * 1_000_000_000L
-            computeRoundMetrics(HeadlessRound.of(kind, player, TEST_DPI, cm, roundSeed, roundSeconds, offset)).scoreInputs()
+            HeadlessRound.of(kind, player, TEST_DPI, cm, roundSeed, roundSeconds, offset)
         }
     }
-    val scores = ScoreCalculator(MetricWeights.DEFAULT).scoreRounds(inputs)
+    val scores = RoundScorer(MetricWeights.DEFAULT, duel).scoreRounds(
+        recordings.map { computeRoundMetrics(it).scoreInputs() }, null, recordings.map { duelEngagements(kind, it.targetEvents, it.endNanos) },
+    )
     return grid.indices.map { gi -> (0 until roundsEach).mapNotNull { scores[gi * roundsEach + it] }.average() }
 }
 

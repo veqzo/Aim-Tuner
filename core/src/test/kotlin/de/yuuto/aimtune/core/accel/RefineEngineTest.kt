@@ -1,6 +1,7 @@
 package de.yuuto.aimtune.core.accel
 
 import de.yuuto.aimtune.core.scenario.ScenarioKind
+import de.yuuto.aimtune.core.scenario.ScenarioMix
 import de.yuuto.aimtune.core.score.MetricWeights
 import de.yuuto.aimtune.core.score.ScoreMetric
 import kotlin.random.Random
@@ -172,5 +173,16 @@ class RefineEngineTest {
         val kinds = List(6) { e.nextRound().also { _ -> e.record(inputs(null, 1.0)) }.scenario }
         assertEquals(AccelScenarios.WITH_FLASH, kinds)
         assertTrue(ScenarioKind.FLASH in kinds)
+    }
+
+    @Test
+    fun `a game's mix gives the curve runs flicks, both strafe scenarios and flash by importance`() {
+        val mix = ScenarioMix(standingParts = 4.0, movingParts = 1.0)
+        val rotation = AccelScenarios.forMix(mix, flashParts = 1.0)
+        assertEquals(12, rotation.size)
+        assertEquals(mapOf(ScenarioKind.FLICK to 8, ScenarioKind.MICRO_STRAFE to 1, ScenarioKind.SWITCH_STRAFE to 1, ScenarioKind.FLASH to 2), rotation.groupingBy { it }.eachCount())
+        assertTrue(ScenarioKind.FLASH !in AccelScenarios.forMix(mix, flashParts = 0.0))
+        val e = RefineEngine(user, 48.0, MetricWeights.DEFAULT, seed = 5, scenarioMix = rotation)
+        assertEquals(rotation.take(RefineEngine.DEFAULT_WARMUP_ROUNDS), List(RefineEngine.DEFAULT_WARMUP_ROUNDS) { e.nextRound().also { _ -> e.record(inputs(null, 1.0)) }.scenario })
     }
 }

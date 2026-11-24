@@ -8,6 +8,9 @@ class AppPaths(val dataDir: Path) {
     val databaseFile: Path get() = dataDir.resolve("aimtune.db")
     val settingsFile: Path get() = dataDir.resolve("settings.json")
 
+    /** Copies of the database that "Start over" made before it cleared the rounds. */
+    val backupDir: Path get() = dataDir.resolve("backups")
+
     companion object {
         const val DATA_DIR_ENV = "AIMTUNE_DATA_DIR"
 

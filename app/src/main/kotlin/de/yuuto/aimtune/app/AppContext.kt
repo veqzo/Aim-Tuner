@@ -7,6 +7,10 @@ import de.yuuto.aimtune.app.accel.AccelPhase
 import de.yuuto.aimtune.app.accel.AccelRun
 import de.yuuto.aimtune.app.audio.FlashSounds
 import de.yuuto.aimtune.app.update.AppVersion
+import de.yuuto.aimtune.app.update.InstallKind
+import de.yuuto.aimtune.app.update.UpdateApplier
+import de.yuuto.aimtune.app.update.UpdateChecker
+import de.yuuto.aimtune.app.update.UpdateService
 import de.yuuto.aimtune.app.update.ReleaseInfo
 import de.yuuto.aimtune.app.audio.HitSounds
 import de.yuuto.aimtune.app.accel.AccelSession
@@ -15,21 +19,24 @@ import de.yuuto.aimtune.app.accel.LastSearch
 import de.yuuto.aimtune.app.accel.PriorCalibration
 import de.yuuto.aimtune.app.accel.HubSession
 import de.yuuto.aimtune.app.accel.ImportedProfile
+import de.yuuto.aimtune.app.accel.DraftStage
 import de.yuuto.aimtune.app.accel.PatchedCopy
+import de.yuuto.aimtune.app.accel.StageProgress
 import de.yuuto.aimtune.app.accel.RawAccelSetting
 import de.yuuto.aimtune.app.accel.RefineOutcome
 import de.yuuto.aimtune.app.accel.RefineRun
 import de.yuuto.aimtune.app.accel.SettingsAnalyses
 import de.yuuto.aimtune.app.accel.RunsUse
 import de.yuuto.aimtune.app.screens.RawAccelExportScreen
-import de.yuuto.aimtune.app.screens.RawAccelHubScreen
 import de.yuuto.aimtune.app.screens.RawAccelSettingScreen
+import de.yuuto.aimtune.app.accel.RefineImport
 import de.yuuto.aimtune.app.accel.RefineSession
 import de.yuuto.aimtune.app.accel.RefineSource
 import de.yuuto.aimtune.app.screens.RefineBetweenScreen
 import de.yuuto.aimtune.app.screens.RefineImportScreen
 import de.yuuto.aimtune.app.screens.RefineResultScreen
 import de.yuuto.aimtune.app.screens.RefineStageScreen
+import de.yuuto.aimtune.core.accel.LookupCurve
 import de.yuuto.aimtune.core.accel.RawAccelProfile
 import de.yuuto.aimtune.core.accel.RefinePhase
 import de.yuuto.aimtune.app.blind.AxisSummary
@@ -42,7 +49,6 @@ import de.yuuto.aimtune.app.screens.AccelBetweenScreen
 import de.yuuto.aimtune.app.screens.AccelIntroScreen
 import de.yuuto.aimtune.app.screens.AccelLastAnalysisScreen
 import de.yuuto.aimtune.app.screens.AccelLastSearchScreen
-import de.yuuto.aimtune.app.screens.SoundSettingsScreen
 import de.yuuto.aimtune.app.screens.AccelResultScreen
 import de.yuuto.aimtune.app.screens.AccelSearchResultScreen
 import de.yuuto.aimtune.app.history.HistoryEntry
@@ -56,22 +62,30 @@ import de.yuuto.aimtune.app.screens.ShareDataScreen
 import de.yuuto.aimtune.app.screens.StoredCounts
 import de.yuuto.aimtune.app.screens.MainMenuScreen
 import de.yuuto.aimtune.app.screens.OnboardingScreen
-import de.yuuto.aimtune.app.screens.PreTestScreen
 import de.yuuto.aimtune.app.screens.ResultsData
 import de.yuuto.aimtune.app.screens.ResultsScreen
 import de.yuuto.aimtune.app.screens.SettingsScreen
+import de.yuuto.aimtune.app.screens.RoundOverlayScreen
 import de.yuuto.aimtune.app.screens.TrainerScreen
+import de.yuuto.aimtune.app.screens.UpdateScreen
 import de.yuuto.aimtune.app.screens.UiScreen
 import de.yuuto.aimtune.app.setup.SetupDraft
 import de.yuuto.aimtune.app.setup.SetupStep
+import de.yuuto.aimtune.app.ui.Motion
+import de.yuuto.aimtune.app.ui.RoundBackdrop
+import de.yuuto.aimtune.app.ui.ScreenTransition
 import de.yuuto.aimtune.app.ui.UiHolder
 import de.yuuto.aimtune.core.accel.AbStatus
 import de.yuuto.aimtune.core.accel.AccelFit
+import de.yuuto.aimtune.core.accel.AccelScenarios
 import de.yuuto.aimtune.core.scenario.ScenarioKind
 import de.yuuto.aimtune.core.score.FlashImportance
+import de.yuuto.aimtune.core.scenario.ScenarioMix
 import de.yuuto.aimtune.core.scenario.ScenarioSchedule
 import de.yuuto.aimtune.core.optimizer.OptimizationResult
+import de.yuuto.aimtune.core.score.DuelScorer
 import de.yuuto.aimtune.core.score.MetricWeights
+import de.yuuto.aimtune.core.score.RoundScorer
 import de.yuuto.aimtune.core.units.AimStyle
 import de.yuuto.aimtune.core.units.searchRange
 import de.yuuto.aimtune.games.GameProfiles
@@ -82,6 +96,7 @@ import de.yuuto.aimtune.app.files.FileDialogs
 import de.yuuto.aimtune.app.files.TinyfdFileDialogs
 import de.yuuto.aimtune.storage.RawAccelExport
 import de.yuuto.aimtune.storage.ResearchExportResult
+import de.yuuto.aimtune.storage.StartOverResult
 import de.yuuto.aimtune.storage.SettingsException
 import java.nio.file.Path
 import java.util.concurrent.CompletableFuture
@@ -115,12 +130,64 @@ class AppContext(
     @Volatile
     var availableUpdate: ReleaseInfo? = null
 
+    /**
+     * Keeps the result of an update check in the settings (not over a damaged settings file) and updates the hint of the menu.
+     * Call on the UI thread. [release] is null when the check failed; the stored time then lets it come due again soon.
+     */
+    fun recordUpdateCheck(checkedAtEpochSeconds: Long, release: ReleaseInfo?) {
+        val before = settings.current
+        val after = before.copy(
+            lastUpdateCheckEpochSeconds = UpdateService.stampOf(checkedAtEpochSeconds, release),
+            latestKnownVersion = release?.version?.toString() ?: before.latestKnownVersion,
+            latestKnownUrl = release?.url ?: before.latestKnownUrl,
+        )
+        if (startupProblems.isEmpty()) settings.save(after)
+        availableUpdate = UpdateService(latest = { null }, current = AppVersion.version).known(after)
+    }
+
+    /**
+     * Asks GitHub now, whatever the day's limit says, in the background; [onResult] runs on the UI thread with the release found
+     * (null when GitHub could not be reached). Works with the daily check switched off: the player asked for it.
+     */
+    fun checkForUpdateNow(onResult: (ReleaseInfo?) -> Unit) {
+        Thread({
+            val release = runCatching { UpdateChecker().latest() }.getOrNull()
+            Gdx.app.postRunnable {
+                recordUpdateCheck(java.time.Instant.now().epochSecond, release)
+                onResult(release)
+            }
+        }, "aimtune-update-check").apply { isDaemon = true }.start()
+    }
+
+    /** The folder the update files go to, inside the data folder; null without one. */
+    val updateDir: Path? get() = exportDir?.parent?.parent?.resolve("update")
+
+    /** Where "Start over" puts its database copies (`AppPaths.backupDir`); null without a data folder. */
+    val backupDir: Path? get() = exportDir?.parent?.parent?.resolve("backups")
+
+    /** How this copy is installed, which decides how an update is put in place. */
+    fun installKind(): InstallKind = UpdateApplier.kindOf(UpdateApplier.runningLauncher(), UpdateApplier.installRoots())
+
+    fun launcher(): Path? = UpdateApplier.runningLauncher()
+
+    /** The screen that offers to install [release] from inside the app. */
+    fun showUpdate(release: ReleaseInfo) = switchTo(UpdateScreen(this, release))
+
+    /** Opens [url] in the browser; false when neither libGDX nor the Windows shell could. Only pages of the repository are ever passed. */
+    fun openUrl(url: String): Boolean {
+        if (runCatching { Gdx.net.openURI(url) }.getOrDefault(false)) return true
+        return runCatching { ProcessBuilder("rundll32", "url.dll,FileProtocolHandler", url).start() }.isSuccess
+    }
+
     /** What the Raw Accel hub keeps: the imported profile, the last refine result, the ticked recommendations and the analyses. */
     val hub = HubSession(settings, processor::settingsAnalyses, { processor.storedCount })
 
-    /** Where the open settings screen returns to (a screen that linked to it), or null for the menu; the sound screen passes it on. */
-    var settingsReturn: (() -> Unit)? = null
-        private set
+    /** Fades the old screen out over the new one; [AimTuneApp] draws it after each frame. */
+    val transition = ScreenTransition(ui.tokens.motionBase)
+
+    /** The trainer room of the last round, behind the overlay between rounds; dropped when a screen outside the run shows. */
+    val roundBackdrop = RoundBackdrop()
+
 
     private val flashSoundsDelegate = lazy { FlashSounds() }
     private val hitSoundsDelegate = lazy { HitSounds() }
@@ -137,12 +204,11 @@ class AppContext(
         if (hitSoundsDelegate.isInitialized()) hitSoundsDelegate.value.dispose()
     }
     private var loadedI18n: I18n? = null
-    private var languageOverride: Language? = null
 
     /** The texts in the language of the settings; reloaded when the language changes. */
     val i18n: I18n
         get() {
-            val language = languageOverride ?: Language.fromCode(settings.current.language)
+            val language = Language.fromCode(settings.current.language)
             return loadedI18n?.takeIf { it.language == language } ?: I18n.load(language).also { loadedI18n = it }
         }
 
@@ -158,57 +224,34 @@ class AppContext(
     /** Whether the curve runs are played at the finder's result instead of the game sensitivity; only honoured when that result is confident. */
     var useFinderResult = false
 
+    /** Whether the analysis path calibrates against the curve imported in the hub; honoured only when there is a usable one (docs/FIND-CURVE-REDESIGN.md step 1). */
+    var useOwnCurve = true
+
     val isSetUp: Boolean
         get() = SetupDraft.fromSettings(settings.current).let { draft -> SetupStep.entries.all { draft.issue(it, profiles) == null } }
 
     /** Config for a trainer session at the current sensitivity, or null until setup is complete. */
     fun trainerConfig(): TrainerConfig? = trainerConfigFor(settings.current, profiles, nextSeed.also { nextSeed++ })
 
-    /** Shows the UI in [language] before it is saved (the settings screen); cleared when the menu or settings open again. */
-    fun previewLanguage(language: Language) {
-        languageOverride = language
+    /** The dashboard; [curveBack] opens it with the CURVE module turned to its back (the Raw Accel settings), where the setting pages came from. */
+    fun showMenu(curveBack: Boolean = false) {
+        switchTo(MainMenuScreen(this, curveBack))
     }
 
-    fun showMenu() {
-        languageOverride = null
-        switchTo(MainMenuScreen(this))
-    }
+    fun showOnboarding(afterFinish: () -> Unit = ::showMenu, draft: SetupDraft = SetupDraft.fromSettings(settings.current)) =
+        switchTo(OnboardingScreen(this, draft, afterFinish))
 
-    /** Start test: onboarding on first use, then the pre-test notice. */
-    fun showStart() = if (isSetUp) showPreTest() else showOnboarding(afterFinish = ::showPreTest)
+    /** The app options: language, sound and flash, updates, the stored rounds. */
+    fun showSettings() = switchTo(SettingsScreen(this))
 
-    fun showOnboarding(startStep: SetupStep = SetupStep.DPI, afterFinish: () -> Unit = ::showMenu) =
-        switchTo(OnboardingScreen(this, SetupDraft.fromSettings(settings.current), startStep, afterFinish))
-
-    fun showPreTest() = switchTo(PreTestScreen(this))
-
-    /** The pre-test notice of the Range mode round set (menu entry "Range mode"). */
-    fun showRangePreTest() = switchTo(PreTestScreen(this, rangeMode = true))
-
-    /** Range mode from the menu: onboarding first if needed, then its notice; a game without a Range block has no such mode. */
-    fun showRangeMode() = if (isSetUp) showRangePreTest() else showOnboarding(afterFinish = ::showRangePreTest)
-
-    /** Whether the configured game has a Range mode. */
-    fun hasRangeMode(): Boolean = trainerConfig()?.profile?.geometry?.range != null
-
-    /** The settings; Save, Back and Escape go to [returnTo] when given (the screen that linked here), else to the menu. */
-    fun showSettings(returnTo: (() -> Unit)? = null) {
-        languageOverride = null
-        settingsReturn = returnTo
-        if (isSetUp) switchTo(SettingsScreen(this, returnTo)) else showOnboarding(afterFinish = returnTo ?: ::showMenu)
-    }
-
-    fun showCrosshair() {
-        languageOverride = null
-        switchTo(CrosshairScreen(this))
-    }
+    fun showCrosshair() = switchTo(CrosshairScreen(this))
 
     /** Starts a new blind test run, merging the stored rounds of this game and DPI; onboarding first if needed. */
     fun startBlindTest(rangeMode: Boolean = false) {
         val config = trainerConfig()
         val setup = settings.current
         val pad = setup.padWidthCm
-        if (config == null || pad == null) return showOnboarding(afterFinish = if (rangeMode) ::showRangePreTest else ::showPreTest)
+        if (config == null || pad == null) return showOnboarding(afterFinish = ::showMenu)
         val range = searchRange(setup.aimStyleOrNull() ?: AimStyle.MIXED, config.cm360, pad)
         val weights = metricWeights()
         val enabled = try {
@@ -223,13 +266,17 @@ class AppContext(
         val playable = if (rangeMode) setOf(ScenarioKind.FLICK, ScenarioKind.RANGE) else if (hasRange) enabled else enabled - ScenarioKind.RANGE
         val past = processor.pastBlindRounds(setup.gameId, config.dpi)
         val seed = nextSeed++
-        val test = BlindTest(range, weights, past, seed)
-        val schedule = ScenarioSchedule(playable.ifEmpty { setOf(ScenarioKind.FLICK) }, weights)
+        val test = BlindTest(range, roundScorer(config, weights), past, seed)
+        val schedule = scheduleFor(playable.ifEmpty { setOf(ScenarioKind.FLICK) }, config.profile.geometry.mix.takeUnless { rangeMode }, weights)
         showBlindRound(BlindRun(test, runKey = System.currentTimeMillis(), baseConfig = config, nextSeed = nextSeed++, schedule = schedule))
     }
 
+    /** A game's scenario mix decides the rounds (M23); without one, or in Range mode, the metric weights do. */
+    private fun scheduleFor(playable: Set<ScenarioKind>, mix: ScenarioMix?, weights: MetricWeights): ScenarioSchedule =
+        if (mix == null) ScenarioSchedule(playable, weights) else ScenarioSchedule.forMix(playable, mix, settings.current.flashImportance().mixParts)
+
     /** One blind round at the sensitivity the optimizer picked (hidden from the user). */
-    fun showBlindRound(run: BlindRun) = switchTo(TrainerScreen(this, run.nextRoundConfig(), BlindSession(this, run)))
+    fun showBlindRound(run: BlindRun, autoStart: Boolean = false) = switchTo(TrainerScreen(this, run.nextRoundConfig(), BlindSession(this, run), autoStart))
 
     fun showBetweenRounds(run: BlindRun) = switchTo(BetweenRoundsScreen(this, run))
 
@@ -247,7 +294,7 @@ class AppContext(
         val config = stored.config
         val data = ResultsData(
             config.profile, config.dpi, config.cm360, stored.result, stored.rounds.size, stored.rounds.map { it.sessionId }.distinct().size,
-            BlindTest.scoreRounds(stored.weights, stored.rounds),
+            BlindTest.scoreRounds(stored.scorer, stored.rounds),
             AxisSummary.of(stored.rounds.map { it.axes }),
         )
         switchTo(ResultsScreen(this, data))
@@ -259,10 +306,14 @@ class AppContext(
         val setup = settings.current
         val pad = setup.padWidthCm ?: return null
         val range = searchRange(setup.aimStyleOrNull() ?: AimStyle.MIXED, config.cm360, pad)
-        val weights = metricWeights()
+        val scorer = roundScorer(config)
         val rounds = processor.pastBlindRounds(setup.gameId, config.dpi)
-        return StoredAnalysis(config, weights, rounds, BlindTest.analyzeStored(range, weights, rounds))
+        return StoredAnalysis(config, scorer, rounds, BlindTest.analyzeStored(range, scorer, rounds))
     }
+
+    /** The score of both finders: duel wins for the click rounds of a game with duel rules (M23g4), else the metric weights. */
+    private fun roundScorer(config: TrainerConfig, weights: MetricWeights = metricWeights()): RoundScorer =
+        RoundScorer(weights, config.profile.geometry.duel?.scorer())
 
     private fun metricWeights(): MetricWeights = try {
         settings.current.toMetricWeights()
@@ -270,7 +321,7 @@ class AppContext(
         MetricWeights.DEFAULT
     }
 
-    private class StoredAnalysis(val config: TrainerConfig, val weights: MetricWeights, val rounds: List<PastRound>, val result: OptimizationResult?)
+    private class StoredAnalysis(val config: TrainerConfig, val scorer: RoundScorer, val rounds: List<PastRound>, val result: OptimizationResult?)
 
     /**
      * The sensitivity the acceleration steps are played at: the configured game sensitivity, plus the finder's result for
@@ -280,17 +331,20 @@ class AppContext(
         val config = trainerConfig() ?: return null
         val setup = settings.current
         val sensitivity = setup.inGameSensitivity ?: return null
+        val imported = hub.restoreImported()
+        val choice = imported?.let { RefineImport.choose(it.source, it.profileName, config.dpi) }
+        val own = choice?.profile?.takeIf { useOwnCurve }
         val finder = storedAnalysis()?.let { stored ->
             stored.result?.let {
                 val sensitivity = config.profile.formatSensitivity(config.profile.sensitivityFor(config.dpi, it.optimumCm360))
-                FinderResult(it.optimumCm360, it.confidencePercent, stored.rounds.size, sensitivity, processor.priorSearch(config.dpi, it.optimumCm360).size)
+                FinderResult(it.optimumCm360, it.confidencePercent, stored.rounds.size, sensitivity, processor.priorSearch(config.dpi, it.optimumCm360, own).size)
             }
         }
-        return AccelBaseline(config.cm360, config.profile.formatSensitivity(sensitivity), config.profile.name, finder, processor.priorSearch(config.dpi, config.cm360).size)
+        return AccelBaseline(
+            config.cm360, config.profile.formatSensitivity(sensitivity), config.profile.name, finder, processor.priorSearch(config.dpi, config.cm360, own).size,
+            ownCurve = choice?.profile, ownCurveLabel = imported?.let { "${it.fileLabel} · ${it.profileName}" }, ownCurveFileDpi = choice?.dpiMismatch, settingsDpi = config.dpi,
+        )
     }
-
-    /** Volume of the flash and hit sounds and the brightness of the flash white-out. */
-    fun showSoundSettings() = switchTo(SoundSettingsScreen(this))
 
     fun showAccel(baseline: AccelBaseline? = accelBaseline()) = switchTo(AccelIntroScreen(this, baseline))
 
@@ -299,10 +353,6 @@ class AppContext(
         val dpi = trainerConfig()?.dpi ?: return null
         return baseline?.let { RunsUse.of(it, dpi, useFinderResult) }
     }
-
-    /** The Raw Accel hub; the passive analyses of the stored rounds are computed in the background. */
-    fun showRawAccelHub(analyses: CompletableFuture<SettingsAnalyses> = hub.analyses()) =
-        switchTo(RawAccelHubScreen(this, analyses, hub.restoreImported()))
 
     /** The page of one Raw Accel setting. */
     fun showRawAccelSetting(setting: RawAccelSetting, analyses: CompletableFuture<SettingsAnalyses> = hub.analyses()) =
@@ -315,15 +365,29 @@ class AppContext(
     fun importProfile(profile: ImportedProfile) = hub.setImported(profile)
 
     /** The newest blind strength search, analysed again from its stored rounds. */
-    fun showLastSearch(last: LastSearch? = processor.lastSearch(metricWeights())) = switchTo(AccelLastSearchScreen(this, last))
+    fun showLastSearch(last: LastSearch? = processor.lastSearch(metricWeights(), accelBaseline()?.ownCurve?.takeIf { useOwnCurve }, gameDuel())) = switchTo(AccelLastSearchScreen(this, last))
 
     /** The analysis of the stored calibration rounds, computed again from them. */
     fun showLastAccelAnalysis(last: LastCalibration? = processor.lastCalibration()) = switchTo(AccelLastAnalysisScreen(this, last))
 
-    /** The screen that exports the stored rounds for a researcher; the counts are read in the background. */
-    fun showShareData() = switchTo(
-        ShareDataScreen(this, CompletableFuture.supplyAsync { processor.storedHistory().let { StoredCounts(it.sessions.size, it.rounds.size) } }),
+    /** The screen that exports the stored rounds for a researcher, left by [back]; the counts are read in the background. */
+    fun showShareData(back: () -> Unit) = switchTo(
+        ShareDataScreen(this, back, CompletableFuture.supplyAsync { processor.storedHistory().let { StoredCounts(it.sessions.size, it.rounds.size) } }),
     )
+
+    /**
+     * Settings "Start over": backs up the database, then clears all rounds; the settings stay. [onResult] runs on the UI thread.
+     * Results the hub kept in memory came from the cleared rounds, so they are dropped too.
+     */
+    fun startOver(onResult: (Result<StartOverResult>) -> Unit) {
+        val dir = backupDir ?: return onResult(Result.failure(IllegalStateException("no data folder to write to")))
+        processor.startOver(dir).thenAccept { result ->
+            Gdx.app.postRunnable {
+                if (result.isSuccess) hub.forgetResults()
+                onResult(result)
+            }
+        }
+    }
 
     /** Writes the research file; fails with the reason when there is no data folder. */
     fun exportResearch(): CompletableFuture<Result<ResearchExportResult>> {
@@ -340,15 +404,44 @@ class AppContext(
         val pad = setup.padWidthCm
         if (config == null || pad == null) return CompletableFuture.completedFuture(emptyList())
         val range = searchRange(setup.aimStyleOrNull() ?: AimStyle.MIXED, config.cm360, pad)
-        val weights = metricWeights()
+        val scorer = roundScorer(config)
         return CompletableFuture.supplyAsync {
             val stored = processor.storedHistory()
-            buildHistory(stored.sessions, stored.rounds, weights, range)
+            buildHistory(stored.sessions, stored.rounds, scorer, range, engagements = stored.engagements)
         }
     }
 
     /** Whether curves are bounded to the measured speeds (curve finder v2); the launch option overrides the setting. */
     val boundedCurves: Boolean get() = (options.curveFinder ?: settings.current.curveFinder) == CurveFinder.V2
+
+    /** Where the stage plan on top of the player's own curve stands at the setup of the next run; null without a plan or a curve in use. */
+    fun stagePlan(baseline: AccelBaseline?): StageProgress? {
+        val own = baseline?.ownCurve?.takeIf { useOwnCurve } ?: return null
+        return processor.stagePlan(baseline.settingsDpi, baseline.cm360(useFinderResult), own, metricWeights(), duel = gameDuel())
+    }
+
+    /** Starts a session on the stage the plan stands on: the calibration plays that stored table, earlier sessions on it count. */
+    fun startStageRun() {
+        if (!source.hasReportTimestamps) return showAccel()
+        val baseline = accelBaseline() ?: return showOnboarding(afterFinish = ::showMenu)
+        val config = trainerConfig() ?: return showOnboarding(afterFinish = ::showMenu)
+        val own = baseline.ownCurve?.takeIf { useOwnCurve } ?: return showAccel()
+        val base = config.copy(cm360 = baseline.cm360(useFinderResult))
+        val stage = stagePlan(baseline)?.stage ?: return showAccel()
+        val run = AccelRun(
+            base, metricWeights(), runKey = System.currentTimeMillis(), seed = nextSeed++, prior = processor.priorCalibration(base.dpi, base.cm360, own, stage),
+            flash = settings.current.flashImportance() != FlashImportance.NEVER, boundedCurves = boundedCurves, baseCurve = own, stage = stage,
+            scenarios = curveScenarios(base), duel = base.profile.geometry.duel?.scorer(),
+        )
+        showAccelStep(run)
+    }
+
+    /** The duel score of the game in the settings (M23g4), for screens that read stored curve rounds; null without duel rules. */
+    private fun gameDuel(): DuelScorer? = SetupDraft.fromSettings(settings.current).profile(profiles)?.geometry?.duel?.scorer()
+
+    /** The curve runs' rotation from the game's scenario mix (M23); null keeps the click scenarios with or without flash. */
+    private fun curveScenarios(config: TrainerConfig): List<ScenarioKind>? =
+        config.profile.geometry.mix?.let { AccelScenarios.forMix(it, settings.current.flashImportance().mixParts) }
 
     /** Starts the acceleration steps at the game sensitivity (or the finder's confident result, if chosen); onboarding until the setup is complete. */
     fun startAccelRun(search: Boolean = false) {
@@ -357,12 +450,15 @@ class AppContext(
         val config = trainerConfig() ?: return showOnboarding(afterFinish = ::showMenu)
         val base = config.copy(cm360 = baseline.cm360(useFinderResult))
         // A run looks for the earlier rounds of what it starts with: the calibration or the search.
-        val prior = if (search) PriorCalibration.NONE else processor.priorCalibration(base.dpi, base.cm360)
-        val priorSearch = if (search && usePriorSearch) processor.priorSearch(base.dpi, base.cm360) else emptyList()
+        // On top of the player's own curve both paths play it: the analysis as its base, the search scaling its rise.
+        val own = baseline.ownCurve?.takeIf { useOwnCurve }
+        val prior = if (search) PriorCalibration.NONE else processor.priorCalibration(base.dpi, base.cm360, own)
+        val priorSearch = if (search && usePriorSearch) processor.priorSearch(base.dpi, base.cm360, own) else emptyList()
         val run = AccelRun(
             base, metricWeights(), runKey = System.currentTimeMillis(), seed = nextSeed++, prior = prior, startWithSearch = search,
             flash = settings.current.flashImportance() != FlashImportance.NEVER, priorSearch = priorSearch,
-            boundedCurves = boundedCurves,
+            boundedCurves = boundedCurves, baseCurve = own, scenarios = curveScenarios(base),
+            duel = base.profile.geometry.duel?.scorer(),
         )
         showAccelStep(run)
     }
@@ -373,7 +469,9 @@ class AppContext(
         val stored = storedAnalysis() ?: return showOnboarding(afterFinish = ::showMenu)
         val base = stored.config.copy(dpi = last.dpi, cm360 = last.cm360)
         showAccelStep(
-            AccelRun(base, stored.weights, runKey = System.currentTimeMillis(), seed = nextSeed++, flash = settings.current.flashImportance() != FlashImportance.NEVER, startWithTest = curve, boundedCurves = boundedCurves),
+            AccelRun(base, stored.scorer.weights, runKey = System.currentTimeMillis(), seed = nextSeed++, flash = settings.current.flashImportance() != FlashImportance.NEVER, startWithTest = curve, boundedCurves = boundedCurves,
+                scenarios = curveScenarios(base), duel = base.profile.geometry.duel?.scorer(),
+            ),
         )
     }
 
@@ -387,7 +485,7 @@ class AppContext(
         },
     )
 
-    fun showAccelRound(run: AccelRun) = switchTo(TrainerScreen(this, run.nextRoundConfig(), AccelSession(this, run)))
+    fun showAccelRound(run: AccelRun, autoStart: Boolean = false) = switchTo(TrainerScreen(this, run.nextRoundConfig(), AccelSession(this, run), autoStart))
 
     /** Writes the Raw Accel settings.json of the tested curve; the path, or the reason it failed. */
     fun exportAccel(run: AccelRun): Result<Path> = exportAccel(run.candidate, run.dpi)
@@ -413,7 +511,9 @@ class AppContext(
         if (!this.source.hasReportTimestamps || !rawAccelConfirmed) return showRefine()
         val config = trainerConfig() ?: return showOnboarding(afterFinish = ::showMenu)
         showRefineStep(
-            RefineRun(config, metricWeights(), runKey = System.currentTimeMillis(), seed = nextSeed++, source = source, profile = profile, flash = settings.current.flashImportance() != FlashImportance.NEVER),
+            RefineRun(config, metricWeights(), runKey = System.currentTimeMillis(), seed = nextSeed++, source = source, profile = profile, flash = settings.current.flashImportance() != FlashImportance.NEVER,
+                scenarios = curveScenarios(config), duel = config.profile.geometry.duel?.scorer(),
+            ),
         )
     }
 
@@ -429,11 +529,20 @@ class AppContext(
         },
     )
 
-    fun showRefineRound(run: RefineRun) = switchTo(TrainerScreen(this, run.nextRoundConfig(), RefineSession(this, run)))
+    fun showRefineRound(run: RefineRun, autoStart: Boolean = false) = switchTo(TrainerScreen(this, run.nextRoundConfig(), RefineSession(this, run), autoStart))
 
     /** The patched copy of a finished refine run, with the recommendations ticked on the setting pages. */
     fun patchedCopy(run: RefineRun, analyses: SettingsAnalyses? = null): PatchedCopy =
         PatchedCopy(run.source, run.profile, run.engine.candidate, hub.passiveChanges(analyses))
+
+    /** Offers stage 1 of the draft of [run] as a copy of the player's file on the export screen; nothing if there is none. */
+    fun showDraftExport(run: AccelRun) {
+        val table = run.draftOffer?.curve as? LookupCurve ?: return
+        val imported = hub.restoreImported() ?: return
+        val stage = run.draftStage ?: return
+        hub.rememberStage(DraftStage(imported.source, imported.profileName, table, stage.step, stage.anchorSlow, stage.anchorFast))
+        showPatchedExport()
+    }
 
     /** Writes the patched copy into the export folder; the path, or the reason it failed. */
     fun exportPatched(copy: PatchedCopy): Result<Path> = runCatching {
@@ -453,12 +562,14 @@ class AppContext(
 
     fun showTrainer() {
         val config = trainerConfig()
-        if (config == null) showOnboarding(afterFinish = ::showPreTest) else switchTo(TrainerScreen(this, config))
+        if (config == null) showOnboarding(afterFinish = ::showMenu) else switchTo(TrainerScreen(this, config))
     }
 
     /** Shows [screen] and disposes the one it replaces. */
     fun switchTo(screen: Screen) {
         val old = game.screen
+        if (old is UiScreen && screen is UiScreen && !Motion.instant) transition.start(old.snapshot())
+        if (screen !is TrainerScreen && screen !is RoundOverlayScreen) roundBackdrop.clear()
         game.screen = screen
         old?.dispose()
     }

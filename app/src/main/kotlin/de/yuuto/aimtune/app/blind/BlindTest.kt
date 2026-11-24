@@ -7,21 +7,25 @@ import de.yuuto.aimtune.core.optimizer.OptimizerConfig
 import de.yuuto.aimtune.core.optimizer.SensitivityOptimizer
 import de.yuuto.aimtune.core.optimizer.Suggestion
 import de.yuuto.aimtune.core.scenario.ScenarioKind
-import de.yuuto.aimtune.core.score.MetricWeights
-import de.yuuto.aimtune.core.score.ScoreCalculator
+import de.yuuto.aimtune.core.score.Engagement
+import de.yuuto.aimtune.core.score.RoundScorer
 import de.yuuto.aimtune.core.score.ScoreMetric
 import de.yuuto.aimtune.core.score.scoreInputs
 import de.yuuto.aimtune.core.units.SearchRange
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
 
-/** A stored round of an earlier session, reduced to what the optimizer needs; [scenario] is the scenario id. */
+/**
+ * A stored round of an earlier session, reduced to what the optimizer needs; [scenario] is the scenario id. [engagements]
+ * are its duels for the duel score (null for tracking, or when the events were not read).
+ */
 data class PastRound(
     val sessionId: Long,
     val cm360: Double,
     val inputs: Map<ScoreMetric, Double>,
     val scenario: String = ScenarioKind.FLICK.id,
     val axes: AxisErrors? = null,
+    val engagements: List<Engagement>? = null,
 )
 
 /** A blind round as the results chart plots it; [score] is null while the round has no usable score yet. */
@@ -56,7 +60,7 @@ data class BlindStep(val result: OptimizationResult?, val next: Suggestion)
  */
 class BlindTest(
     range: SearchRange,
-    private val weights: MetricWeights,
+    private val scorer: RoundScorer,
     private val past: List<PastRound>,
     seed: Long,
     val plannedRounds: Int = DEFAULT_PLANNED_ROUNDS,
@@ -90,7 +94,7 @@ class BlindTest(
     fun nextCm360(): Double = job.get().next.cm360
 
     /** Every round in the model (earlier sessions and this run) with its current score; null score while it has none. */
-    fun scoredRounds(): List<ScoredRound> = scoreRounds(weights, past + played)
+    fun scoredRounds(): List<ScoredRound> = scoreRounds(scorer, past + played)
 
     /** Which axis the misses of all rounds in the model come from; null with fewer than three rounds that have movements. */
     fun axisSummary(): AxisSummary? = AxisSummary.of((past + played).map { it.axes })
@@ -100,9 +104,9 @@ class BlindTest(
 
     val sessionCount: Int get() = (past.map { it.sessionId } + if (played.isEmpty()) emptyList() else listOf(CURRENT_RUN)).distinct().size
 
-    /** Adds a finished round of [scenario] played at [cm360] and starts the analysis. */
-    fun recordRound(cm360: Double, metrics: RoundMetrics, scenario: ScenarioKind = ScenarioKind.FLICK) {
-        played += PastRound(CURRENT_RUN, cm360, metrics.scoreInputs(), scenario.id, AxisErrors.of(metrics))
+    /** Adds a finished round of [scenario] played at [cm360] with its [engagements] (see [PastRound]) and starts the analysis. */
+    fun recordRound(cm360: Double, metrics: RoundMetrics, scenario: ScenarioKind = ScenarioKind.FLICK, engagements: List<Engagement>? = null) {
+        played += PastRound(CURRENT_RUN, cm360, metrics.scoreInputs(), scenario.id, AxisErrors.of(metrics), engagements)
         lastOutcome = RoundOutcome.of(scenario, metrics)
         job = schedule(past + played)
     }
@@ -110,7 +114,7 @@ class BlindTest(
     private fun schedule(rounds: List<PastRound>): CompletableFuture<BlindStep> {
         val snapshot = rounds.toList()
         return CompletableFuture.supplyAsync({
-            val scores = ScoreCalculator(weights).scoreRounds(snapshot.map { it.inputs }, snapshot.map { it.scenario })
+            val scores = scorer.score(snapshot)
             val history = observations(snapshot, scores)
             BlindStep(optimizer.analyze(history), optimizer.suggestNext(history))
         }, executor)
@@ -130,22 +134,25 @@ class BlindTest(
         private const val UNKNOWN_SCORE = 50.0
 
         /** [rounds] with the score the model sees for each, for the results chart. */
-        fun scoreRounds(weights: MetricWeights, rounds: List<PastRound>): List<ScoredRound> {
-            val scores = ScoreCalculator(weights).scoreRounds(rounds.map { it.inputs }, rounds.map { it.scenario })
+        fun scoreRounds(scorer: RoundScorer, rounds: List<PastRound>): List<ScoredRound> {
+            val scores = scorer.score(rounds)
             return rounds.indices.map { ScoredRound(rounds[it].cm360, scores[it], rounds[it].sessionId) }
         }
 
         /** The result of stored rounds alone, for the results screen. */
         fun analyzeStored(
             range: SearchRange,
-            weights: MetricWeights,
+            scorer: RoundScorer,
             rounds: List<PastRound>,
             config: OptimizerConfig = OptimizerConfig(),
         ): OptimizationResult? {
             if (rounds.isEmpty()) return null
-            val scores = ScoreCalculator(weights).scoreRounds(rounds.map { it.inputs }, rounds.map { it.scenario })
+            val scores = scorer.score(rounds)
             return SensitivityOptimizer(range, seed = 0L, config).analyze(observations(rounds, scores))
         }
+
+        private fun RoundScorer.score(rounds: List<PastRound>): List<Double?> =
+            scoreRounds(rounds.map { it.inputs }, rounds.map { it.scenario }, rounds.map { it.engagements })
 
         /** The optimizer's view of [rounds] with their [scores]; each scenario is its own group. */
         private fun observations(rounds: List<PastRound>, scores: List<Double?>): List<Observation> {

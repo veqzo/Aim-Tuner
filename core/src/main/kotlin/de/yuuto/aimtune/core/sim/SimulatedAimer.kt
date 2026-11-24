@@ -300,8 +300,12 @@ class SimulatedAimer(
         when (mode) {
             Mode.REACTING -> if (nowNanos >= wakeNanos) planReach(nowNanos, target, primary = true)
             Mode.MOVING -> if (nowNanos >= lastEnd()) {
-                mode = Mode.SETTLING
-                wakeNanos = nowNanos + ms(player.feedbackDelayMs * fatigue(nowNanos))
+                if (corrections == 0 && rushes()) {
+                    clickNow(nowNanos)
+                } else {
+                    mode = Mode.SETTLING
+                    wakeNanos = nowNanos + ms(player.feedbackDelayMs * fatigue(nowNanos))
+                }
             }
             Mode.SETTLING -> if (nowNanos >= wakeNanos) decide(nowNanos, target)
             Mode.CLICKING -> if (nowNanos >= wakeNanos) {
@@ -400,15 +404,26 @@ class SimulatedAimer(
         val error = aimError(nowNanos, target)
         val onTarget = hypot(error.x, error.y) <= angularRadius(target)
         if (onTarget || corrections >= player.maxCorrections) {
-            mode = Mode.CLICKING
-            val delay = max(0.0, player.clickDelayMs + player.clickDelaySdMs * gaussian())
-            wakeNanos = nowNanos + ms(delay * fatigue(nowNanos))
-            clickReadyNanos = wakeNanos
+            clickNow(nowNanos)
         } else {
             corrections++
             planReach(nowNanos, target, primary = false)
         }
     }
+
+    private fun clickNow(nowNanos: Long) {
+        mode = Mode.CLICKING
+        val delay = max(0.0, player.clickDelayMs + player.clickDelaySdMs * gaussian())
+        wakeNanos = nowNanos + ms(delay * fatigue(nowNanos))
+        clickReadyNanos = wakeNanos
+    }
+
+    /**
+     * Whether the player clicks at the end of its first reach without waiting to see where it landed
+     * ([SimulatedPlayer.rushClickChance]). No random number is drawn when the chance is 0, so the default player plays
+     * exactly as before.
+     */
+    private fun rushes(): Boolean = player.rushClickChance > 0.0 && random.nextDouble() < player.rushClickChance
 
     private fun planReach(nowNanos: Long, target: Target, primary: Boolean) {
         planReachBy(nowNanos, aimError(nowNanos, target), max(2.0 * angularRadius(target), MIN_WIDTH_DEGREES), primary)

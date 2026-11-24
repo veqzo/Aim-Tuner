@@ -67,4 +67,46 @@ class ScenarioScheduleTest {
         for (from in 0..20) assertTrue(first.subList(from, from + 10).contains(ScenarioKind.TRACKING), "window $from")
         assertTrue(first.zipWithNext().none { (a, b) -> a == b }, "no scenario twice in a row: $first")
     }
+
+    private val valorant = ScenarioMix(standingParts = 4.0, movingParts = 1.0)
+
+    @Test
+    fun `a mix plays flick 4 to strafe 1 to flash by importance and gives tracking nothing`() {
+        val enabled = setOf(ScenarioKind.FLICK, ScenarioKind.TRACKING, ScenarioKind.SWITCH_STRAFE, ScenarioKind.FLASH)
+        val sometimes = ScenarioSchedule.forMix(enabled, valorant, FlashImportance.SOMETIMES.mixParts)
+        assertEquals(setOf(ScenarioKind.FLICK, ScenarioKind.SWITCH_STRAFE, ScenarioKind.FLASH), sometimes.shares.keys)
+        assertEquals(4.0 / 6, sometimes.shares.getValue(ScenarioKind.FLICK), 1e-12)
+        assertEquals(1.0 / 6, sometimes.shares.getValue(ScenarioKind.SWITCH_STRAFE), 1e-12)
+        assertEquals(1.0 / 6, sometimes.shares.getValue(ScenarioKind.FLASH), 1e-12)
+        assertEquals(2.0 / 7, ScenarioSchedule.forMix(enabled, valorant, FlashImportance.OFTEN.mixParts).shares.getValue(ScenarioKind.FLASH), 1e-12)
+        assertTrue(ScenarioKind.FLASH !in ScenarioSchedule.forMix(enabled, valorant, FlashImportance.NEVER.mixParts).shares)
+        val played = counts(sometimes, 60)
+        assertEquals(mapOf(ScenarioKind.FLICK to 40, ScenarioKind.SWITCH_STRAFE to 10, ScenarioKind.FLASH to 10), played)
+    }
+
+    @Test
+    fun `a group splits its parts among its enabled scenarios and an empty group gives its parts to nobody`() {
+        val all = ScenarioSchedule.forMix(setOf(ScenarioKind.FLICK, ScenarioKind.MICRO, ScenarioKind.RANGE, ScenarioKind.MICRO_STRAFE), valorant, 0.0)
+        assertEquals(2.0 / 5, all.shares.getValue(ScenarioKind.FLICK), 1e-12)
+        assertEquals(2.0 / 5, all.shares.getValue(ScenarioKind.MICRO), 1e-12)
+        assertEquals(0.5 / 5, all.shares.getValue(ScenarioKind.RANGE), 1e-12)
+        // Without a moving scenario the flicks do not take its part: flash keeps its share next to them.
+        val noMoving = ScenarioSchedule.forMix(setOf(ScenarioKind.FLICK, ScenarioKind.FLASH), valorant, 1.0)
+        assertEquals(1.0 / 5, noMoving.shares.getValue(ScenarioKind.FLASH), 1e-12)
+    }
+
+    @Test
+    fun `a mix with only tracking enabled still plays something`() {
+        assertEquals(ScenarioKind.TRACKING, ScenarioSchedule.forMix(setOf(ScenarioKind.TRACKING), valorant, 0.0).kindFor(0))
+    }
+
+    @Test
+    fun `a cycle is the shortest plan in which every scenario gets its exact share`() {
+        val enabled = setOf(ScenarioKind.FLICK, ScenarioKind.MICRO_STRAFE, ScenarioKind.SWITCH_STRAFE, ScenarioKind.FLASH)
+        val cycle = ScenarioSchedule.forMix(enabled, valorant, 1.0).cycle()
+        assertEquals(12, cycle.size)
+        assertEquals(mapOf(ScenarioKind.FLICK to 8, ScenarioKind.MICRO_STRAFE to 1, ScenarioKind.SWITCH_STRAFE to 1, ScenarioKind.FLASH to 2), cycle.groupingBy { it }.eachCount())
+        assertEquals(14, ScenarioSchedule.forMix(enabled, valorant, 2.0).cycle().size)
+        assertEquals(3, ScenarioSchedule(classic, MetricWeights.DEFAULT).cycle(maxRounds = 3).size, "no exact cycle within the limit")
+    }
 }

@@ -4,13 +4,18 @@ import com.badlogic.gdx.Gdx
 import com.badlogic.gdx.Input
 import com.badlogic.gdx.Screen
 import com.badlogic.gdx.graphics.GL20
+import com.badlogic.gdx.graphics.Pixmap
+import com.badlogic.gdx.graphics.glutils.FrameBuffer
 import com.badlogic.gdx.scenes.scene2d.Actor
 import com.badlogic.gdx.scenes.scene2d.InputEvent
 import com.badlogic.gdx.scenes.scene2d.InputListener
 import com.badlogic.gdx.scenes.scene2d.Stage
+import com.badlogic.gdx.scenes.scene2d.ui.Table
 import com.badlogic.gdx.utils.viewport.ScreenViewport
 import de.yuuto.aimtune.app.AppContext
+import de.yuuto.aimtune.app.setup.SetupDraft
 import de.yuuto.aimtune.app.ui.UiSkin
+import de.yuuto.aimtune.app.ui.frame
 import kotlin.math.min
 
 private const val MAX_FRAME_SECONDS = 1f / 30f
@@ -30,6 +35,18 @@ abstract class UiScreen(protected val ctx: AppContext) : Screen {
     /** Creates the screen's widget tree (normally via [de.yuuto.aimtune.app.ui.frame]). */
     protected abstract fun build(): Actor
 
+    /** The utility-bar tool this screen belongs to, so the bar marks it; null for the other screens. */
+    protected open val utility: Utility? = null
+
+    /**
+     * The screen layout of the shell: top bar, scrolling [content], optional [footer]. With [Chrome.MINIMAL]
+     * (inside a run) the top bar shows only the brand and [headerRight], so nothing there leaves the run.
+     */
+    protected fun frame(content: Actor, footer: Actor?, chrome: Chrome = Chrome.FULL, headerRight: Actor? = null): Table {
+        val right = if (chrome == Chrome.FULL) shellBar(ctx, ui, utility, ::openSetup) { t(it) } else headerRight
+        return ui.frame(right, content, footer)
+    }
+
     protected open fun onEscape() {}
 
     protected open fun onEnter() {}
@@ -40,18 +57,64 @@ abstract class UiScreen(protected val ctx: AppContext) : Screen {
     /** Called when the window loses focus. */
     open fun onWindowFocusLost() {}
 
+    /** The setup panel over this screen while it is open; it lives outside the widgets so it survives a rebuild. */
+    private var setupEditor: SetupEditor? = null
+
+    /** Opens the setup panel from the pill; without a setup yet, the onboarding is the better place. */
+    internal fun openSetup() {
+        if (!ctx.isSetUp) {
+            ctx.showOnboarding(afterFinish = ctx::showMenu)
+            return
+        }
+        setupEditor = SetupEditor(SetupDraft.fromSettings(ctx.settings.current))
+        rebuild()
+    }
+
+    private fun closeSetup() {
+        stage.unfocusAll()
+        setupEditor = null
+        rebuild()
+    }
+
+    private fun saveSetup() {
+        val editor = setupEditor ?: return
+        val problem = SetupPanel.problem(ctx, editor.draft) { t(it) }
+        if (problem != null) {
+            editor.message = problem
+            rebuild()
+            return
+        }
+        val error = ctx.settings.save(editor.draft.toSettings(ctx.settings.current, ctx.profiles))
+        if (error != null) {
+            editor.message = error
+            rebuild()
+            return
+        }
+        stage.unfocusAll()
+        setupEditor = null
+        onSetupSaved()
+    }
+
+    /** Called after the setup panel saved new values; screens that show the setup rebuild or reload. */
+    protected open fun onSetupSaved() = rebuild()
+
     fun rebuild() {
         stage.clear()
         stage.addActor(build())
+        setupEditor?.let { editor ->
+            stage.addActor(SetupPanel(ctx, ui, editor, { key, args -> t(key, *args) }, ::rebuild, ::saveSetup, ::closeSetup).overlay())
+        }
     }
 
     override fun show() {
         stage.addCaptureListener(object : InputListener() {
             override fun keyDown(event: InputEvent, keycode: Int): Boolean {
+                val panelOpen = setupEditor != null
                 val used = when (keycode) {
-                    Input.Keys.ESCAPE -> true.also { onEscape() }
-                    Input.Keys.ENTER, Input.Keys.NUMPAD_ENTER -> true.also { onEnter() }
-                    else -> onKey(keycode)
+                    Input.Keys.ESCAPE -> true.also { if (panelOpen) closeSetup() else onEscape() }
+                    Input.Keys.ENTER, Input.Keys.NUMPAD_ENTER -> true.also { if (panelOpen) saveSetup() else onEnter() }
+                    // Typing in the panel must not trigger the screen's shortcuts.
+                    else -> if (panelOpen) false else onKey(keycode)
                 }
                 if (used) event.stop()
                 return used
@@ -64,11 +127,38 @@ abstract class UiScreen(protected val ctx: AppContext) : Screen {
     }
 
     override fun render(delta: Float) {
+        clear()
+        drawBackground()
+        stage.act(min(delta, MAX_FRAME_SECONDS))
+        stage.draw()
+    }
+
+    /** Drawn after the clear and before the stage; the round overlay puts the frozen trainer room here. */
+    protected open fun drawBackground() {}
+
+    private fun clear() {
         val bg = ui.tokens.bg
         Gdx.gl.glClearColor(bg.r, bg.g, bg.b, 1f)
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT)
-        stage.act(min(delta, MAX_FRAME_SECONDS))
+    }
+
+    /**
+     * Draws the screen as it is now into a new frame buffer of the window's size, for the screen
+     * transition; the caller owns it. Only draws, so it is safe to call from inside the stage's act.
+     */
+    fun snapshot(): FrameBuffer {
+        val fbo = FrameBuffer(Pixmap.Format.RGBA8888, Gdx.graphics.backBufferWidth, Gdx.graphics.backBufferHeight, false)
+        fbo.begin()
+        clear()
+        drawBackground()
         stage.draw()
+        // Blending leaves alpha below 1 under translucent widgets; the snapshot must be opaque.
+        Gdx.gl.glColorMask(false, false, false, true)
+        Gdx.gl.glClearColor(0f, 0f, 0f, 1f)
+        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT)
+        Gdx.gl.glColorMask(true, true, true, true)
+        fbo.end()
+        return fbo
     }
 
     override fun resize(width: Int, height: Int) = updateViewport()

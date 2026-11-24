@@ -52,6 +52,16 @@ class SetupDraftTest {
     }
 
     @Test
+    fun `defaults fill only the choices that are still open`() {
+        val filled = SetupDraft().withDefaults()
+        assertEquals(AimStyle.MIXED, filled.aimStyle)
+        assertEquals(PadPreset.MEDIUM, filled.padPreset)
+        val chosen = complete.copy(aimStyle = AimStyle.ARM).withDefaults()
+        assertEquals(AimStyle.ARM, chosen.aimStyle)
+        assertEquals(PadPreset.LARGE, chosen.padPreset)
+    }
+
+    @Test
     fun `dpi must be plausible`() {
         assertEquals(SetupIssue.DPI_INVALID, complete.copy(dpiText = "5000000").issue(SetupStep.DPI, profiles))
     }
@@ -91,12 +101,15 @@ class SetupDraftTest {
     }
 
     @Test
-    fun `finishing keeps the saved scenarios and drops range for a game without a Range mode`() {
-        val saved = AppSettings(scenarios = listOf("flick", "flash"))
-        assertEquals(listOf("flick", "flash"), complete.copy(gameId = "valorant").toSettings(saved, profiles).scenarios)
-        val withRange = AppSettings()
-        assertEquals(AppSettings.DEFAULT_SCENARIOS_WITH_RANGE, complete.copy(gameId = "valorant").toSettings(withRange, profiles).scenarios)
-        assertEquals(AppSettings.DEFAULT_SCENARIOS, complete.copy(gameId = "cs2").toSettings(withRange, profiles).scenarios)
+    fun `finishing keeps chosen scenarios, drops range for a game without a Range mode and gives untouched lists the game's defaults`() {
+        val chosen = AppSettings(scenarios = listOf("flick", "micro", "range", "flash"))
+        assertEquals(listOf("flick", "micro", "range", "flash"), complete.copy(gameId = "valorant").toSettings(chosen, profiles).scenarios)
+        assertEquals(listOf("flick", "micro", "flash"), complete.copy(gameId = "cs2").toSettings(chosen, profiles).scenarios)
+        val untouched = AppSettings()
+        assertEquals(listOf("flick", "range", "micro-strafe", "switch-strafe", "flash"), complete.copy(gameId = "valorant").toSettings(untouched, profiles).scenarios)
+        assertEquals(AppSettings.DEFAULT_SCENARIOS, complete.copy(gameId = "cs2").toSettings(untouched, profiles).scenarios)
+        // From CS2's defaults back to Valorant: the list was not chosen, so Valorant's own defaults come back.
+        assertEquals(AppSettings.defaultScenarios(hasRange = true, hasMix = true), complete.copy(gameId = "valorant").toSettings(AppSettings(scenarios = AppSettings.DEFAULT_SCENARIOS), profiles).scenarios)
     }
 
     @Test

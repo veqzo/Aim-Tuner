@@ -15,13 +15,17 @@ import com.badlogic.gdx.scenes.scene2d.ui.TextField
 import com.badlogic.gdx.scenes.scene2d.utils.ClickListener
 import de.yuuto.aimtune.app.AppContext
 import de.yuuto.aimtune.app.ui.CrosshairPreview
+import de.yuuto.aimtune.app.ui.Icon
+import de.yuuto.aimtune.app.ui.LedState
+import de.yuuto.aimtune.app.ui.ModuleStatus
 import de.yuuto.aimtune.app.ui.PreviewBackground
 import de.yuuto.aimtune.app.ui.Styles
 import de.yuuto.aimtune.app.ui.addButton
 import de.yuuto.aimtune.app.ui.button
 import de.yuuto.aimtune.app.ui.caps
-import de.yuuto.aimtune.app.ui.frame
+import de.yuuto.aimtune.app.ui.iconButton
 import de.yuuto.aimtune.app.ui.label
+import de.yuuto.aimtune.app.ui.modulePanel
 import de.yuuto.aimtune.app.ui.onChange
 import de.yuuto.aimtune.core.crosshair.Crosshair
 import de.yuuto.aimtune.core.crosshair.CrosshairCode
@@ -40,10 +44,10 @@ import de.yuuto.aimtune.storage.withCrosshairSelected
 import de.yuuto.aimtune.storage.withNewCrosshair
 import java.util.Locale
 
-private const val COLUMN_GAP = 32f
+private const val COLUMN_GAP = 40f
 private const val PROFILE_WIDTH = 460f
-private const val GENERAL_WIDTH = 420f
-private const val LINES_WIDTH = 400f
+private const val GROUP_WIDTH = 520f
+private const val GROUP_HEAD_HEIGHT = 44f
 private const val CONTROL_HEIGHT = 48f
 private const val ROW_GAP = 10f
 private const val BLOCK_GAP = 22f
@@ -55,8 +59,8 @@ private const val COMPACT_PADDING = 10f
 private const val TILE_WIDTH = 96f
 private const val SWATCH = 44f
 private const val SWATCH_FRAME = 6f
-private const val PREVIEW_WIDTH = 460f
-private const val PREVIEW_HEIGHT = 190f
+private const val PREVIEW_MIN_HEIGHT = 420f
+private const val WELL_PADDING = 24f
 private const val FOOTER_BUTTON_HEIGHT = 64f
 private const val BUTTON_WIDTH = 140f
 private const val CODE_BUTTON_WIDTH = 225f
@@ -65,8 +69,11 @@ private const val CODE_BUTTON_WIDTH = 225f
  * Crosshair editor: named profiles, the options of Valorant's crosshair settings with their ranges, a live preview in
  * screen pixels, import and export of Valorant profile codes (docs/CROSSHAIR.md). Edits change a working copy of
  * the settings; Save keeps them, Back and Esc drop them. The selected profile is the one all scenarios draw.
+ * One opened module: profiles and code on the left, the big preview in the centre, the options as collapsible groups on the right.
  */
 class CrosshairScreen(ctx: AppContext) : UiScreen(ctx) {
+    override val utility = Utility.CROSSHAIR
+
     private var working: AppSettings = ctx.settings.current.let { if (it.crosshairs.isEmpty()) it.withNewCrosshair(t("crosshair.default_name", 1), Crosshair().toCode().format()) else it }
     private var code: CrosshairCode = CrosshairCode.parse(selected().code)
     private var crosshair: Crosshair = Crosshair.fromCode(code)
@@ -75,16 +82,24 @@ class CrosshairScreen(ctx: AppContext) : UiScreen(ctx) {
     private var codeField: TextField? = null
     private var preview: CrosshairPreview? = null
 
+    /** The one option group shown open, so the column fits without scrolling; the inner lines are changed most. */
+    private var openGroup: Group? = Group.INNER
+
+    private enum class Group(val key: String) { COLOR("crosshair.color"), OUTLINES("crosshair.outlines"), DOT("crosshair.dot"), INNER("crosshair.inner"), OUTER("crosshair.outer") }
+
     private fun selected(): SavedCrosshair = checkNotNull(working.activeSavedCrosshair())
 
     override fun build(): Actor {
         preview?.dispose()
+        val body = Table()
+        body.add(profileColumn()).top().left().width(PROFILE_WIDTH)
+        body.add(previewColumn()).grow().padLeft(COLUMN_GAP).padRight(COLUMN_GAP)
+        body.add(groupColumn()).top().right().width(GROUP_WIDTH)
+        val panel = ui.modulePanel(t("crosshair.title"), ModuleStatus(LedState.OK, selected().name))
+        panel.add(body).grow()
         val content = Table()
-        content.add(profileColumn()).top().left().width(PROFILE_WIDTH).padRight(COLUMN_GAP)
-        content.add(generalColumn()).top().left().width(GENERAL_WIDTH).padRight(COLUMN_GAP)
-        content.add(linesColumn(inner = true)).top().left().width(LINES_WIDTH).padRight(COLUMN_GAP)
-        content.add(linesColumn(inner = false)).top().left().width(LINES_WIDTH)
-        return ui.frame(null, content, footer())
+        content.add(panel).grow()
+        return frame(content, footer())
     }
 
     override fun onEscape() = ctx.showMenu()
@@ -134,7 +149,6 @@ class CrosshairScreen(ctx: AppContext) : UiScreen(ctx) {
 
     private fun profileColumn(): Table {
         val column = Table()
-        column.add(ui.label(t("crosshair.title"), Styles.HEADING)).left().padBottom(BLOCK_GAP).row()
         column.add(ui.caps(t("crosshair.profiles"))).left().padBottom(ROW_GAP).row()
         column.add(profileSelect()).left().width(PROFILE_WIDTH).height(CONTROL_HEIGHT).padBottom(ROW_GAP).row()
         column.add(nameField()).left().width(PROFILE_WIDTH).height(CONTROL_HEIGHT).padBottom(ROW_GAP).row()
@@ -153,14 +167,49 @@ class CrosshairScreen(ctx: AppContext) : UiScreen(ctx) {
         codeActions.add(compact(ui.button(t("crosshair.apply"), Styles.SECONDARY) { applyCode(asNew = false) })).height(CONTROL_HEIGHT).width(CODE_BUTTON_WIDTH).padRight(ROW_GAP)
         codeActions.add(compact(ui.button(t("crosshair.copy"), Styles.SECONDARY) { copyCode() })).height(CONTROL_HEIGHT).width(CODE_BUTTON_WIDTH).row()
         codeActions.add(compact(ui.button(t("crosshair.import_new"), Styles.SECONDARY) { applyCode(asNew = true) })).height(CONTROL_HEIGHT).width(2 * CODE_BUTTON_WIDTH + ROW_GAP).colspan(2).padTop(ROW_GAP)
-        column.add(codeActions).left().padBottom(BLOCK_GAP).row()
+        column.add(codeActions).left().row()
+        return column
+    }
 
-        column.add(ui.caps(t("crosshair.preview"))).left().padBottom(ROW_GAP).row()
-        column.add(backgroundButtons()).left().padBottom(ROW_GAP).row()
+    /** The preview fills the centre in a recessed panel, with its backgrounds above it and the error note under it. */
+    private fun previewColumn(): Table {
+        val column = Table()
+        val head = Table()
+        head.add(ui.caps(t("crosshair.preview"))).left().expandX()
+        head.add(backgroundButtons()).right()
+        column.add(head).growX().padBottom(ROW_GAP).row()
+        val well = Table()
+        well.background(ui.skin.getDrawable(Styles.WELL))
+        well.pad(WELL_PADDING)
         val actor = CrosshairPreview({ crosshair }, { background })
         preview = actor
-        column.add(actor).left().size(PREVIEW_WIDTH, PREVIEW_HEIGHT).row()
+        well.add(actor).grow()
+        column.add(well).grow().minHeight(PREVIEW_MIN_HEIGHT).row()
+        column.add(ui.label(t("crosshair.error_help"), Styles.CAPTION_MUTED, wrap = true)).growX().padTop(ROW_GAP)
         return column
+    }
+
+    /** The options as groups with a chevron head each; opening one closes the others. */
+    private fun groupColumn(): Table {
+        val column = Table().top()
+        Group.entries.forEach { group ->
+            val open = group == openGroup
+            val head = ui.iconButton(t(group.key), if (open) Icon.CHEVRON_DOWN else Icon.CHEVRON_RIGHT) {
+                openGroup = if (open) null else group
+                rebuild()
+            }
+            column.add(head).left().height(GROUP_HEAD_HEIGHT).row()
+            if (open) column.add(groupBody(group)).left().padLeft(ROW_GAP).padBottom(BLOCK_GAP).row()
+        }
+        return column
+    }
+
+    private fun groupBody(group: Group): Table = when (group) {
+        Group.COLOR -> colorGroup()
+        Group.OUTLINES -> outlinesGroup()
+        Group.DOT -> dotGroup()
+        Group.INNER -> linesGroup(inner = true)
+        Group.OUTER -> linesGroup(inner = false)
     }
 
     private fun profileSelect(): SelectBox<String> {
@@ -224,35 +273,41 @@ class CrosshairScreen(ctx: AppContext) : UiScreen(ctx) {
 
     private fun backgroundButtons(): Table {
         val table = Table()
-        listOf(PreviewBackground.LIGHT to "crosshair.bg_light", PreviewBackground.DARK to "crosshair.bg_dark", PreviewBackground.TRAINER to "crosshair.bg_trainer").forEach { (kind, key) ->
+        listOf(PreviewBackground.LIGHT to "crosshair.bg_light", PreviewBackground.DARK to "crosshair.bg_dark", PreviewBackground.TRAINER to "crosshair.bg_trainer").forEachIndexed { index, (kind, key) ->
             val button: TextButton = ui.button(t(key), Styles.TILE) { background = kind; rebuild() }
             button.setProgrammaticChangeEvents(false)
             button.isChecked = background == kind
-            table.add(button).width(TILE_WIDTH + 20f).height(CONTROL_HEIGHT).padRight(ROW_GAP)
+            table.add(button).width(TILE_WIDTH + 20f).height(CONTROL_HEIGHT).padLeft(if (index == 0) 0f else ROW_GAP)
         }
         return table
     }
 
     // ---- crosshair options -------------------------------------------------------------------------------------
 
-    private fun generalColumn(): Table {
+    private fun colorGroup(): Table {
         val column = Table()
-        column.add(ui.caps(t("crosshair.color"))).left().padBottom(ROW_GAP).padTop(HEADING_SPACE).row()
         column.add(swatches()).left().padBottom(ROW_GAP).row()
-        column.add(customColor()).left().padBottom(BLOCK_GAP).row()
-        column.add(ui.caps(t("crosshair.outlines"))).left().padBottom(ROW_GAP).row()
-        column.add(onOff(crosshair.outlines) { v -> edit(structural = true) { it.copy(outlines = v) } }).left().padBottom(ROW_GAP).row()
+        column.add(customColor()).left().row()
+        return column
+    }
+
+    private fun outlinesGroup(): Table {
+        val column = Table()
+        column.add(onOff(crosshair.outlines) { v -> edit(structural = true) { it.copy(outlines = v) } }).left().row()
         if (crosshair.outlines) {
-            column.add(slider(t("crosshair.thickness"), 1f, 6f, 1f, crosshair.outlineThickness.toFloat(), { crosshair.outlineThickness.toString() }) { v -> edit { it.copy(outlineThickness = v.toInt()) } }).left().padBottom(ROW_GAP).row()
-            column.add(slider(t("crosshair.opacity"), 0f, 1f, 0.05f, crosshair.outlineOpacity.toFloat(), { percent(crosshair.outlineOpacity) }) { v -> edit { it.copy(outlineOpacity = v.toDouble()) } }).left().padBottom(ROW_GAP).row()
+            column.add(slider(t("crosshair.thickness"), 1f, 6f, 1f, crosshair.outlineThickness.toFloat(), { crosshair.outlineThickness.toString() }) { v -> edit { it.copy(outlineThickness = v.toInt()) } }).left().padTop(ROW_GAP).row()
+            column.add(slider(t("crosshair.opacity"), 0f, 1f, 0.05f, crosshair.outlineOpacity.toFloat(), { percent(crosshair.outlineOpacity) }) { v -> edit { it.copy(outlineOpacity = v.toDouble()) } }).left().padTop(ROW_GAP).row()
         }
-        column.add(ui.caps(t("crosshair.dot"))).left().padBottom(ROW_GAP).padTop(BLOCK_GAP - ROW_GAP).row()
-        column.add(onOff(crosshair.dot) { v -> edit(structural = true) { it.copy(dot = v) } }).left().padBottom(ROW_GAP).row()
+        return column
+    }
+
+    private fun dotGroup(): Table {
+        val column = Table()
+        column.add(onOff(crosshair.dot) { v -> edit(structural = true) { it.copy(dot = v) } }).left().row()
         if (crosshair.dot) {
-            column.add(slider(t("crosshair.size"), 1f, 6f, 1f, crosshair.dotThickness.toFloat(), { crosshair.dotThickness.toString() }) { v -> edit { it.copy(dotThickness = v.toInt()) } }).left().padBottom(ROW_GAP).row()
-            column.add(slider(t("crosshair.opacity"), 0f, 1f, 0.05f, crosshair.dotOpacity.toFloat(), { percent(crosshair.dotOpacity) }) { v -> edit { it.copy(dotOpacity = v.toDouble()) } }).left().padBottom(ROW_GAP).row()
+            column.add(slider(t("crosshair.size"), 1f, 6f, 1f, crosshair.dotThickness.toFloat(), { crosshair.dotThickness.toString() }) { v -> edit { it.copy(dotThickness = v.toInt()) } }).left().padTop(ROW_GAP).row()
+            column.add(slider(t("crosshair.opacity"), 0f, 1f, 0.05f, crosshair.dotOpacity.toFloat(), { percent(crosshair.dotOpacity) }) { v -> edit { it.copy(dotOpacity = v.toDouble()) } }).left().padTop(ROW_GAP).row()
         }
-        column.add(ui.label(t("crosshair.error_help"), Styles.CAPTION_MUTED, wrap = true)).left().width(GENERAL_WIDTH).padTop(BLOCK_GAP).row()
         return column
     }
 
@@ -288,12 +343,11 @@ class CrosshairScreen(ctx: AppContext) : UiScreen(ctx) {
         return table
     }
 
-    private fun linesColumn(inner: Boolean): Table {
+    private fun linesGroup(inner: Boolean): Table {
         val lines = if (inner) crosshair.inner else crosshair.outer
         fun change(structural: Boolean = false, f: (CrosshairLines) -> CrosshairLines) =
             edit(structural) { c -> if (inner) c.copy(inner = f(c.inner)) else c.copy(outer = f(c.outer)) }
         val column = Table()
-        column.add(ui.caps(t(if (inner) "crosshair.inner" else "crosshair.outer"))).left().padBottom(ROW_GAP).padTop(HEADING_SPACE).row()
         column.add(onOff(lines.show) { v -> change(structural = true) { it.copy(show = v) } }).left().padBottom(ROW_GAP).row()
         if (lines.show) {
             column.add(slider(t("crosshair.opacity"), 0f, 1f, 0.05f, lines.opacity.toFloat(), { percent(currentLines(inner).opacity) }) { v -> change { it.copy(opacity = v.toDouble()) } }).left().padBottom(ROW_GAP).row()
@@ -365,6 +419,5 @@ class CrosshairScreen(ctx: AppContext) : UiScreen(ctx) {
     private companion object {
         const val MAX_CODE_CHARS = 2000
         const val HEX_LENGTH = 8
-        const val HEADING_SPACE = 72f
     }
 }

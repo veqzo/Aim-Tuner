@@ -84,14 +84,27 @@ private const val PROFILE_CHART_MAX_SPEED = 120.0
 private const val PROFILE_CHART_POINTS = 120
 
 /** The total multiplier of a Raw Accel profile (curve times output DPI / device DPI) against hand speed in in/s, with the line at 1. */
-fun profileChart(tokens: Tokens, profile: de.yuuto.aimtune.core.accel.RawAccelProfile): ChartSpec {
+fun profileChart(tokens: Tokens, profile: de.yuuto.aimtune.core.accel.RawAccelProfile): ChartSpec = multiplierChart(tokens, profile::totalMultiplier)
+
+/** The total gain of a found or offered curve against hand speed in in/s, with the line at 1; for curves without measured speed bins. */
+fun fitChart(tokens: Tokens, fit: AccelFit): ChartSpec = multiplierChart(tokens, fit::totalGain)
+
+/** The imported profile [base] as a dashed baseline line and the refined [candidate] over it, both as total multipliers by hand speed. */
+fun compareChart(tokens: Tokens, base: de.yuuto.aimtune.core.accel.RawAccelProfile, candidate: de.yuuto.aimtune.core.accel.RawAccelProfile): ChartSpec =
+    multiplierChart(tokens, candidate::totalMultiplier, base::totalMultiplier)
+
+/** One multiplier line in the candidate colour; a [baseline] multiplier is drawn dashed under it. */
+private fun multiplierChart(tokens: Tokens, multiplier: (Double) -> Double, baseline: ((Double) -> Double)? = null): ChartSpec {
     val xs = DoubleArray(PROFILE_CHART_POINTS) { PROFILE_CHART_MAX_SPEED * (it + 1) / PROFILE_CHART_POINTS }
-    val ys = DoubleArray(xs.size) { profile.totalMultiplier(xs[it]) }
-    val low = minOf(ys.min(), 1.0)
-    val high = maxOf(ys.max(), 1.0)
+    val ys = DoubleArray(xs.size) { multiplier(xs[it]) }
+    val baseYs = baseline?.let { f -> DoubleArray(xs.size) { f(xs[it]) } }
+    val all = ys + (baseYs ?: DoubleArray(0))
+    val low = minOf(all.min(), 1.0)
+    val high = maxOf(all.max(), 1.0)
     val margin = maxOf((high - low) * 0.15, 0.05)
+    val lines = listOfNotNull(baseYs?.let { ChartLine(xs, it, tokens.chartBaseline, dashed = true) }, ChartLine(xs, ys, tokens.chartCandidate))
     return ChartSpec(
         xMin = 0.0, xMax = PROFILE_CHART_MAX_SPEED, yMin = low - margin, yMax = high + margin,
-        lines = listOf(ChartLine(xs, ys, tokens.chartCandidate)), referenceYs = listOf(1.0),
+        lines = lines, referenceYs = listOf(1.0),
     )
 }

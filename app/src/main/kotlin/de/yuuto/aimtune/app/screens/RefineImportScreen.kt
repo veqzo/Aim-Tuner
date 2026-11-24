@@ -2,7 +2,6 @@ package de.yuuto.aimtune.app.screens
 
 import com.badlogic.gdx.Gdx
 import com.badlogic.gdx.scenes.scene2d.Actor
-import com.badlogic.gdx.scenes.scene2d.ui.CheckBox
 import com.badlogic.gdx.scenes.scene2d.ui.Table
 import de.yuuto.aimtune.app.AppContext
 import de.yuuto.aimtune.app.accel.ImportedProfile
@@ -12,42 +11,48 @@ import de.yuuto.aimtune.app.accel.RefineImport
 import de.yuuto.aimtune.app.accel.RefineSource
 import de.yuuto.aimtune.app.files.ImportFileReader
 import de.yuuto.aimtune.app.files.ImportFileResult
-import de.yuuto.aimtune.app.ui.ChartActor
+import de.yuuto.aimtune.app.pretest.PreTestChecks
+import de.yuuto.aimtune.app.ui.LedState
+import de.yuuto.aimtune.app.ui.ModuleStatus
 import de.yuuto.aimtune.app.ui.Styles
-import de.yuuto.aimtune.app.ui.addButton
 import de.yuuto.aimtune.app.ui.button
 import de.yuuto.aimtune.app.ui.caps
-import de.yuuto.aimtune.app.ui.frame
 import de.yuuto.aimtune.app.ui.label
-import de.yuuto.aimtune.app.ui.onChange
+import de.yuuto.aimtune.app.ui.primaryAction
 import de.yuuto.aimtune.app.ui.profileChart
 import de.yuuto.aimtune.core.accel.refineStages
+import de.yuuto.aimtune.input.windows.WindowsPointerSettings
+import de.yuuto.aimtune.input.windows.WindowsRawInputSource
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.Locale
 
-private const val LEFT_WIDTH = 820f
-private const val CARD_WIDTH = 900f
-private const val CARD_PADDING = 28f
-private const val CHART_HEIGHT = 250f
-private const val FOOTER_BUTTON_HEIGHT = 64f
+private const val SIDE_WIDTH = 480f
+private const val SIDE_GAP = 40f
+private const val BUTTON_HEIGHT = 56f
+private const val BUTTON_GAP = 12f
 private const val MAX_FILE_BUTTONS = 4
+private const val PROFILES_PER_ROW = 3
 
 /**
- * First step of "Refine my Raw Accel curve": the player's own `settings.json`, pasted from the clipboard or taken from the
- * import folder. Shows the profiles, what was read, the curve, why a profile is refused, and starts the run only for a profile
- * the trainer reproduces exactly at the DPI of the settings.
+ * First step of "Refine my Raw Accel curve", in the curve layout: the player's own `settings.json`, opened, pasted from
+ * the clipboard or taken from the import folder, and its profiles on the left with the start; the curve of the chosen
+ * profile on the display, what was read and why a profile is refused under it. The run starts only for a profile the
+ * trainer reproduces exactly at the DPI of the settings.
  */
-class RefineImportScreen(ctx: AppContext, sampleText: String? = null, imported: ImportedProfile? = null) : UiScreen(ctx) {
+class RefineImportScreen(ctx: AppContext, sampleText: String? = null, imported: ImportedProfile? = null) : AccelFitScreen(ctx) {
     private var source: RefineSource? = null
     private var error: String? = null
     private var selected: String? = null
     private var path: Path? = null
+    private var pointerAcceleration = WindowsPointerSettings.readAcceleration()
+    private var checkOpen = false
 
     init {
         if (sampleText != null) {
             load(sampleText, "refine-sample.json", null)
         } else if (imported != null) {
-            // The file imported earlier (also the one the hub read again from the settings) is still the choice.
+            // The file imported earlier (also the one the dashboard read again from the settings) is still the choice.
             source = imported.source
             selected = imported.profileName
             path = imported.path
@@ -63,109 +68,117 @@ class RefineImportScreen(ctx: AppContext, sampleText: String? = null, imported: 
     }
 
     override fun build(): Actor {
+        val animate = firstBuild()
         val choice = choice()
-        val content = Table()
-        content.add(ui.label(t("refine.import.title"), Styles.HEADING)).left().colspan(2).padBottom(12f).row()
-        content.add(ctx.runsUseLine(ctx.runsUse(), LEFT_WIDTH + CARD_WIDTH, { ctx.showRefine() })).left().width(LEFT_WIDTH + CARD_WIDTH + 40f).colspan(2).padBottom(16f).row()
-        val left = Table().top().left()
-        left.add(ui.label(t("refine.import.intro"), Styles.BODY_MUTED, wrap = true)).left().width(LEFT_WIDTH).padBottom(16f).row()
-        left.add(sourceBlock()).left().width(LEFT_WIDTH).padBottom(16f).row()
-        source?.let { left.add(profileBlock(it)).left().width(LEFT_WIDTH).padBottom(16f).row() }
-        error?.let { left.add(ui.label(t("refine.import.error", it), Styles.CAUTION, wrap = true)).left().width(LEFT_WIDTH).padBottom(12f).row() }
-        left.add(rawAccelCheck()).left().padBottom(12f).row()
-        content.add(left).top().left()
-        content.add(if (choice == null) hintCard() else profileCard(choice)).top().left().padLeft(40f)
+        val left = Table()
+        left.headline(t("refine.import.title"))
+        left.text(t("refine.import.intro"))
+        left.add(sourceBlock()).left().width(CURVE_LEFT_WIDTH).padTop(CURVE_SECTION_GAP).row()
+        source?.let { left.add(profileBlock(it)).left().width(CURVE_LEFT_WIDTH).padTop(CURVE_SECTION_GAP).row() }
+        error?.let { left.text(t("refine.import.error", it), Styles.CAUTION) }
+        left.add(start(choice)).left().padTop(CURVE_SECTION_GAP).row()
 
-        val footer = Table()
-        footer.add(ui.button(t("common.back"), Styles.TEXT) { ctx.showRawAccelHub() }).left().height(FOOTER_BUTTON_HEIGHT).padLeft(8f)
-        footer.add().expandX()
-        val start = ui.button(t("refine.import.start"), Styles.PRIMARY) { start(choice) }
-        start.isDisabled = !canStart(choice)
-        footer.addButton(start, minWidth = 340f)
-        return ui.frame(null, content, footer)
+        val content = Table()
+        content.add(curvePanel(status(choice), left, right(choice, animate))).grow()
+        return frame(content, curveFooter(t("common.back")) { ctx.showMenu() })
     }
 
-    override fun onEscape() = ctx.showRawAccelHub()
+    override fun onEscape() = ctx.showMenu()
 
-    override fun onEnter() = start(choice())
+    override fun onEnter() = begin(choice())
+
+    private fun status(choice: RefineChoice?): ModuleStatus = when {
+        choice == null -> ModuleStatus(LedState.OFF, t("curve.status.no_file"))
+        choice.profile?.refineStages().isNullOrEmpty() -> ModuleStatus(LedState.CAUTION, t("curve.status.refused"))
+        !ctx.source.hasReportTimestamps -> ModuleStatus(LedState.CAUTION, t("curve.status.no_input"))
+        !ctx.rawAccelConfirmed -> ModuleStatus(LedState.CAUTION, t("curve.status.check"))
+        else -> ModuleStatus(LedState.OK, t("curve.status.ready"))
+    }
 
     private fun canStart(choice: RefineChoice?) = choice?.profile?.refineStages()?.isNotEmpty() == true && ctx.rawAccelConfirmed && ctx.source.hasReportTimestamps
 
-    private fun start(choice: RefineChoice?) {
+    private fun begin(choice: RefineChoice?) {
         val profile = choice?.profile ?: return
         val file = source ?: return
         if (canStart(choice)) ctx.startRefineRun(file, profile)
     }
 
+    /** The checks as chips and the start; it stays off until a profile can be refined and Raw Accel is confirmed off. */
+    private fun start(choice: RefineChoice?): Table {
+        val rows = PreTestChecks.rows(pointerAcceleration, ctx.rawAccelConfirmed, ctx.source.name, ctx.source is WindowsRawInputSource)
+        val chips = rows.map { row -> ctx.checkChip(row, { pointerAcceleration = WindowsPointerSettings.readAcceleration() }, ::rebuild) }
+        val detail = ctx.checkDetail(ui, rows, CURVE_LEFT_WIDTH, checkOpen) { checkOpen = it }
+        return ui.primaryAction(chips, detail, t("refine.import.start"), CURVE_LEFT_WIDTH, canStart(choice)) { begin(choice) }
+    }
+
+    /** Open and paste side by side, the files of the import folder as quieter buttons under them, then where that folder is. */
     private fun sourceBlock(): Table {
         val block = Table().left()
-        block.add(ui.button(t("refine.import.open"), Styles.PRIMARY) { openFile() }).left().height(FOOTER_BUTTON_HEIGHT).colspan(2 + MAX_FILE_BUTTONS).padBottom(12f).row()
-        block.add(ui.button(t("refine.import.paste"), Styles.SECONDARY) { paste() }).left().height(FOOTER_BUTTON_HEIGHT).padRight(16f)
+        val half = (CURVE_LEFT_WIDTH - BUTTON_GAP) / 2
+        block.add(ui.button(t("refine.import.open"), Styles.SECONDARY) { openFile() }).left().width(half).height(BUTTON_HEIGHT).padRight(BUTTON_GAP)
+        block.add(ui.button(t("refine.import.paste"), Styles.SECONDARY) { paste() }).left().width(half).height(BUTTON_HEIGHT).row()
         val files = RefineImport.listFiles(ctx.importDir)
         files.take(MAX_FILE_BUTTONS).forEach { path ->
-            block.add(ui.button(path.fileName.toString(), Styles.SECONDARY) { loadFile(path) }).left().height(FOOTER_BUTTON_HEIGHT).padRight(12f)
+            val button = ui.button(path.fileName.toString(), Styles.TEXT) { loadFile(path) }
+            button.pad(0f)
+            block.add(button).left().colspan(2).padTop(CURVE_SMALL_GAP).row()
         }
-        block.row()
         val folder = ctx.importDir?.toString() ?: t("refine.import.no_folder")
         val text = if (files.isEmpty()) t("refine.import.folder_empty", folder) else t("refine.import.folder", folder)
-        block.add(ui.label(text, Styles.CAPTION_MUTED, wrap = true)).left().colspan(2 + MAX_FILE_BUTTONS).width(LEFT_WIDTH).padTop(8f)
+        block.add(ui.label(text, Styles.CAPTION_MUTED, wrap = true)).left().colspan(2).width(CURVE_LEFT_WIDTH).padTop(CURVE_SMALL_GAP)
         return block
     }
 
+    /** The profiles of the file as buttons, the chosen one marked, a few to a row. */
     private fun profileBlock(s: RefineSource): Table {
         val block = Table().left()
-        block.add(ui.caps(t("refine.import.profiles", s.label))).left().colspan(8).padBottom(8f).row()
-        s.file.profileNames.forEach { name ->
+        block.add(ui.caps(t("refine.import.profiles", s.label))).left().colspan(PROFILES_PER_ROW).padBottom(CURVE_SMALL_GAP).row()
+        val width = (CURVE_LEFT_WIDTH - BUTTON_GAP * (PROFILES_PER_ROW - 1)) / PROFILES_PER_ROW
+        s.file.profileNames.forEachIndexed { index, name ->
             val style = if (name == selected) Styles.PRIMARY else Styles.SECONDARY
-            block.add(ui.button(name, style) { selected = name; ctx.importProfile(ImportedProfile(s, name, path)); rebuild() }).left().height(FOOTER_BUTTON_HEIGHT).padRight(12f)
+            val cell = block.add(ui.button(name, style) { selected = name; ctx.importProfile(ImportedProfile(s, name, path)); rebuild() })
+                .left().width(width).height(BUTTON_HEIGHT).padBottom(BUTTON_GAP)
+            if (index % PROFILES_PER_ROW == PROFILES_PER_ROW - 1) cell.row() else cell.padRight(BUTTON_GAP)
         }
         return block
     }
 
-    private fun hintCard(): Table {
-        val card = Table()
-        card.background(ui.skin.getDrawable(Styles.CARD))
-        card.pad(CARD_PADDING)
-        card.add(ui.label(t("refine.import.hint"), Styles.BODY_MUTED, wrap = true)).left().width(CARD_WIDTH - 2 * CARD_PADDING)
-        return card
+    /** The display with the chosen profile; under it what was read beside the sensitivity of the runs and why Raw Accel must be off. */
+    private fun right(choice: RefineChoice?, animate: Boolean): Table {
+        val profile = choice?.profile
+        val display = curveDisplay(t("curve.display.own"), profile?.let { profileChart(ui.tokens, it) }, animate, t("curve.display.empty_title"), t("refine.import.hint"))
+        val below = Table()
+        below.add(choice?.let(::facts) ?: Table()).top().left().width(SIDE_WIDTH)
+        val setup = Table().top().left()
+        setup.add(ctx.runsUseBlock(ctx.runsUse(), SIDE_WIDTH)).left().width(SIDE_WIDTH).row()
+        setup.add(ui.label(t("refine.import.raw_accel_off"), Styles.CAPTION_MUTED, wrap = true)).left().width(SIDE_WIDTH).padTop(CURVE_SECTION_GAP)
+        below.add(setup).top().left().width(SIDE_WIDTH).padLeft(SIDE_GAP)
+        below.add().expandX()
+        val right = Table()
+        right.add(display).grow().row()
+        right.add(below).growX().padTop(CURVE_SECTION_GAP)
+        return right
     }
 
-    private fun profileCard(choice: RefineChoice): Table {
-        val card = Table()
-        val refused = choice.profile == null
-        card.background(ui.skin.getDrawable(if (refused) Styles.CARD_CAUTION else Styles.CARD))
-        card.pad(CARD_PADDING)
-        val inner = CARD_WIDTH - 2 * CARD_PADDING
+    /** What was read from the chosen profile, or why it is refused, with the warnings. */
+    private fun facts(choice: RefineChoice): Table {
+        val block = Table().top().left()
         val profile = choice.profile
         if (profile != null) {
-            card.add(ui.caps(t("refine.import.parsed"))).left().row()
-            card.add(ui.label(RefineDiff.describe(profile), Styles.MONO, wrap = true)).left().width(inner).padTop(8f).row()
-            card.add(ui.label(t("refine.import.factor", "%.3f".format(java.util.Locale.ROOT, profile.outputDpi / profile.effectiveDeviceDpi)), Styles.CAPTION_MUTED, wrap = true))
-                .left().width(inner).padTop(8f).row()
-            card.add(ChartActor(ui, profileChart(ui.tokens, profile))).left().width(inner).height(CHART_HEIGHT).padTop(12f).row()
-            if (profile.refineStages().isEmpty()) card.add(ui.label(t("refine.import.nothing"), Styles.CAUTION, wrap = true)).left().width(inner).padTop(12f).row()
+            block.add(ui.caps(t("refine.import.parsed"))).left().row()
+            block.add(ui.label(RefineDiff.describe(profile), Styles.MONO, wrap = true)).left().width(SIDE_WIDTH).padTop(CURVE_SMALL_GAP).row()
+            val factor = "%.3f".format(Locale.ROOT, profile.outputDpi / profile.effectiveDeviceDpi)
+            block.add(ui.label(t("refine.import.factor", factor), Styles.CAPTION_MUTED, wrap = true)).left().width(SIDE_WIDTH).padTop(CURVE_SMALL_GAP).row()
+            if (profile.refineStages().isEmpty()) block.add(ui.label(t("refine.import.nothing"), Styles.CAUTION, wrap = true)).left().width(SIDE_WIDTH).padTop(CURVE_SMALL_GAP).row()
         } else {
-            card.add(ui.caps(t("refine.import.refused"))).left().row()
+            block.add(ui.caps(t("refine.import.refused"))).left().row()
         }
         choice.dpiMismatch?.let { dpi ->
-            val shown = settingsDpi?.let { "%.0f".format(java.util.Locale.ROOT, it) } ?: "-"
-            card.add(ui.label(t("refine.import.dpi_mismatch", dpi, shown), Styles.CAUTION, wrap = true)).left().width(inner).padTop(12f).row()
+            val shown = settingsDpi?.let { "%.0f".format(Locale.ROOT, it) } ?: "-"
+            block.add(ui.label(t("refine.import.dpi_mismatch", dpi, shown), Styles.CAUTION, wrap = true)).left().width(SIDE_WIDTH).padTop(CURVE_SMALL_GAP).row()
         }
-        choice.refusals.forEach { card.add(ui.label("- $it", Styles.CAUTION, wrap = true)).left().width(inner).padTop(6f).row() }
-        choice.warnings.forEach { card.add(ui.label("- $it", Styles.CAPTION_MUTED, wrap = true)).left().width(inner).padTop(6f).row() }
-        return card
-    }
-
-    private fun rawAccelCheck(): Table {
-        val block = Table().left()
-        val box = CheckBox("  " + t("pretest.raw_accel_checked"), ui.skin)
-        box.isChecked = ctx.rawAccelConfirmed
-        box.onChange {
-            ctx.rawAccelConfirmed = box.isChecked
-            rebuild()
-        }
-        block.add(box).left().row()
-        block.add(ui.label(t("refine.import.raw_accel_off"), Styles.CAPTION_MUTED, wrap = true)).left().width(LEFT_WIDTH).padTop(6f)
+        choice.refusals.forEach { block.add(ui.label("- $it", Styles.CAUTION, wrap = true)).left().width(SIDE_WIDTH).padTop(CURVE_SMALL_GAP).row() }
+        choice.warnings.forEach { block.add(ui.label("- $it", Styles.CAPTION_MUTED, wrap = true)).left().width(SIDE_WIDTH).padTop(CURVE_SMALL_GAP).row() }
         return block
     }
 
@@ -190,11 +203,10 @@ class RefineImportScreen(ctx: AppContext, sampleText: String? = null, imported: 
         }
         if (text.isNullOrBlank()) {
             error = t("refine.import.clipboard_empty")
-            rebuild()
         } else {
             load(text, t("refine.import.clipboard"), null)
-            rebuild()
         }
+        rebuild()
     }
 
     private fun loadFile(path: Path) {
@@ -206,7 +218,7 @@ class RefineImportScreen(ctx: AppContext, sampleText: String? = null, imported: 
         rebuild()
     }
 
-    /** Reads [text]; a file that parses becomes the imported profile of the hub (its [file] is remembered in the settings), a clipboard text has none. */
+    /** Reads [text]; a file that parses becomes the imported profile of the dashboard (its [file] is remembered in the settings), a clipboard text has none. */
     private fun load(text: String, label: String, file: Path?) {
         RefineImport.parse(text, label).fold(
             {

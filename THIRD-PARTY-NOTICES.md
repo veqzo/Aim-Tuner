@@ -10,7 +10,7 @@ AimTune is MIT licensed (see LICENSE). The distribution bundles these components
 | [JNA](https://github.com/java-native-access/jna) and jna-platform | Apache-2.0 (dual licensed LGPL-2.1-or-later; AimTune uses it under Apache-2.0) |
 | [sqlite-jdbc](https://github.com/xerial/sqlite-jdbc) (bundles SQLite) | Apache-2.0 (SQLite is in the public domain) |
 | [kotlinx.serialization](https://github.com/Kotlin/kotlinx.serialization), Kotlin standard library | Apache-2.0 |
-| [Inter](https://rsms.me/inter/) font (`app/src/main/resources/assets/fonts`) | SIL Open Font License 1.1 (text in `LICENSE-Inter.txt`) |
+| [Inter](https://rsms.me/inter/) and Inter Display fonts (`app/src/main/resources/assets/fonts`) | SIL Open Font License 1.1 (text in `LICENSE-Inter.txt`) |
 | [JetBrains Mono](https://www.jetbrains.com/lp/mono/) font | SIL Open Font License 1.1 (text in `LICENSE-JetBrainsMono.txt`) |
 | OpenJDK runtime (bundled by jpackage) | GPL-2.0 with Classpath Exception |
 

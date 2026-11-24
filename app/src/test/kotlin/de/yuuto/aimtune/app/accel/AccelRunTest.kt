@@ -5,7 +5,14 @@ import de.yuuto.aimtune.core.accel.AbStatus
 import de.yuuto.aimtune.core.accel.AccelAnalysis
 import de.yuuto.aimtune.core.accel.AccelFit
 import de.yuuto.aimtune.core.accel.AccelScenarios
+import de.yuuto.aimtune.core.accel.FeltStepFamily
 import de.yuuto.aimtune.core.accel.LookupCurve
+import de.yuuto.aimtune.core.accel.MovementSample
+import de.yuuto.aimtune.core.accel.NaturalCurve
+import de.yuuto.aimtune.core.accel.RawAccelArgs
+import de.yuuto.aimtune.core.accel.RawAccelCapMode
+import de.yuuto.aimtune.core.accel.RawAccelMode
+import de.yuuto.aimtune.core.accel.RawAccelProfile
 import de.yuuto.aimtune.core.accel.trialAccel
 import de.yuuto.aimtune.core.scenario.ScenarioKind
 import de.yuuto.aimtune.core.score.MetricWeights
@@ -26,11 +33,21 @@ class AccelRunTest {
     @Test
     fun `the curve finder never plays range rounds`() {
         // The M15c gate: range rounds in the strength search raised the false directions for flat players (9/16 to 14/16).
-        val lists = listOf(AccelRun.CLICK_SCENARIOS, AccelRun.SCENARIOS_WITH_FLASH, AccelScenarios.of(true), AccelScenarios.of(false))
+        val valorantMix = checkNotNull(base.profile.geometry.mix)
+        val lists = listOf(AccelRun.CLICK_SCENARIOS, AccelRun.SCENARIOS_WITH_FLASH, AccelScenarios.of(true), AccelScenarios.of(false), AccelScenarios.forMix(valorantMix, 2.0))
         lists.forEach { assertFalse(ScenarioKind.RANGE in it) }
     }
 
     private fun newRun() = AccelRun(base, MetricWeights.DEFAULT, runKey = 1, seed = 3)
+
+    @Test
+    fun `with a game's mix the strength search plays its rotation`() {
+        val rotation = AccelScenarios.forMix(checkNotNull(base.profile.geometry.mix), flashParts = 1.0)
+        val run = AccelRun(base, MetricWeights.DEFAULT, runKey = 1, seed = 5, startWithSearch = true, scenarios = rotation)
+        val kinds = List(rotation.size) { run.nextRoundConfig().scenario.also { _ -> play(run, SimulatedPlayer()) } }
+        assertEquals(rotation, kinds)
+        assertFailsWith<IllegalArgumentException> { AccelRun(base, MetricWeights.DEFAULT, runKey = 1, seed = 5, scenarios = emptyList()) }
+    }
 
     private fun play(run: AccelRun, player: SimulatedPlayer) {
         val next = run.nextRoundConfig()
@@ -279,5 +296,99 @@ class AccelRunTest {
     @Test
     fun `tracking is never part of the acceleration rounds`() {
         assertTrue(ScenarioKind.TRACKING !in AccelRun.CLICK_SCENARIOS)
+    }
+
+    // --- a base curve of the player's own (docs/FIND-CURVE-REDESIGN.md step 1)
+
+    private val own = RawAccelProfile(
+        "default", RawAccelArgs(RawAccelMode.CLASSIC, gain = true, inputOffset = 10.0, capX = 62.5, capY = 1.6, capMode = RawAccelCapMode.IN_OUT), 600.0, 800.0,
+    )
+
+    @Test
+    fun `calibration rounds are played with the base curve when there is one`() {
+        val run = AccelRun(base, MetricWeights.DEFAULT, runKey = 1, seed = 3, baseCurve = own)
+        val configs = (0 until run.calibrationRounds).map { run.nextRoundConfig().also { _ -> play(run, SimulatedPlayer()) } }
+        assertTrue(configs.all { it.accel == own && it.cm360 == 55.0 }, "the player's curve at the game sensitivity, nothing plain")
+        assertEquals(AccelPhase.ANALYSIS, run.phase)
+    }
+
+    @Test
+    fun `a wish that rises more than the own curve is found on top of it and keeps the level of the base`() {
+        val wish = NaturalCurve(0.05, 1.3)
+        val player = SimulatedPlayer(gainPreference = { v -> own.planningGain(v, base.dpi) * wish.multiplier(v) })
+        val run = AccelRun(base, MetricWeights.DEFAULT, runKey = 1, seed = 3, baseCurve = own)
+        while (run.phase == AccelPhase.CALIBRATION) play(run, player)
+        val candidate = checkNotNull(run.fit?.recommended) { "the correction is a clear rise" }
+        val speeds = run.calibrationSamples.map { it.speed }.sorted()
+        val low = speeds[speeds.size / 20]
+        val mid = speeds[speeds.size / 2]
+        val high = speeds[speeds.size * 19 / 20]
+        assertTrue(kotlin.math.abs(candidate.totalGain(mid) / own.planningGain(mid, base.dpi) - 1.0) < 0.10, "the level at the typical speed stays the base's")
+        val baseRise = own.planningGain(high, base.dpi) / own.planningGain(low, base.dpi)
+        assertTrue(candidate.totalGain(high) / candidate.totalGain(low) > baseRise * 1.05, "it rises more than the base does")
+    }
+
+    @Test
+    fun `the control arm of the blind test is the base curve, not plain`() {
+        val candidate = checkNotNull(sampleAccelRun(base, AccelPhase.ANALYSIS).candidate)
+        val run = AccelRun(base, MetricWeights.DEFAULT, runKey = 9, seed = 9, startWithTest = candidate, baseCurve = own)
+        val configs = (0 until 4).map { run.nextRoundConfig().also { _ -> play(run, SimulatedPlayer()) } }
+        assertEquals(2, configs.count { it.accel == own }, "half of the rounds play the base")
+        assertEquals(2, configs.count { it.accel == candidate.curve }, "half play the candidate")
+    }
+
+    @Test
+    fun `a simulated hand that moves at about one speed gets a draft but no felt step to test`() {
+        val run = AccelRun(base, MetricWeights.DEFAULT, runKey = 1, seed = 3, baseCurve = own)
+        while (run.phase == AccelPhase.CALIBRATION) play(run, SimulatedPlayer())
+        val draft = assertNotNull(run.draft, "a draft is made for every analysis on the player's own curve")
+        // The simulated hand's first reaches are all within a narrow band of speeds, so fast cannot be told from slow (FeltStep.MIN_SPAN).
+        assertNull(draft.felt)
+        assertNull(run.draftOffer)
+        assertFailsWith<IllegalStateException> { run.startDraftTest() }
+    }
+
+    /** Earlier reaches of a loose hand over a wide band of speeds, which a simulated player does not make. */
+    private fun widePrior(): PriorCalibration {
+        val random = kotlin.random.Random(5)
+        val samples = List(1200) {
+            val v = kotlin.math.exp(random.nextDouble(kotlin.math.ln(3.5), kotlin.math.ln(25.0)))
+            MovementSample(v, kotlin.math.exp(0.45 * (random.nextDouble() + random.nextDouble() + random.nextDouble() - 1.5) * 2.0) - 1.0)
+        }
+        return PriorCalibration(40, samples)
+    }
+
+    @Test
+    fun `a hand with a wide band of speeds is offered a felt step to test blind against the own curve`() {
+        val run = AccelRun(base, MetricWeights.DEFAULT, runKey = 1, seed = 3, prior = widePrior(), baseCurve = own)
+        while (run.phase == AccelPhase.CALIBRATION) play(run, SimulatedPlayer())
+        val plan = assertNotNull(assertNotNull(run.draft).felt, "the speeds span enough")
+        val offer = assertNotNull(run.draftOffer, "steps up to ${plan.maxStep}")
+        assertTrue(offer.curve is LookupCurve)
+        run.startDraftTest()
+        assertTrue(run.isDraft && !run.isTrial && !run.isSearch)
+        val configs = (0 until 2).map { run.nextRoundConfig().also { _ -> play(run, SimulatedPlayer()) } }
+        assertEquals(setOf<Any?>(own, offer.curve), configs.map { it.accel }.toSet(), "the step against the player's curve")
+    }
+
+    @Test
+    fun `a run on a stored stage plays that table word for word and keeps its anchors`() {
+        val table = FeltStepFamily(own, 800.0).table(0.15, 9.0, 22.0)
+        val run = AccelRun(base, MetricWeights.DEFAULT, runKey = 1, seed = 3, prior = widePrior(), baseCurve = own, stage = table)
+        val config = run.nextRoundConfig()
+        assertTrue(config.accel === table, "the calibration plays the stage")
+        while (run.phase == AccelPhase.CALIBRATION) play(run, SimulatedPlayer())
+        assertNull(run.draft, "no new anchors are drawn from the speeds of a stage")
+        val offer = assertNotNull(run.draftOffer, "the stage itself is what is offered")
+        assertTrue(offer.curve === table)
+    }
+
+    @Test
+    fun `a plain mouse has no draft to make`() {
+        val run = newRun()
+        while (run.phase == AccelPhase.CALIBRATION) play(run, SimulatedPlayer())
+        assertNull(run.draft)
+        assertNull(run.draftOffer)
+        assertFailsWith<IllegalStateException> { run.startDraftTest() }
     }
 }

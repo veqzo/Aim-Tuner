@@ -4,7 +4,6 @@ import com.badlogic.gdx.Gdx
 import com.badlogic.gdx.Input
 import com.badlogic.gdx.InputAdapter
 import com.badlogic.gdx.Screen
-import com.badlogic.gdx.graphics.GL20
 import de.yuuto.aimtune.app.AppContext
 import de.yuuto.aimtune.storage.AppSettings
 import de.yuuto.aimtune.storage.activeCrosshair
@@ -25,9 +24,15 @@ private const val MILLIS_PER_SECOND = 1000L
  * The 3D trainer: room, targets, HUD and the round state machine for the scenario in [config]. Without a [blind] run it is
  * the free trainer at the current sensitivity; with a [session] it plays a single round with the
  * settings in [config] (for the blind test the sensitivity is chosen by the optimizer and never shown)
- * and then lets the session decide what comes next.
+ * and then lets the session decide what comes next. With [autoStart] (the countdown between rounds ran out)
+ * the round starts without a click, but only while the window has the focus.
  */
-class TrainerScreen(private val ctx: AppContext, private val config: TrainerConfig, private val session: RoundSession? = null) : Screen {
+class TrainerScreen(
+    private val ctx: AppContext,
+    private val config: TrainerConfig,
+    private val session: RoundSession? = null,
+    private val autoStart: Boolean = false,
+) : Screen {
     private var sessionRoundDone = false
     private val trainer = Trainer(config, ctx.source) { recording ->
         val startedAtMs = System.currentTimeMillis() - config.roundSeconds * MILLIS_PER_SECOND
@@ -50,9 +55,6 @@ class TrainerScreen(private val ctx: AppContext, private val config: TrainerConf
         trainer.onRoundStarted = { if (ctx.settings.current.hitSound) ctx.hitSounds.reset() }
         trainer.onShot = { result -> ctx.settings.current.let { if (it.hitSound) ctx.hitSounds.onShot(result, AppSettings.fraction(it.hitVolumePercent)) } }
     }
-
-    /** Exposed for the screenshot tour. */
-    val roundPhase: Phase get() = trainer.phase
 
     /** Starts a round without a click, for the screenshot tour. */
     fun startRoundForTour() = trainer.startRound()
@@ -85,23 +87,35 @@ class TrainerScreen(private val ctx: AppContext, private val config: TrainerConf
             }
         }
         resize(Gdx.graphics.width, Gdx.graphics.height)
+        if (autoStart && ctx.gate.windowFocused) {
+            trainer.startRound()
+            syncCursor()
+        }
     }
 
     override fun render(delta: Float) {
         trainer.update()
         if (sessionRoundDone && session != null) {
+            captureBackdrop()
             session.showNext()
             return
         }
         syncCursor()
-        val bg = ctx.ui.tokens.bg
-        Gdx.gl.glClearColor(bg.r, bg.g, bg.b, 1f)
-        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT or GL20.GL_DEPTH_BUFFER_BIT)
+        scene.clear()
         playFlashSounds()
         scene.whiteOutLevel = AppSettings.fraction(ctx.settings.current.flashBrightnessPercent)
         scene.render(trainer.view, trainer.activeTargets, trainer.activeFlash)
         hud.render(trainer, ctx.source, ctx.processor.report, Gdx.graphics.framesPerSecond, ctx.ui.skin.fonts)
     }
+
+    /** The room without HUD, targets or flash, as the backdrop of the overlay between rounds. */
+    private fun captureBackdrop() = ctx.roundBackdrop.capture {
+        scene.clear()
+        scene.render(trainer.view, emptyList())
+    }
+
+    /** Screenshot tour: the backdrop of the overlay that comes next. */
+    fun captureBackdropForTour() = captureBackdrop()
 
     /** The cue sounds of a flash round: when to turn away and, with the pop, when it is safe to turn back. */
     private fun playFlashSounds() {

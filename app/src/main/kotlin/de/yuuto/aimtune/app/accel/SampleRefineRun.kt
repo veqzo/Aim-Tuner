@@ -16,15 +16,16 @@ fun sampleRefineText(): String? =
 
 /**
  * A refine run played by a simulated player up to the first stage result, for the screenshot tour only: the stage screen needs
- * a real result to show. Never user data.
+ * a real result to show. [maxRounds] stops earlier, for the screen between two rounds. Never user data.
  */
-fun sampleRefineRun(config: TrainerConfig): RefineRun? {
+fun sampleRefineRun(config: TrainerConfig, maxRounds: Int = Int.MAX_VALUE): RefineRun? {
     val text = sampleRefineText() ?: return null
     val source = RefineImport.parse(text, "refine-sample.json").getOrNull() ?: return null
     val profile = (RefineImport.choose(source, source.file.profileNames.first(), config.dpi).profile) ?: return null
     val run = RefineRun(config.copy(roundSeconds = SAMPLE_ROUND_SECONDS), MetricWeights.DEFAULT, runKey = 0L, seed = SAMPLE_SEED, source = source, profile = profile, flash = false)
     val player = SimulatedPlayer()
-    while (run.phase == RefinePhase.WARMUP || run.phase == RefinePhase.SEARCH) {
+    var played = 0
+    while ((run.phase == RefinePhase.WARMUP || run.phase == RefinePhase.SEARCH) && played++ < maxRounds) {
         val next = run.nextRoundConfig()
         run.recordRound(HeadlessRound.of(next.scenario, player, next.dpi, next.cm360, next.seed, next.roundSeconds, accel = next.accel))
     }

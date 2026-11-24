@@ -95,10 +95,18 @@ data class SimulatedPlayer(
      */
     val extentNoiseScale: Double = 1.0,
     val directionNoiseScale: Double = 1.0,
+    /**
+     * Time pressure of a duel: the share of click targets the player shoots at the end of its first reach without waiting
+     * the [feedbackDelayMs] to see where the reach landed. It saves that look and any correction, and misses when the
+     * reach's endpoint error is larger than the head; after a miss the player corrects as usual. 0 (the default) is the
+     * patient player, who clicks only when it sees the crosshair on the target, so its first shots nearly always hit.
+     */
+    val rushClickChance: Double = 0.0,
 ) {
     init {
         require(noiseLevel >= 0.0 && fatiguePerMinute >= 0.0 && optimumScale > 0.0) { "invalid player parameters" }
         require(extentNoiseScale > 0.0 && directionNoiseScale > 0.0) { "noise scales must be positive" }
+        require(rushClickChance in 0.0..1.0) { "rush click chance must be in [0, 1]" }
         require(rangeBias >= 0.0 && rangeReferenceDegrees > 0.0) { "invalid range bias" }
         require(undershootBias in 0.0..<1.0) { "undershoot bias must be in [0, 1)" }
         require(pressureUndershoot >= 0.0) { "pressure undershoot must not be negative" }

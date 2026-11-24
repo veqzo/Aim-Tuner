@@ -14,7 +14,13 @@ import de.yuuto.aimtune.core.accel.AccelScenarios
 import de.yuuto.aimtune.core.accel.bounded
 import de.yuuto.aimtune.core.accel.evaluateAb
 import de.yuuto.aimtune.core.accel.CurveStrength
+import de.yuuto.aimtune.core.accel.FeltStage
+import de.yuuto.aimtune.core.accel.LookupCurve
 import de.yuuto.aimtune.core.accel.MovementSample
+import de.yuuto.aimtune.core.accel.RawAccelProfile
+import de.yuuto.aimtune.core.accel.StrengthDraft
+import de.yuuto.aimtune.core.accel.draftStrength
+import de.yuuto.aimtune.core.accel.scaledBy
 import de.yuuto.aimtune.core.accel.fitAccel
 import de.yuuto.aimtune.core.accel.strengthAccel
 import de.yuuto.aimtune.core.accel.trialAccel
@@ -23,7 +29,9 @@ import de.yuuto.aimtune.core.metrics.RoundMetrics
 import de.yuuto.aimtune.core.metrics.computeRoundMetrics
 import de.yuuto.aimtune.core.recording.RoundRecording
 import de.yuuto.aimtune.core.scenario.ScenarioKind
+import de.yuuto.aimtune.core.score.DuelScorer
 import de.yuuto.aimtune.core.score.MetricWeights
+import de.yuuto.aimtune.core.score.duelEngagements
 import de.yuuto.aimtune.core.score.scoreInputs
 
 enum class AccelPhase {
@@ -77,6 +85,21 @@ class AccelRun(
     priorSearch: List<PriorSearchRound> = emptyList(),
     /** Bound the recommended curve to the measured speeds as a lookup table (curve finder v2); false keeps the fitted family. */
     private val boundedCurves: Boolean = true,
+    /**
+     * The player's own Raw Accel curve, when they play one: the calibration and the control arm of the blind test are played with it,
+     * the analysis divides it out and the strength search scales its rise (docs/FIND-CURVE-REDESIGN.md steps 1 and 2). Null is a
+     * plain mouse: the search then plays natural curves over plain.
+     */
+    val baseCurve: RawAccelProfile? = null,
+    /**
+     * A stage of the plan on top of [baseCurve] (docs/FIND-CURVE-REDESIGN.md section 13), played word for word as it was stored, so the
+     * anchors stay frozen: the calibration plays it and the analysis divides it out instead of the base. Needs a base.
+     */
+    val stage: LookupCurve? = null,
+    /** The rotation of the search and the test instead of the [flash] choice, e.g. a game's scenario mix ([AccelScenarios.forMix]). */
+    scenarios: List<ScenarioKind>? = null,
+    /** The game's duel score ([de.yuuto.aimtune.core.score.RoundScorer]) for the search and the test; null scores by [weights]. */
+    private val duel: DuelScorer? = null,
 ) {
     var phase = when {
         startWithTest != null -> AccelPhase.TEST
@@ -96,7 +119,7 @@ class AccelRun(
         if (prior.rounds == 0) requestedCalibrationRounds else maxOf(requestedCalibrationRounds - prior.rounds, minOf(MIN_NEW_ROUNDS, requestedCalibrationRounds))
 
     private val calibration = mutableListOf<RoundMetrics>()
-    private val testScenarios = if (flash) SCENARIOS_WITH_FLASH else CLICK_SCENARIOS
+    private val testScenarios = scenarios?.also { require(it.isNotEmpty()) { "scenario rotation must not be empty" } } ?: if (flash) SCENARIOS_WITH_FLASH else CLICK_SCENARIOS
     private val plan = AccelAbPlan(testScenarios, seed, maxPairs)
     private val outcomes = mutableListOf<AbOutcome>()
 
@@ -108,12 +131,13 @@ class AccelRun(
     val runsUse: RunsUse get() = RunsUse.running(baseConfig)
 
     /** Where the curve under test came from. */
-    enum class Source { ANALYSIS, TRIAL, SEARCH }
+    enum class Source { ANALYSIS, TRIAL, SEARCH, DRAFT }
 
     private var tested: AccelFit? = startWithTest
     private var source = Source.ANALYSIS
 
-    private val search = StrengthSearch(weights, seed, plannedRounds = StrengthSearch.plannedFor(priorSearch.size), prior = priorSearch, flash = flash)
+    private val searchBase = baseCurve?.let { SearchBase(it, baseConfig.dpi) }
+    private val search = StrengthSearch(weights, seed, plannedRounds = StrengthSearch.plannedFor(priorSearch.size), prior = priorSearch, flash = flash, base = searchBase, duel = duel)
     private var searchCandidate: AccelFit? = null
     private var currentStrength = CurveStrength.NEUTRAL
 
@@ -132,6 +156,9 @@ class AccelRun(
 
     /** True when the curve under test is the result of the blind strength search. */
     val isSearch: Boolean get() = tested != null && source == Source.SEARCH
+
+    /** True when the curve under test is the draft drawn from the movement profile. */
+    val isDraft: Boolean get() = tested != null && source == Source.DRAFT
 
     val searchDone: Int get() = search.roundsPlayed
 
@@ -176,7 +203,7 @@ class AccelRun(
         AccelPhase.CALIBRATION -> baseConfig.copy(
             scenario = CLICK_SCENARIOS[calibration.size % CLICK_SCENARIOS.size],
             seed = seed * CALIBRATION_SEED_MIX + calibration.size,
-            accel = null,
+            accel = stage ?: baseCurve,
         )
         AccelPhase.TEST -> {
             val round = plan.round(outcomes.size)
@@ -186,7 +213,7 @@ class AccelRun(
                 cm360 = if (accelerated) baseConfig.cm360 / candidate.sensitivityFactor else baseConfig.cm360,
                 scenario = round.scenario,
                 seed = round.seed,
-                accel = if (accelerated) candidate.curve else null,
+                accel = if (accelerated) candidate.curve else baseCurve,
             )
         }
         AccelPhase.SEARCH -> {
@@ -194,7 +221,7 @@ class AccelRun(
             baseConfig.copy(
                 scenario = testScenarios[search.roundsPlayed % testScenarios.size],
                 seed = seed * SEARCH_SEED_MIX + search.roundsPlayed,
-                accel = CurveStrength.curve(currentStrength),
+                accel = searchBase?.strengths?.model(currentStrength) ?: CurveStrength.curve(currentStrength),
             )
         }
         AccelPhase.ANALYSIS, AccelPhase.SEARCH_RESULT, AccelPhase.DONE -> error("no round is due in phase $phase")
@@ -210,11 +237,12 @@ class AccelRun(
             }
             AccelPhase.TEST -> {
                 val round = plan.round(outcomes.size)
-                outcomes += AbOutcome(round.pair, round.condition, metrics.scoreInputs(), round.scenario.id)
+                outcomes += AbOutcome(round.pair, round.condition, metrics.scoreInputs(), round.scenario.id, duelEngagements(round.scenario, recording.targetEvents, recording.endNanos))
                 if (outcomes.size % 2 == 0) decide()
             }
             AccelPhase.SEARCH -> {
-                search.record(currentStrength, testScenarios[search.roundsPlayed % testScenarios.size], metrics)
+                val scenario = testScenarios[search.roundsPlayed % testScenarios.size]
+                search.record(currentStrength, scenario, metrics, duelEngagements(scenario, recording.targetEvents, recording.endNanos))
                 if (search.roundsPlayed >= search.plannedRounds) finishSearch()
             }
             AccelPhase.ANALYSIS, AccelPhase.SEARCH_RESULT, AccelPhase.DONE -> error("no round is due in phase $phase")
@@ -231,6 +259,37 @@ class AccelRun(
     fun analyseNow() {
         check(canAnalyseNow) { "too few calibration rounds for an analysis" }
         finishCalibration()
+    }
+
+    /**
+     * The strength drawn from the movement profile after a calibration on the player's own curve (docs/FIND-CURVE-REDESIGN.md step 5);
+     * null on a plain mouse or with too few movements.
+     */
+    var draft: StrengthDraft? = null
+        private set
+
+    /**
+     * The first felt step of the [draft] (a gain rise at the player's fast speeds, docs/FIND-CURVE-REDESIGN.md section 12) as a table to
+     * test against the player's curve; null without a draft or when even the smallest step is beyond what the error spread allows.
+     */
+    val draftOffer: AccelFit?
+        get() = stageFit ?: draft?.felt?.let { plan -> plan.steps.firstOrNull()?.let { searchBase?.felt?.offer(it, plan.anchorSlow, plan.anchorFast) } }
+
+    /** The step and frozen anchors of the stage the draft offers: the stage being played, or the first step of a new draft; null without one. */
+    val draftStage: FeltStage?
+        get() = stage?.let { searchBase?.felt?.stageOf(it) } ?: draft?.felt?.let { plan -> plan.steps.firstOrNull()?.let { FeltStage(it, plan.anchorSlow, plan.anchorFast) } }
+
+    /** The stage being played as a candidate (its step and frozen anchors read back from the table); null when it is no stage of this base. */
+    private val stageFit: AccelFit? by lazy {
+        stage?.let { searchBase?.felt?.stageOf(it) }?.let { searchBase?.felt?.offer(it.step, it.anchorSlow, it.anchorFast)?.copy(curve = checkNotNull(stage)) }
+    }
+
+    /** Begins the blind test of the draft's first stage against the player's own curve. */
+    fun startDraftTest() {
+        check(phase == AccelPhase.ANALYSIS) { "the draft is tested after the analysis" }
+        tested = checkNotNull(draftOffer) { "there is no draft to test" }
+        source = Source.DRAFT
+        phase = AccelPhase.TEST
     }
 
     /** Begins the blind test of the recommended curve. */
@@ -277,19 +336,30 @@ class AccelRun(
     private fun finishSearch() {
         val result = search.result()
         searchResult = result
-        searchCandidate = result?.takeIf { it.excludesPlain }?.let { strengthAccel(it.strength) }
+        searchCandidate = result?.takeIf { it.excludesPlain }?.let { searchBase?.strengths?.offer(it.strength) ?: strengthAccel(it.strength) }
         phase = AccelPhase.SEARCH_RESULT
     }
 
     private fun finishCalibration() {
-        val analysis = AccelAnalysis(calibrationSamples + prior.samples)
+        val base = baseCurve
+        val delivered: ((Double) -> Double)? = stage?.let { s -> { speed: Double -> s.multiplier(speed) } }
+            ?: base?.let { b -> { speed: Double -> b.planningGain(speed, dpi) } }
+        val analysis = AccelAnalysis(calibrationSamples + prior.samples, delivered = delivered)
         val result = fitAccel(analysis)
-        fit = if (boundedCurves) result.bounded(analysis) else result
+        // On top of a curve of their own the fit is always a table: the base's level at the typical speed does not fit a family that starts at 1.
+        fit = if (base == null) {
+            if (boundedCurves) result.bounded(analysis) else result
+        } else {
+            val level = checkNotNull(delivered)(analysis.speedQuantile(0.5))
+            result.bounded(analysis).let { bounded -> bounded.copy(recommended = bounded.recommended?.scaledBy(level)) }
+        }
+        // A stage that is played has its anchors frozen; a draft would draw new ones from the speeds it was played at.
+        draft = if (stage != null) null else base?.let { b -> draftStrength(analysis, { speed -> b.planningGain(speed, dpi) }) }
         phase = AccelPhase.ANALYSIS
     }
 
     private fun decide() {
-        val result = evaluateAb(outcomes, weights, maxPairs = plan.maxPairs)
+        val result = evaluateAb(outcomes, weights, maxPairs = plan.maxPairs, duel = duel)
         verdict = result
         if (result.status != AbStatus.NEED_MORE_ROUNDS) phase = AccelPhase.DONE
     }

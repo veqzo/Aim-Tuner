@@ -4,18 +4,23 @@ import com.badlogic.gdx.Gdx
 import com.badlogic.gdx.scenes.scene2d.Actor
 import com.badlogic.gdx.scenes.scene2d.ui.Table
 import de.yuuto.aimtune.app.AppContext
+import de.yuuto.aimtune.app.ui.LedState
+import de.yuuto.aimtune.app.ui.ModuleStatus
 import de.yuuto.aimtune.app.ui.Styles
 import de.yuuto.aimtune.app.ui.addButton
 import de.yuuto.aimtune.app.ui.button
 import de.yuuto.aimtune.app.ui.caps
-import de.yuuto.aimtune.app.ui.frame
 import de.yuuto.aimtune.app.ui.label
+import de.yuuto.aimtune.app.ui.modulePanel
 import de.yuuto.aimtune.storage.ResearchExportResult
 import java.util.concurrent.CompletableFuture
 
-private const val TEXT_WIDTH = 1000f
-private const val CARD_WIDTH = 900f
-private const val CARD_PADDING = 32f
+private const val LEFT_WIDTH = 760f
+private const val COLUMN_GAP = 64f
+private const val WELL_PADDING = 36f
+private const val WELL_WIDTH = 860f
+private const val TEXT_GAP = 20f
+private const val CAPTION_GAP = 8f
 private const val FOOTER_BUTTON_HEIGHT = 64f
 private const val BYTES_PER_KB = 1024
 
@@ -23,37 +28,29 @@ private const val BYTES_PER_KB = 1024
 data class StoredCounts(val sessions: Int, val rounds: Int)
 
 /**
- * Exports the stored rounds as one file for a researcher (docs/history/ASSESSMENT.md D4). Nothing is sent
- * anywhere: the file is written to the data folder and the person sends it themselves. The screen says
- * what the file holds and what it does not hold before anything is written.
+ * Exports the stored rounds as one file for a researcher (docs/history/ASSESSMENT.md D4), as one opened module. Nothing is sent
+ * anywhere: the file is written to the data folder and the person sends it themselves. The screen says what the file holds and
+ * what it does not hold before anything is written. [back] leads to the screen that opened it (History or Settings).
  */
-class ShareDataScreen(ctx: AppContext, private val counts: CompletableFuture<StoredCounts>) : UiScreen(ctx) {
+class ShareDataScreen(ctx: AppContext, private val back: () -> Unit, private val counts: CompletableFuture<StoredCounts>) : UiScreen(ctx) {
     private var stored: StoredCounts? = null
     private var export: CompletableFuture<Result<ResearchExportResult>>? = null
     private var result: Result<ResearchExportResult>? = null
 
     override fun build(): Actor {
-        val content = Table()
-        content.add(ui.label(t("share.title"), Styles.HEADING)).left().padBottom(24f).row()
-        content.add(ui.label(t("share.intro"), Styles.BODY_MUTED, wrap = true)).left().width(TEXT_WIDTH).padBottom(24f).row()
-        content.add(infoCard()).left().width(CARD_WIDTH).padBottom(24f).row()
-        content.add(ui.label(countsText(), Styles.BODY_MUTED, wrap = true)).left().width(TEXT_WIDTH).padBottom(16f).row()
-        statusLabel()?.let { content.add(it).left().width(TEXT_WIDTH).row() }
+        val left = Table().top().left()
+        left.add(ui.label(t("share.intro"), Styles.BODY, wrap = true)).left().width(LEFT_WIDTH).row()
+        statusLabel()?.let { left.add(it).left().width(LEFT_WIDTH).padTop(TEXT_GAP * 2).row() }
 
-        val footer = Table()
-        footer.add(ui.button(t("common.back"), Styles.TEXT) { ctx.showHistory() }).left().height(FOOTER_BUTTON_HEIGHT).padLeft(8f)
-        footer.add().expandX()
-        val saved = result?.getOrNull()
-        if (saved != null) {
-            footer.addButton(ui.button(t("share.copy_path"), Styles.SECONDARY) { Gdx.app.clipboard.contents = saved.file.toString() }, minWidth = 220f).padRight(16f)
-            footer.addButton(ui.button(t("share.open_folder"), Styles.SECONDARY) { Gdx.net.openURI(saved.file.parent.toUri().toString()) }, minWidth = 240f).padRight(16f)
-        }
-        val rounds = stored?.rounds ?: 0
-        val busy = export != null && result == null
-        val button = ui.button(t("share.export"), Styles.PRIMARY) { startExport() }
-        button.isDisabled = rounds == 0 || busy
-        footer.addButton(button, minWidth = 260f)
-        return ui.frame(null, content, footer)
+        val body = Table().top().left()
+        body.add(left).top().left().width(LEFT_WIDTH)
+        body.add(infoWell()).top().left().width(WELL_WIDTH).padLeft(COLUMN_GAP)
+        body.add().expandX()
+        val panel = ui.modulePanel(t("share.title"), status())
+        panel.add(body).grow()
+        val content = Table()
+        content.add(panel).grow()
+        return frame(content, footer())
     }
 
     override fun render(delta: Float) {
@@ -69,7 +66,29 @@ class ShareDataScreen(ctx: AppContext, private val counts: CompletableFuture<Sto
         super.render(delta)
     }
 
-    override fun onEscape() = ctx.showHistory()
+    override fun onEscape() = back()
+
+    private fun footer(): Table {
+        val footer = Table()
+        footer.add(ui.button(t("common.back"), Styles.TEXT) { back() }).left().height(FOOTER_BUTTON_HEIGHT).padLeft(8f)
+        footer.add().expandX()
+        val saved = result?.getOrNull()
+        if (saved != null) {
+            footer.addButton(ui.button(t("share.copy_path"), Styles.SECONDARY) { Gdx.app.clipboard.contents = saved.file.toString() }, minWidth = 220f).padRight(16f)
+            footer.addButton(ui.button(t("share.open_folder"), Styles.SECONDARY) { Gdx.net.openURI(saved.file.parent.toUri().toString()) }, minWidth = 240f).padRight(16f)
+        }
+        val busy = export != null && result == null
+        val button = ui.button(t("share.export"), Styles.PRIMARY) { startExport() }
+        button.isDisabled = (stored?.rounds ?: 0) == 0 || busy
+        footer.addButton(button, minWidth = 260f)
+        return footer
+    }
+
+    /** The counts in the head of the module: lit once there is something to export. */
+    private fun status(): ModuleStatus? {
+        val s = stored ?: return null
+        return if (s.rounds == 0) ModuleStatus(LedState.OFF, t("share.none")) else ModuleStatus(LedState.OK, t("share.counts", s.sessions, s.rounds))
+    }
 
     private fun startExport() {
         if (export != null && result == null) return
@@ -78,20 +97,17 @@ class ShareDataScreen(ctx: AppContext, private val counts: CompletableFuture<Sto
         rebuild()
     }
 
-    private fun infoCard(): Table {
-        val card = Table()
-        card.background(ui.skin.getDrawable(Styles.CARD))
-        card.pad(CARD_PADDING)
-        card.add(ui.caps(t("share.contains_title"))).left().row()
-        card.add(ui.label(t("share.contains"), Styles.CAPTION_MUTED, wrap = true)).left().width(CARD_WIDTH - 2 * CARD_PADDING).padTop(8f).padBottom(20f).row()
-        card.add(ui.caps(t("share.not_contains_title"))).left().row()
-        card.add(ui.label(t("share.not_contains"), Styles.CAPTION_MUTED, wrap = true)).left().width(CARD_WIDTH - 2 * CARD_PADDING).padTop(8f)
-        return card
-    }
-
-    private fun countsText(): String {
-        val s = stored ?: return ""
-        return if (s.rounds == 0) t("share.none") else t("share.counts", s.sessions, s.rounds)
+    /** What the file holds and what it does not hold, in a recessed panel. */
+    private fun infoWell(): Table {
+        val inner = WELL_WIDTH - 2 * WELL_PADDING
+        val well = Table().top().left()
+        well.background(ui.skin.getDrawable(Styles.WELL))
+        well.pad(WELL_PADDING)
+        well.add(ui.caps(t("share.contains_title"))).left().row()
+        well.add(ui.label(t("share.contains"), Styles.BODY_MUTED, wrap = true)).left().width(inner).padTop(CAPTION_GAP).padBottom(TEXT_GAP * 1.5f).row()
+        well.add(ui.caps(t("share.not_contains_title"))).left().row()
+        well.add(ui.label(t("share.not_contains"), Styles.BODY_MUTED, wrap = true)).left().width(inner).padTop(CAPTION_GAP)
+        return well
     }
 
     private fun statusLabel() = when {

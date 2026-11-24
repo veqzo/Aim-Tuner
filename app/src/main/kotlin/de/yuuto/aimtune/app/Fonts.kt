@@ -10,7 +10,7 @@ import de.yuuto.aimtune.app.ui.Tokens
 import kotlin.math.roundToInt
 
 /**
- * Inter and JetBrains Mono rasterized at the exact pixel size of the framebuffer, then scaled back
+ * Inter, Inter Display and JetBrains Mono rasterized at the exact pixel size of the framebuffer, then scaled back
  * so that text is laid out in design units (a 1080-high design space). Scaling a smaller bitmap
  * font up would blur; this stays sharp at every window size. Sizes come from the design tokens.
  * Call [dispose] before building a new instance.
@@ -22,18 +22,25 @@ class Fonts(framebufferHeight: Int, tokens: Tokens) : Disposable {
     private val generators = mutableMapOf<String, FreeTypeFontGenerator>()
     private val all = mutableListOf<BitmapFont>()
 
-    /** Uppercase labels (token `label`). */
+    /** Field and section labels, sentence case (token `label`). */
     val label = create(INTER_MEDIUM, tokens.fontSize("label"))
     val caption = create(INTER_REGULAR, tokens.fontSize("caption"))
     val body = create(INTER_REGULAR, tokens.fontSize("body"))
     val bodyLg = create(INTER_REGULAR, tokens.fontSize("bodyLg"))
-    val brand = create(INTER_MEDIUM, BRAND_SIZE)
-    val title = create(INTER_MEDIUM, tokens.fontSize("title"))
-    val heading = create(INTER_REGULAR, tokens.fontSize("heading"))
+    val bodyMedium = create(INTER_MEDIUM, tokens.fontSize("body"))
+
+    /** Titles, module names and the brand: Inter Display SemiBold, tight and sharp at large sizes. */
+    val brand = create(INTER_DISPLAY_SEMIBOLD, BRAND_SIZE)
+    val strong = create(INTER_DISPLAY_SEMIBOLD, tokens.fontSize("bodyLg"))
+    val title = create(INTER_DISPLAY_SEMIBOLD, tokens.fontSize("title"))
+    val heading = create(INTER_DISPLAY_SEMIBOLD, tokens.fontSize("heading"))
 
     /** Numbers, units, timers and the debug overlay. */
     val mono = create(JETBRAINS_MONO, tokens.fontSize("body"))
     val numberMd = create(JETBRAINS_MONO, tokens.fontSize("numberMd"))
+
+    /** The readout of a rack module (token `display`). */
+    val readout = create(JETBRAINS_MONO, tokens.fontSize("display"), NUMBER_CHARS)
     val numberLg = create(JETBRAINS_MONO, tokens.fontSize("numberLg"), NUMBER_CHARS)
     val numberXl = create(JETBRAINS_MONO, tokens.fontSize("numberXl"), NUMBER_CHARS)
 
@@ -64,12 +71,13 @@ class Fonts(framebufferHeight: Int, tokens: Tokens) : Disposable {
 
         const val INTER_REGULAR = "assets/fonts/Inter-Regular.ttf"
         const val INTER_MEDIUM = "assets/fonts/Inter-Medium.ttf"
+        const val INTER_DISPLAY_SEMIBOLD = "assets/fonts/InterDisplay-SemiBold.ttf"
         const val JETBRAINS_MONO = "assets/fonts/JetBrainsMono-Regular.ttf"
 
         // Degree sign, middle dot, dashes, arrows and German letters used by the UI texts.
-        const val EXTRA_CHARS = "°·–—…→←×÷≈ÄÖÜäöüß"
+        const val EXTRA_CHARS = "°·–—…→←↑↓×÷≈±✓ÄÖÜäöüß"
 
         // The very large number fonts only ever show digits and a few symbols.
-        const val NUMBER_CHARS = "0123456789.,-+%: "
+        const val NUMBER_CHARS = "0123456789.,-+%:×–— "
     }
 }

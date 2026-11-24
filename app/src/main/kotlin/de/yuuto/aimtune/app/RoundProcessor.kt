@@ -5,15 +5,25 @@ import de.yuuto.aimtune.app.accel.LastCalibration
 import de.yuuto.aimtune.app.accel.LastSearch
 import de.yuuto.aimtune.app.accel.PriorCalibration
 import de.yuuto.aimtune.app.accel.PriorSearchRound
+import de.yuuto.aimtune.app.accel.SearchBase
 import de.yuuto.aimtune.app.accel.SettingsAnalyses
 import de.yuuto.aimtune.app.accel.StoredSearches
 import de.yuuto.aimtune.app.blind.AxisErrors
 import de.yuuto.aimtune.app.blind.PastRound
+import de.yuuto.aimtune.app.accel.StagePlanReader
+import de.yuuto.aimtune.app.accel.StageProgress
+import de.yuuto.aimtune.core.accel.AccelSpec
+import de.yuuto.aimtune.core.accel.LookupCurve
+import de.yuuto.aimtune.core.accel.RawAccelProfile
 import de.yuuto.aimtune.core.accel.movementSamples
 import de.yuuto.aimtune.core.metrics.RoundMetrics
 import de.yuuto.aimtune.core.metrics.computeRoundMetrics
 import de.yuuto.aimtune.core.recording.RoundRecording
+import de.yuuto.aimtune.core.scenario.ScenarioKind
+import de.yuuto.aimtune.core.score.DuelScorer
+import de.yuuto.aimtune.core.score.Engagement
 import de.yuuto.aimtune.core.score.MetricWeights
+import de.yuuto.aimtune.core.score.duelEngagements
 import de.yuuto.aimtune.storage.Database
 import de.yuuto.aimtune.storage.RoundLogFile
 import de.yuuto.aimtune.storage.RoundRepository
@@ -22,6 +32,8 @@ import de.yuuto.aimtune.storage.ResearchExportResult
 import de.yuuto.aimtune.storage.RoundRow
 import de.yuuto.aimtune.storage.SessionKind
 import de.yuuto.aimtune.storage.SessionRow
+import de.yuuto.aimtune.storage.StartOverResult
+import de.yuuto.aimtune.storage.startOver
 import de.yuuto.aimtune.storage.scoreInputs
 import java.nio.file.Path
 import java.util.concurrent.CompletableFuture
@@ -40,7 +52,8 @@ sealed interface RoundReport {
 }
 
 /** Everything the database holds about played sessions, for the history. */
-data class StoredHistory(val sessions: List<SessionRow>, val rounds: List<RoundRow>)
+/** [engagements] holds the duels of the blind rounds by round id ([PastRound.engagements]). */
+data class StoredHistory(val sessions: List<SessionRow>, val rounds: List<RoundRow>, val engagements: Map<Long, List<Engagement>?> = emptyMap())
 
 /**
  * Computes metrics and stores finished rounds on a background thread so the render thread never
@@ -114,7 +127,7 @@ class RoundProcessor(private val database: Database?, private val exportDir: Pat
         val repo = repository ?: return emptyList()
         return try {
             executor.submit<List<PastRound>> {
-                repo.blindRounds(gameId, dpi).map { PastRound(it.sessionId, it.cm360, it.scoreInputs(), it.scenario, AxisErrors.of(it)) }
+                repo.blindRounds(gameId, dpi).map { PastRound(it.sessionId, it.cm360, it.scoreInputs(), it.scenario, AxisErrors.of(it), repo.engagementsOf(it)) }
             }.get()
         } catch (e: Exception) {
             log.log(System.Logger.Level.ERROR, "reading earlier rounds failed: ${e.message}", e)
@@ -123,16 +136,38 @@ class RoundProcessor(private val database: Database?, private val exportDir: Pat
     }
 
     /**
-     * The plain-sensitivity movements of earlier acceleration runs at this DPI and sensitivity, read on the storage thread
-     * and analysed again from the stored raw events; nothing without a database or if reading fails.
+     * The movements of earlier acceleration runs at this DPI and sensitivity, plain ones or, with a [baseCurve], those played with
+     * exactly that curve (a different base would need a different analysis), read on the storage thread and analysed again from
+     * the stored raw events; nothing without a database or if reading fails.
      */
-    fun priorCalibration(dpi: Double, cm360: Double): PriorCalibration {
+    fun priorCalibration(dpi: Double, cm360: Double, baseCurve: RawAccelProfile? = null, stage: LookupCurve? = null): PriorCalibration {
         val repo = repository ?: return PriorCalibration.NONE
         return try {
-            executor.submit<PriorCalibration> { readPriorCalibration(repo, dpi, cm360) }.get()
+            executor.submit<PriorCalibration> { readPriorCalibration(repo, dpi, cm360, (stage ?: baseCurve)?.let(AccelSpec::encodeModel)) }.get()
         } catch (e: Exception) {
             log.log(System.Logger.Level.ERROR, "reading earlier calibration rounds failed: ${e.message}", e)
             PriorCalibration.NONE
+        }
+    }
+
+    /**
+     * Where the stage plan on top of [baseCurve] stands at this DPI and sensitivity (docs/FIND-CURVE-REDESIGN.md section 13), read on the
+     * storage thread from the stored rounds; null without a stage ever played, without a database or if reading fails.
+     */
+    fun stagePlan(
+        dpi: Double,
+        cm360: Double,
+        baseCurve: RawAccelProfile,
+        weights: MetricWeights,
+        maxStep: Double = Double.POSITIVE_INFINITY,
+        duel: DuelScorer? = null,
+    ): StageProgress? {
+        val repo = repository ?: return null
+        return try {
+            executor.submit<StageProgress?> { StagePlanReader.read(repo, baseCurve, dpi, cm360, weights, maxStep, duel) }.get()
+        } catch (e: Exception) {
+            log.log(System.Logger.Level.ERROR, "reading the stage plan failed: ${e.message}", e)
+            null
         }
     }
 
@@ -154,7 +189,7 @@ class RoundProcessor(private val database: Database?, private val exportDir: Pat
      * The stored blind strength searches at the setup of the newest one, analysed again together from their rounds; null when
      * there is none or reading fails. Read on the storage thread.
      */
-    fun lastSearch(weights: MetricWeights): LastSearch? {
+    fun lastSearch(weights: MetricWeights, baseCurve: RawAccelProfile? = null, duel: DuelScorer? = null): LastSearch? {
         val repo = repository ?: return null
         return try {
             executor.submit<LastSearch?> {
@@ -162,7 +197,7 @@ class RoundProcessor(private val database: Database?, private val exportDir: Pat
                     val rounds = StoredSearches.searchRounds(session.kind, repo.rounds(session.id))
                     if (rounds.isEmpty()) null else StoredSearches.SearchSession(session.id, session.dpi, rounds)
                 }
-                StoredSearches.pool(searches, weights)
+                StoredSearches.pool(searches, weights, baseCurve?.let { SearchBase(it, searches.first().dpi) }, duel) { repo.engagementsOf(it) }
             }.get()
         } catch (e: Exception) {
             log.log(System.Logger.Level.ERROR, "reading the last search failed: ${e.message}", e)
@@ -170,8 +205,11 @@ class RoundProcessor(private val database: Database?, private val exportDir: Pat
         }
     }
 
-    /** The stored search rounds at this DPI and sensitivity for a new search to build on; none without a database or if reading fails. */
-    fun priorSearch(dpi: Double, cm360: Double): List<PriorSearchRound> {
+    /**
+     * The stored search rounds at this DPI and sensitivity for a new search to build on; none without a database or if reading fails.
+     * With a [baseCurve] the rounds of searches on top of exactly that curve, otherwise those of the plain mouse's natural curves.
+     */
+    fun priorSearch(dpi: Double, cm360: Double, baseCurve: RawAccelProfile? = null): List<PriorSearchRound> {
         val repo = repository ?: return emptyList()
         return try {
             executor.submit<List<PriorSearchRound>> {
@@ -179,7 +217,7 @@ class RoundProcessor(private val database: Database?, private val exportDir: Pat
                     val rounds = StoredSearches.searchRounds(session.kind, repo.rounds(session.id))
                     if (rounds.isEmpty()) null else StoredSearches.SearchSession(session.id, session.dpi, rounds)
                 }
-                StoredSearches.priorRounds(searches, dpi, cm360)
+                StoredSearches.priorRounds(searches, dpi, cm360, baseCurve?.let { SearchBase(it, dpi) }) { repo.engagementsOf(it) }
             }.get()
         } catch (e: Exception) {
             log.log(System.Logger.Level.ERROR, "reading earlier search rounds failed: ${e.message}", e)
@@ -187,8 +225,8 @@ class RoundProcessor(private val database: Database?, private val exportDir: Pat
         }
     }
 
-    private fun readPriorCalibration(repo: RoundRepository, dpi: Double, cm360: Double): PriorCalibration {
-        val ids = repo.plainAccelRoundIds(dpi, cm360, AccelRun.CLICK_SCENARIOS.map { it.id }, PriorCalibration.CM360_TOLERANCE, PriorCalibration.MAX_ROUNDS)
+    private fun readPriorCalibration(repo: RoundRepository, dpi: Double, cm360: Double, spec: String? = null): PriorCalibration {
+        val ids = repo.accelRoundIds(spec, dpi, cm360, AccelRun.CLICK_SCENARIOS.map { it.id }, PriorCalibration.CM360_TOLERANCE, PriorCalibration.MAX_ROUNDS)
         val metrics = ids.mapNotNull { id ->
             val recording = repo.loadRecording(id) ?: return@mapNotNull null
             try {
@@ -225,7 +263,10 @@ class RoundProcessor(private val database: Database?, private val exportDir: Pat
     fun storedHistory(): StoredHistory {
         val repo = repository ?: return StoredHistory(emptyList(), emptyList())
         return try {
-            executor.submit<StoredHistory> { StoredHistory(repo.sessions(), repo.rounds()) }.get()
+            executor.submit<StoredHistory> {
+                val rounds = repo.rounds()
+                StoredHistory(repo.sessions(), rounds, rounds.filter { it.blind && it.accel == null }.associate { it.id to repo.engagementsOf(it) })
+            }.get()
         } catch (e: Exception) {
             log.log(System.Logger.Level.ERROR, "reading the history failed: ${e.message}", e)
             StoredHistory(emptyList(), emptyList())
@@ -238,6 +279,31 @@ class RoundProcessor(private val database: Database?, private val exportDir: Pat
         val future = CompletableFuture<Result<ResearchExportResult>>()
         executor.execute {
             future.complete(runCatching { ResearchExport.write(dir, repo, appVersion) }.onFailure { log.log(System.Logger.Level.ERROR, "research export failed: ${it.message}", it) })
+        }
+        return future
+    }
+
+    /**
+     * Settings "Start over": backs up the database into [backupDir] and clears all rounds, on the storage thread so it never overlaps
+     * a save. The open session is forgotten, so the next round starts a new one. Settings are not touched.
+     */
+    fun startOver(backupDir: Path): CompletableFuture<Result<StartOverResult>> {
+        val repo = repository ?: return CompletableFuture.completedFuture(Result.failure(IllegalStateException("storage unavailable")))
+        val db = checkNotNull(database)
+        val future = CompletableFuture<Result<StartOverResult>>()
+        executor.execute {
+            future.complete(
+                runCatching { repo.startOver(db, backupDir, System.currentTimeMillis()) }
+                    .onSuccess {
+                        sessionId = null
+                        sessionKey = null
+                        lastSaved = null
+                        // The hub reads this to know its analyses of the stored rounds are out of date.
+                        storedCounter.incrementAndGet()
+                        log.log(System.Logger.Level.INFO, "started over: ${it.rounds} rounds in ${it.sessions} sessions backed up to ${it.backup}")
+                    }
+                    .onFailure { log.log(System.Logger.Level.ERROR, "start over failed, nothing deleted: ${it.message}", it) },
+            )
         }
         return future
     }
@@ -261,12 +327,33 @@ class RoundProcessor(private val database: Database?, private val exportDir: Pat
                     sessionId = it
                     sessionKey = key
                 }
-            repo.saveRound(session, recording, startedAtMs, blind, metrics)
+            lastSaved = recording.seed to repo.saveRound(session, recording, startedAtMs, blind, metrics)
             storedCounter.incrementAndGet()
             null
         } catch (e: Exception) {
             log.log(System.Logger.Level.ERROR, "saving round failed", e)
             e.message ?: e.javaClass.simpleName
+        }
+    }
+
+    /** The seed and id of the round saved last; only the storage thread touches it. */
+    private var lastSaved: Pair<Long, Long>? = null
+
+    /**
+     * Keeps the player's rating of the round with this [seed], queued behind the saving of that round. Only the round saved last can
+     * be rated, and only if its seed matches, so a failed save never gives its rating to another round.
+     */
+    fun recordFeel(seed: Long, vote: Int) {
+        val repo = repository ?: return
+        executor.execute {
+            val last = lastSaved
+            if (last != null && last.first == seed) {
+                try {
+                    repo.setFeel(last.second, vote)
+                } catch (e: Exception) {
+                    log.log(System.Logger.Level.ERROR, "saving a rating failed: ${e.message}", e)
+                }
+            }
         }
     }
 
@@ -286,3 +373,7 @@ class RoundProcessor(private val database: Database?, private val exportDir: Pat
         const val MAX_ANALYSED_ROUNDS = 120
     }
 }
+
+/** The duels of a stored round for the duel score, read from its target events; null for tracking or an unknown scenario. */
+internal fun RoundRepository.engagementsOf(row: RoundRow): List<Engagement>? =
+    ScenarioKind.fromId(row.scenario)?.let { duelEngagements(it, loadTargetEvents(row.id), roundEndNanos(row.id)) }

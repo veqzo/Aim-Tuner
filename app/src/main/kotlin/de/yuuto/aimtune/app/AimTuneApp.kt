@@ -108,14 +108,7 @@ class AimTuneApp(private val options: LaunchOptions) : Game() {
         ctx.availableUpdate = service.known(ctx.settings.current)
         service.checkIfDue(ctx.settings.current) { checkedAt, release ->
             Gdx.app.postRunnable {
-                val before = ctx.settings.current
-                val after = before.copy(
-                    lastUpdateCheckEpochSeconds = checkedAt,
-                    latestKnownVersion = release?.version?.toString() ?: before.latestKnownVersion,
-                    latestKnownUrl = release?.url ?: before.latestKnownUrl,
-                )
-                if (ctx.startupProblems.isEmpty()) ctx.settings.save(after)
-                ctx.availableUpdate = service.known(after)
+                ctx.recordUpdateCheck(checkedAt, release)
                 (screen as? MainMenuScreen)?.rebuild()
             }
         }
@@ -130,6 +123,7 @@ class AimTuneApp(private val options: LaunchOptions) : Game() {
     override fun render() {
         if (tour == null) toggleFullscreenOnF11()
         super.render()
+        context?.transition?.drawOver(Gdx.graphics.deltaTime)
         tour?.afterRender()
     }
 
@@ -137,6 +131,8 @@ class AimTuneApp(private val options: LaunchOptions) : Game() {
         super.dispose()
         screen?.dispose()
         context?.let {
+            it.transition.dispose()
+            it.roundBackdrop.dispose()
             it.disposeAudio()
             it.ui.dispose()
             it.source.close()
