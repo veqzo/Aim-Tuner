@@ -76,6 +76,7 @@ Offen, nicht geprüft: Ob `AccelAnalysis`-Gain-Punkte relativ zur gelieferten Ku
 - Ergebnis = `min(s* aus Suche, s_max)`; Gate: nie über `MAX`/`MAX_WITH_FLASH`.
 
 ### Schritt 6: Konstanz als Metrik
+- **Verworfen (2026-11-24, Entscheidung des Nutzers):** Die Simulation fand im Geschwindigkeitsbereich der Hand keine Kurvenpräferenz (Abschnitte 9, 10, 12); eine reine Berichtsmetrik ändert daran nichts. Die Stufen-Sessions mit echten Runden sind die bessere Datenquelle.
 - Vorschlag: Streuung von `ln(1+e)` (erster Reach) innerhalb eines Geschwindigkeitsbins, entzerrt um Distanz (Lehre aus R3: Konsistenz gehört nicht in die Sensi-Zielfunktion). Reporting und Gewicht in Schritt 5, nicht im Score.
 - Validierung: Test-Retest zwischen Sessions in der Simulation (ICC), Unterscheidbarkeit zwischen DEFAULT und DECOUPLED-Rauschen, Prüfung, ob sie von Distanz/Geschwindigkeit entkoppelt bleibt (corr(ln dist, ln speed) = 0.956, `PROGRESS.md` M14).
 
