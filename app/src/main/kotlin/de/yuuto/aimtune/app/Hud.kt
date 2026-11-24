@@ -4,6 +4,7 @@ import com.badlogic.gdx.Gdx
 import com.badlogic.gdx.graphics.Color
 import com.badlogic.gdx.graphics.OrthographicCamera
 import com.badlogic.gdx.graphics.g2d.BitmapFont
+import com.badlogic.gdx.graphics.g2d.GlyphLayout
 import com.badlogic.gdx.graphics.g2d.SpriteBatch
 import com.badlogic.gdx.utils.Align
 import com.badlogic.gdx.utils.Disposable
@@ -84,8 +85,9 @@ class Hud(
         draw(fonts.label, label.uppercase(), width / 2, height * 0.64f, highlight, Align.center)
         draw(fonts.title, i18n.t("hud.click_to_start"), width / 2, height * 0.58f, text, Align.center)
         draw(fonts.body, i18n.t("hud.blind_info", config.roundSeconds, i18n.scenarioRound(config.scenario)), width / 2, height * 0.49f, muted, Align.center)
-        draw(fonts.body, instruction(), width / 2, height * 0.44f, muted, Align.center)
-        draw(fonts.body, i18n.t("hud.blind_stop"), width / 2, height * 0.40f, muted, Align.center)
+        // The instruction wraps (the flash one is longer than a 1080p line); the stop line moves down by the extra lines.
+        val wrapped = drawWrapped(fonts.body, instruction(), height * 0.44f, muted)
+        draw(fonts.body, i18n.t("hud.blind_stop"), width / 2, height * 0.40f - (wrapped.height - fonts.body.capHeight), muted, Align.center)
     }
 
     private fun instruction(): String = when (config.scenario) {
@@ -178,6 +180,13 @@ class Hud(
         font.draw(batch, s, x, y, 0f, align, false)
     }
 
+    /** Draws [s] centered and wrapped to at most [INSTRUCTION_WIDTH] of the window width; returns the layout for its height. */
+    private fun drawWrapped(font: BitmapFont, s: String, y: Float, color: Color): GlyphLayout {
+        val wrapWidth = minOf(width * INSTRUCTION_WIDTH, width - 2 * MARGIN)
+        font.color = color
+        return font.draw(batch, s, (width - wrapWidth) / 2, y, wrapWidth, Align.center, true)
+    }
+
     override fun dispose() {
         batch.dispose()
         crosshairRenderer.dispose()
@@ -185,5 +194,8 @@ class Hud(
 
     private companion object {
         const val MARGIN = 72f
+
+        /** Widest instruction line, as a share of the window width. */
+        const val INSTRUCTION_WIDTH = 0.6f
     }
 }

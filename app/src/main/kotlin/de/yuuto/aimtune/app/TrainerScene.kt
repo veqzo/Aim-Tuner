@@ -316,6 +316,15 @@ class TrainerScene(
     private fun laneBox(x: Float, y: Float, z: Float, width: Float, length: Float, yawDegrees: Double): ModelInstance =
         ModelInstance(laneModel).apply { transform.setToTranslation(x, y, z).rotateRad(Vector3.Y, -Math.toRadians(yawDegrees).toFloat()).scale(width, LANE_THICKNESS, length) }
 
+    /**
+     * Clears the picture to the fog colour. The room box is larger than the far plane; beyond it the room is fully
+     * fogged, so this colour hides the clipped walls. A UI colour here showed them as a dark rectangle.
+     */
+    fun clear() {
+        Gdx.gl.glClearColor(Theme.roomFog.r, Theme.roomFog.g, Theme.roomFog.b, 1f)
+        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT or GL20.GL_DEPTH_BUFFER_BIT)
+    }
+
     /** How bright the white-out is, 0..1 of full white (the player's setting); full white hurt the eyes. */
     var whiteOutLevel: Float = 1f
 

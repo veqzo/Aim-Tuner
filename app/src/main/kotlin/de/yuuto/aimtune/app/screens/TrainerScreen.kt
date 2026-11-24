@@ -4,7 +4,6 @@ import com.badlogic.gdx.Gdx
 import com.badlogic.gdx.Input
 import com.badlogic.gdx.InputAdapter
 import com.badlogic.gdx.Screen
-import com.badlogic.gdx.graphics.GL20
 import de.yuuto.aimtune.app.AppContext
 import de.yuuto.aimtune.storage.AppSettings
 import de.yuuto.aimtune.storage.activeCrosshair
@@ -102,9 +101,7 @@ class TrainerScreen(
             return
         }
         syncCursor()
-        val bg = ctx.ui.tokens.bg
-        Gdx.gl.glClearColor(bg.r, bg.g, bg.b, 1f)
-        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT or GL20.GL_DEPTH_BUFFER_BIT)
+        scene.clear()
         playFlashSounds()
         scene.whiteOutLevel = AppSettings.fraction(ctx.settings.current.flashBrightnessPercent)
         scene.render(trainer.view, trainer.activeTargets, trainer.activeFlash)
@@ -112,7 +109,10 @@ class TrainerScreen(
     }
 
     /** The room without HUD, targets or flash, as the backdrop of the overlay between rounds. */
-    private fun captureBackdrop() = ctx.roundBackdrop.capture { scene.render(trainer.view, emptyList()) }
+    private fun captureBackdrop() = ctx.roundBackdrop.capture {
+        scene.clear()
+        scene.render(trainer.view, emptyList())
+    }
 
     /** Screenshot tour: the backdrop of the overlay that comes next. */
     fun captureBackdropForTour() = captureBackdrop()
