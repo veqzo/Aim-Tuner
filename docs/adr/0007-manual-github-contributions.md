@@ -20,8 +20,8 @@ duties by itself. The maintainer does not want to publish a home address. These 
   stay after a deletion. They never call the data anonymous. AimTune keeps no link between accounts and datasets.
 - The feature is temporary and off: a build switch (`aimtune.contribution.enabled=false`) hides it, and the issue
   form was first kept in `docs/contribution/`. On 2026-11-24 the maintainer moved it to `.github/ISSUE_TEMPLATE/`
-  and created the `training-data` label; the form is live once it is on `main`. The app switch stays off until the
-  legal questions are settled.
+  and created the `training-data` label; the form is live once it is on `main`. The maintainer switched the app on
+  for v1.1.1 on the same day; the legal questions are still open.
 
 ## Consequences
 - The local export works as before; the contribution code sits in `app/contribute` and can be removed in one step

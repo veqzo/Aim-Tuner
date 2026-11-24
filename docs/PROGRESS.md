@@ -14,7 +14,8 @@ Single source of truth for project status. Update at the end of every task and b
 - [x] Privacy audit of the research export: format 2 without round seeds (they showed the PC's uptime) and with a fixed file name (no date); gzip header checked (no time, no name)
 - [x] `app/contribute`: config from `contribution.properties` (build switch, off), encoded issue link without measurements or paths, flow state machine, `ContributeScreen` (en, de), button in Share data, Explorer reveal
 - [x] Issue form (first in `docs/contribution/`, moved to `.github/ISSUE_TEMPLATE/training-data.yml` on 2026-11-24, label `training-data` created); tests for privacy, link, config, flow, texts and no network code; docs (RESEARCH-EXPORT, SPEC, ARCHITECTURE, DESIGN, ADR 0007, tester guides)
-- [ ] Legal questions settled, then activation (docs/RESEARCH-EXPORT.md "Turn it on")
+- [x] Activation for v1.1.1 (switch on, issue form in `.github/ISSUE_TEMPLATE/`, label `training-data`); the maintainer tested it with a scratch repo
+- [ ] Legal questions settled (still open)
 
 ### M24 UI redesign "Rack" (branch `feature/m24-ui-redesign`; plan approved 2026-11-09)
 - [x] 1 Foundation: Rack tokens (graphite, signal amber `#FFB020`, LED colours, motion durations), `Tokens.kt`, Inter Display for titles, `Icons.kt` (procedural line icons), bevel, glow and icon drawables, `LayeredDrawable`, `UiSkin` v2 (all old style names kept, new STRONG, READOUT, MONO_SMALL, CHIP, GHOST, MODULE, WELL), `Motion.kt` (fade, pulse, count-up, flip, press, `Reveal`), sentence-case labels; the screenshot tour sets `Motion.instant`
@@ -264,6 +265,7 @@ Gate for every task: tests green, before/after tables from the gated harness (`g
 
 ## Last session
 
+- Contributions switched on for v1.1.1 (2026-11-24): the maintainer tested the flow locally and the issue form in a scratch repo; PR to `main`, then tag v1.1.1.
 - Training data contributions (2026-11-24): voluntary GitHub contributions, off by a build switch until the legal questions are settled. The research export is now format 2 (no seeds, fixed name `aimtune-research.json.gz`). AimTune makes no request for it: the player creates the file, shows it in Explorer and opens a prefilled issue, each after a click. Build green; screenshots checked (contribute, contribute-ready; EN, DE, 720). Not tested by hand: Explorer with a path that contains spaces.
 
 - main hardened (2026-11-24): GitHub rulesets "main protection" (no deletion, no force push, changes only through a pull request with merge commits, required check `build` from GitHub Actions on an up-to-date branch, resolved conversations, no bypass) and "release tags" (`v*` tags cannot be moved or deleted). CI runs on every pull request without a path filter (a skipped required check would block the merge) and has a read-only token. The release workflow stops unless the tag points to a commit on `main`. Review count is 0: GitHub does not let the PR author approve their own PR, the user approves by merging. Next: PR `dev` -> `main`, then tag v1.1.0.
@@ -467,7 +469,7 @@ Gate for every task: tests green, before/after tables from the gated harness (`g
 
 ## Open questions
 
-- Training data contributions (ADR 0007): before activation, settle whether a public collection through GitHub issues needs an Impressum or a data protection notice from the maintainer, and how to meet that without a residential address. Until then `aimtune.contribution.enabled=false`. The issue form is in `.github/ISSUE_TEMPLATE/` and goes live on GitHub with the next merge to `main`, even with the app switch off.
+- Training data contributions (ADR 0007): before activation, settle whether a public collection through GitHub issues needs an Impressum or a data protection notice from the maintainer, and how to meet that without a residential address. The maintainer switched the feature on for v1.1.1 (2026-11-24) before these are settled; `aimtune.contribution.enabled=false` and removing the issue form turn it off again.
 
 - WM_INPUT `wParam` (RIM_INPUT vs RIM_INPUTSINK) semantics for a message-only window are unverified; it is counted but not used for gating (ADR 0002).
 - Trainer FOV assumes the game's FOV value refers to a 16:9 window and keeps the vertical FOV fixed when the window aspect changes. Real per-game aspect behavior is verified in M4.

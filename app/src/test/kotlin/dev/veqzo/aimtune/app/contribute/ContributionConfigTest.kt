@@ -40,8 +40,8 @@ class ContributionConfigTest {
     }
 
     @Test
-    fun `this build is switched off by default`() {
-        // gradle.properties keeps the feature off until the legal questions are settled (ADR 0007).
-        assertEquals(ContributionAvailability.Disabled, Contributions.load())
+    fun `this build reads the switch and the repository from the build`() {
+        // gradle.properties switches the feature on (ADR 0007); false there hides it again.
+        assertEquals(ContributionAvailability.Enabled(ContributionConfig("veqzo/Aim-Tuner", "training-data.yml")), Contributions.load())
     }
 }

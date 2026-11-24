@@ -48,10 +48,11 @@ The gzip header holds no time (MTIME 0) and no file name (`ResearchExportTest` c
 The data is not anonymous. Mouse movements are personal data of a kind that can be linked to a person. The
 texts in the app never call the file anonymous.
 
-## Contributions on GitHub (temporary, off)
+## Contributions on GitHub (temporary)
 
-A second way to share the file, behind a build switch (ADR 0007). It is off in every build until the legal
-questions for a public collection are settled (data protection, the maintainer's contact duties). The local
+A second way to share the file, behind a build switch (ADR 0007). The maintainer switched it on for v1.1.1
+(2026-11-24). The legal questions for a public collection (data protection, the maintainer's contact duties) are
+still open (docs/PROGRESS.md). The local
 export works without it.
 
 When it is on, Share data shows "Contribute training data". `ContributeScreen` explains why the data helps,
@@ -74,7 +75,7 @@ Configuration (`gradle.properties`, copied into `contribution.properties` by `pr
 
 | Property | Default | Meaning |
 |---|---|---|
-| `aimtune.contribution.enabled` | `false` | Only `true` turns the feature on |
+| `aimtune.contribution.enabled` | `true` | Only `true` turns the feature on |
 | `aimtune.contribution.repository` | `veqzo/Aim-Tuner` | `owner/name`, checked against GitHub's naming rules |
 | `aimtune.contribution.template` | `training-data.yml` | The issue form file name |
 
@@ -82,10 +83,10 @@ An invalid repository or template keeps the feature off.
 
 ### Turn it on
 
-1. Settle the legal questions first (docs/PROGRESS.md, open questions).
+1. Settle the legal questions (docs/PROGRESS.md, open questions). Still open; the maintainer switched it on anyway.
 2. Done (2026-11-24): the issue form is in `.github/ISSUE_TEMPLATE/training-data.yml` (GitHub reads issue forms
    only from the default branch, so it goes live with the next merge to `main`) and the label `training-data` exists.
-3. Set `aimtune.contribution.enabled=true` (or pass `-Paimtune.contribution.enabled=true` to the release build).
+3. Done for v1.1.1: `aimtune.contribution.enabled=true`.
 
 ### Turn it off or remove it
 
