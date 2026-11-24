@@ -3,18 +3,15 @@ package dev.veqzo.aimtune.app.ui
 import com.badlogic.gdx.scenes.scene2d.Actor
 import com.badlogic.gdx.scenes.scene2d.InputEvent
 import com.badlogic.gdx.scenes.scene2d.InputListener
-import com.badlogic.gdx.scenes.scene2d.ui.Container
 import com.badlogic.gdx.scenes.scene2d.ui.Image
 import com.badlogic.gdx.scenes.scene2d.ui.Label
 import com.badlogic.gdx.scenes.scene2d.ui.ScrollPane
-import com.badlogic.gdx.scenes.scene2d.ui.Stack
 import com.badlogic.gdx.scenes.scene2d.ui.Table
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton
 import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener
 import com.badlogic.gdx.utils.Align
 
-private const val LOGO_SIZE = 28f
-private const val LOGO_DOT = 8f
+private const val LOGO_SIZE = 32f
 private const val BRAND_GAP = 12f
 private const val CONTENT_TOP_PADDING = 64f
 private const val BUTTON_HEIGHT = 64f
@@ -62,11 +59,8 @@ fun UiSkin.frame(headerRight: Actor?, content: Actor, footer: Actor?): Table {
     root.setFillParent(true)
     root.pad(0f, tokens.margin, 0f, tokens.margin)
 
-    val logo = Stack()
-    logo.add(Image(logoRing))
-    logo.add(Container(Image(logoDot)).size(LOGO_DOT).center())
     val header = Table()
-    header.add(logo).size(LOGO_SIZE)
+    header.add(Image(logo)).size(LOGO_SIZE)
     header.add(label("AimTune", Styles.BRAND)).padLeft(BRAND_GAP)
     header.add().expandX()
     if (headerRight != null) header.add(headerRight)

@@ -122,6 +122,7 @@ Deviations from the original mockup (`AimTune.pdf`) that still apply:
 | Label letter spacing +10 % | Dropped | `BitmapFont` has no tracking |
 | Greek letters in formulas | Words ("angle") and × ÷ ° · | The font atlas has no theta or pi |
 | Game tiles for five games | Only games with verified yaw and FOV | Never guess values |
+| Logo: amber ring with a dot | The app icon (`docs/design/icon/aimtune-icon.png`): a dark tile with a bell curve and a crosshair at the peak, gradient from amber over orange to magenta. The top bar, the window, the exe and the README banner use it | The maintainer chose it for v1.1.1; the orange and magenta exist only in the icon, the UI stays amber. `tools/icon/make_icons.py` (Pillow, dev-only) makes the PNG and ICO files from it |
 
 ## Open design questions
 

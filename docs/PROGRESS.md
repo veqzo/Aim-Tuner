@@ -16,6 +16,7 @@ Single source of truth for project status. Update at the end of every task and b
 - [x] Issue form (first in `docs/contribution/`, moved to `.github/ISSUE_TEMPLATE/training-data.yml` on 2026-11-24, label `training-data` created); tests for privacy, link, config, flow, texts and no network code; docs (RESEARCH-EXPORT, SPEC, ARCHITECTURE, DESIGN, ADR 0007, tester guides)
 - [x] Activation for v1.1.1 (switch on, issue form in `.github/ISSUE_TEMPLATE/`, label `training-data`); the maintainer tested it with a scratch repo
 - [ ] Legal questions settled (still open)
+- [x] App icon for v1.1.1: master in `docs/design/icon/`, `tools/icon/make_icons.py` writes the window PNGs (`assets/icon/`) and `app/packaging/AimTune.ico` (jpackage `--icon`); the top bar logo and the README banner use it; README screenshots refreshed
 
 ### M24 UI redesign "Rack" (branch `feature/m24-ui-redesign`; plan approved 2026-11-09)
 - [x] 1 Foundation: Rack tokens (graphite, signal amber `#FFB020`, LED colours, motion durations), `Tokens.kt`, Inter Display for titles, `Icons.kt` (procedural line icons), bevel, glow and icon drawables, `LayeredDrawable`, `UiSkin` v2 (all old style names kept, new STRONG, READOUT, MONO_SMALL, CHIP, GHOST, MODULE, WELL), `Motion.kt` (fade, pulse, count-up, flip, press, `Reveal`), sentence-case labels; the screenshot tour sets `Motion.instant`
@@ -265,6 +266,7 @@ Gate for every task: tests green, before/after tables from the gated harness (`g
 
 ## Last session
 
+- App icon (2026-11-24): the maintainer supplied the artwork; window icon (`setWindowIcon`), exe icon (jpackage `--icon`, checked in the built `AimTune.exe`), top bar logo and README banner use it.
 - Contributions switched on for v1.1.1 (2026-11-24): the maintainer tested the flow locally and the issue form in a scratch repo; PR to `main`, then tag v1.1.1.
 - Training data contributions (2026-11-24): voluntary GitHub contributions, off by a build switch until the legal questions are settled. The research export is now format 2 (no seeds, fixed name `aimtune-research.json.gz`). AimTune makes no request for it: the player creates the file, shows it in Explorer and opens a prefilled issue, each after a click. Build green; screenshots checked (contribute, contribute-ready; EN, DE, 720). Not tested by hand: Explorer with a path that contains spaces.
 
