@@ -81,7 +81,7 @@ class ResultsScreen(ctx: AppContext, private val data: ResultsData) : UiScreen(c
 
     override fun onEscape() = ctx.showMenu()
 
-    override fun onEnter() = ctx.showStart()
+    override fun onEnter() = ctx.startBlindTest()
 
     private fun emptyText() =
         if (data.rounds == 0) t("results.none") else t("results.too_few", data.rounds)
@@ -222,7 +222,7 @@ class ResultsScreen(ctx: AppContext, private val data: ResultsData) : UiScreen(c
         if (sensitivity != null) {
             footer.addButton(ui.button(t("results.copy", sensitivity), Styles.SECONDARY) { Gdx.app.clipboard.contents = sensitivity }, minWidth = 220f).padRight(16f)
         }
-        footer.addButton(ui.button(t("results.continue"), Styles.PRIMARY) { ctx.showStart() }, minWidth = 260f)
+        footer.addButton(ui.button(t("results.continue"), Styles.PRIMARY) { ctx.startBlindTest() }, minWidth = 260f)
         return footer
     }
 

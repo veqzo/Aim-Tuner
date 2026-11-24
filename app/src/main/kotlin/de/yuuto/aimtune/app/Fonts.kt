@@ -37,7 +37,6 @@ class Fonts(framebufferHeight: Int, tokens: Tokens) : Disposable {
 
     /** Numbers, units, timers and the debug overlay. */
     val mono = create(JETBRAINS_MONO, tokens.fontSize("body"))
-    val monoSmall = create(JETBRAINS_MONO, tokens.fontSize("caption"))
     val numberMd = create(JETBRAINS_MONO, tokens.fontSize("numberMd"))
 
     /** The readout of a rack module (token `display`). */

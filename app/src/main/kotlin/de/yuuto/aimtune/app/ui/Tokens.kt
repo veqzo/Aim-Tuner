@@ -41,7 +41,6 @@ class Tokens private constructor(root: JsonValue) {
     val ledOff: Color = parseColor(led.getString("off"))
 
     /** Motion durations in seconds. */
-    val motionFast: Float = motion.getFloat("fast")
     val motionBase: Float = motion.getFloat("base")
     val motionSlow: Float = motion.getFloat("slow")
 

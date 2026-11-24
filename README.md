@@ -113,7 +113,7 @@ AimTune is honest about what it has and has not shown. Read this before you trus
 
 <br>
 
-- **The target sizes are estimates.** Riot publishes no head size or movement speeds, so the Valorant profile uses a head of about 0.2 m seen from 6 to 30 m. The pre-test notice says so until the values are measured in the game (see [docs/history/REVIEW.md](docs/history/REVIEW.md)). The recommended sensitivity depends on target size.
+- **The target sizes are estimates.** Riot publishes no head size or movement speeds, so the Valorant profile uses a head of about 0.2 m seen from 6 to 30 m. The targets check on the dashboard says so until the values are measured in the game (see [docs/history/REVIEW.md](docs/history/REVIEW.md)). The recommended sensitivity depends on target size.
 - **Checked against a simulated player, not against many people.** The method recovers the best sensitivity of a simulated player to within about 10-20 % at 15 rounds, but how well real people behave like it is not measured yet (see [docs/history/ASSESSMENT.md](docs/history/ASSESSMENT.md)).
 - **The result is a range, not an exact value.** Controlled studies and the simulations agree that scores are flat around the best sensitivity: a difference of 15 % is below what a 45-second round can measure. The app shows the stretch in which your scores were equal, and says so when they were equal almost everywhere. Fatigue and learning can move the result; play on more than one day.
 - **A clean aim test is not a game.** Nothing shows yet that the best sensitivity in a trainer is the best one in a match (movement, peeking, pressure); no study of that was found.

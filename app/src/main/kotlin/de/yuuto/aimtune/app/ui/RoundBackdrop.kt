@@ -24,8 +24,6 @@ class RoundBackdrop : Disposable {
     private val vignette = createVignette()
     private var frame: FrameBuffer? = null
 
-    val present: Boolean get() = frame != null
-
     /** Renders [draw] (the 3D scene, no HUD) into a new frame buffer of the window's size. */
     fun capture(draw: () -> Unit) {
         val width = Gdx.graphics.backBufferWidth

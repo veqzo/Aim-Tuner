@@ -28,7 +28,6 @@ import de.yuuto.aimtune.app.accel.RefineRun
 import de.yuuto.aimtune.app.accel.SettingsAnalyses
 import de.yuuto.aimtune.app.accel.RunsUse
 import de.yuuto.aimtune.app.screens.RawAccelExportScreen
-import de.yuuto.aimtune.app.screens.RawAccelHubScreen
 import de.yuuto.aimtune.app.screens.RawAccelSettingScreen
 import de.yuuto.aimtune.app.accel.RefineImport
 import de.yuuto.aimtune.app.accel.RefineSession
@@ -63,7 +62,6 @@ import de.yuuto.aimtune.app.screens.ShareDataScreen
 import de.yuuto.aimtune.app.screens.StoredCounts
 import de.yuuto.aimtune.app.screens.MainMenuScreen
 import de.yuuto.aimtune.app.screens.OnboardingScreen
-import de.yuuto.aimtune.app.screens.PreTestScreen
 import de.yuuto.aimtune.app.screens.ResultsData
 import de.yuuto.aimtune.app.screens.ResultsScreen
 import de.yuuto.aimtune.app.screens.SettingsScreen
@@ -240,22 +238,8 @@ class AppContext(
         switchTo(MainMenuScreen(this, curveBack))
     }
 
-    /** Start test: onboarding on first use, then the pre-test notice. */
-    fun showStart() = if (isSetUp) showPreTest() else showOnboarding(afterFinish = ::showPreTest)
-
     fun showOnboarding(afterFinish: () -> Unit = ::showMenu, draft: SetupDraft = SetupDraft.fromSettings(settings.current)) =
         switchTo(OnboardingScreen(this, draft, afterFinish))
-
-    fun showPreTest() = switchTo(PreTestScreen(this))
-
-    /** The pre-test notice of the Range mode round set (menu entry "Range mode"). */
-    fun showRangePreTest() = switchTo(PreTestScreen(this, rangeMode = true))
-
-    /** Range mode from the menu: onboarding first if needed, then its notice; a game without a Range block has no such mode. */
-    fun showRangeMode() = if (isSetUp) showRangePreTest() else showOnboarding(afterFinish = ::showRangePreTest)
-
-    /** Whether the configured game has a Range mode. */
-    fun hasRangeMode(): Boolean = trainerConfig()?.profile?.geometry?.range != null
 
     /** The app options: language, sound and flash, updates, the stored rounds. */
     fun showSettings() = switchTo(SettingsScreen(this))
@@ -267,7 +251,7 @@ class AppContext(
         val config = trainerConfig()
         val setup = settings.current
         val pad = setup.padWidthCm
-        if (config == null || pad == null) return showOnboarding(afterFinish = if (rangeMode) ::showRangePreTest else ::showPreTest)
+        if (config == null || pad == null) return showOnboarding(afterFinish = ::showMenu)
         val range = searchRange(setup.aimStyleOrNull() ?: AimStyle.MIXED, config.cm360, pad)
         val weights = metricWeights()
         val enabled = try {
@@ -369,10 +353,6 @@ class AppContext(
         val dpi = trainerConfig()?.dpi ?: return null
         return baseline?.let { RunsUse.of(it, dpi, useFinderResult) }
     }
-
-    /** The Raw Accel hub; the passive analyses of the stored rounds are computed in the background. */
-    fun showRawAccelHub(analyses: CompletableFuture<SettingsAnalyses> = hub.analyses()) =
-        switchTo(RawAccelHubScreen(this, analyses, hub.restoreImported()))
 
     /** The page of one Raw Accel setting. */
     fun showRawAccelSetting(setting: RawAccelSetting, analyses: CompletableFuture<SettingsAnalyses> = hub.analyses()) =
@@ -582,7 +562,7 @@ class AppContext(
 
     fun showTrainer() {
         val config = trainerConfig()
-        if (config == null) showOnboarding(afterFinish = ::showPreTest) else switchTo(TrainerScreen(this, config))
+        if (config == null) showOnboarding(afterFinish = ::showMenu) else switchTo(TrainerScreen(this, config))
     }
 
     /** Shows [screen] and disposes the one it replaces. */

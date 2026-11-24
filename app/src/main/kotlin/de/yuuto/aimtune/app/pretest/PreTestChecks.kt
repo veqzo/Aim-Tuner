@@ -4,7 +4,7 @@ import de.yuuto.aimtune.input.windows.PointerAcceleration
 
 enum class CheckLevel { OK, ATTENTION, UNKNOWN }
 
-/** One line of the pre-test notice. The checks only inform; starting the test is never blocked. */
+/** One check chip next to a start action. The checks only inform; starting the sens test is never blocked. */
 data class CheckRow(
     val id: String,
     /** Keys of the i18n bundles; [detailArg] fills the `{0}` of the detail text. */

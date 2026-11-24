@@ -25,16 +25,13 @@ object Styles {
     const val BODY = "body"
     const val BODY_MUTED = "bodyMuted"
     const val BODY_LG = "bodyLg"
-    const val CAPTION = "caption"
     const val CAPTION_MUTED = "captionMuted"
     const val LABEL = "label"
     const val BRAND = "brand"
-    const val STRONG = "strong"
     const val TITLE = "title"
     const val HEADING = "heading"
     const val MONO = "mono"
     const val MONO_MUTED = "monoMuted"
-    const val MONO_SMALL = "monoSmall"
     const val NUMBER_MD = "numberMd"
     const val NUMBER_LG = "numberLg"
     const val NUMBER_XL = "numberXl"
@@ -60,7 +57,6 @@ object Styles {
     /** A recessed readout that is also a button (the setup pill). */
     const val WELL_BUTTON = "wellButton"
     const val CARD = "card"
-    const val CARD_CAUTION = "cardCaution"
 
     /** The raised face of a rack module; [WELL] is the recessed display inside it. */
     const val MODULE = "module"
@@ -84,7 +80,6 @@ class UiSkin(val tokens: Tokens, framebufferHeight: Int) : Disposable {
     /** Drawables that other code needs by name (logo, cards). */
     val logoRing: Drawable = shapes.roundedRect(LOGO_SIZE / 2, null, tokens.accent, LOGO_RING)
     val logoDot: Drawable = shapes.circle(LOGO_DOT, tokens.accent)
-    val surfaceSolid: Drawable = shapes.solid(tokens.surface)
     val whiteSolid: Drawable = shapes.solid(Color.WHITE)
 
     /** White soft disc for LED glows and halos; tint it with the actor color. */
@@ -125,16 +120,13 @@ class UiSkin(val tokens: Tokens, framebufferHeight: Int) : Disposable {
         label(Styles.BODY, fonts.body, tokens.text)
         label(Styles.BODY_MUTED, fonts.body, muted)
         label(Styles.BODY_LG, fonts.bodyLg, tokens.text)
-        label(Styles.CAPTION, fonts.caption, tokens.text)
         label(Styles.CAPTION_MUTED, fonts.caption, faint)
         label(Styles.LABEL, fonts.label, muted)
         label(Styles.BRAND, fonts.brand, tokens.text)
-        label(Styles.STRONG, fonts.strong, tokens.text)
         label(Styles.TITLE, fonts.title, tokens.text)
         label(Styles.HEADING, fonts.heading, tokens.text)
         label(Styles.MONO, fonts.mono, tokens.text)
         label(Styles.MONO_MUTED, fonts.mono, faint)
-        label(Styles.MONO_SMALL, fonts.monoSmall, faint)
         label(Styles.NUMBER_MD, fonts.numberMd, tokens.text)
         label(Styles.NUMBER_LG, fonts.numberLg, readoutColor)
         label(Styles.NUMBER_XL, fonts.numberXl, readoutColor)
@@ -256,7 +248,6 @@ class UiSkin(val tokens: Tokens, framebufferHeight: Int) : Disposable {
         val module = shapes.bevel(tokens.radiusLg, tokens.module, tokens.moduleHi, tokens.moduleLo)
         skin.add(Styles.MODULE, module, Drawable::class.java)
         skin.add(Styles.CARD, shapes.bevel(tokens.radiusMd, tokens.module, tokens.moduleHi, tokens.moduleLo), Drawable::class.java)
-        skin.add(Styles.CARD_CAUTION, shapes.roundedRect(tokens.radiusMd, tokens.module, tokens.caution, HAIRLINE), Drawable::class.java)
         skin.add(Styles.WELL, shapes.bevel(tokens.radiusMd, tokens.well, tokens.moduleLo, tokens.neutral(900)), Drawable::class.java)
     }
 

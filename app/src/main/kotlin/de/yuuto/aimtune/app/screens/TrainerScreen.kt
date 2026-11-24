@@ -57,9 +57,6 @@ class TrainerScreen(
         trainer.onShot = { result -> ctx.settings.current.let { if (it.hitSound) ctx.hitSounds.onShot(result, AppSettings.fraction(it.hitVolumePercent)) } }
     }
 
-    /** Exposed for the screenshot tour. */
-    val roundPhase: Phase get() = trainer.phase
-
     /** Starts a round without a click, for the screenshot tour. */
     fun startRoundForTour() = trainer.startRound()
 
