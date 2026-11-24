@@ -22,11 +22,11 @@ private const val ENTER_STEP = 0.08f
 /**
  * The dashboard: two equal rack modules, SENS (find the sensitivity) and CURVE (find or refine a
  * Raw Accel curve). Each front holds the main task, its back the advanced settings of it. The setup
- * is edited in the panel of the setup pill, the tools sit in the utility bar of the top bar.
+ * is edited in the panel of the setup pill, the tools sit in the utility bar of the top bar. [curveBack] opens the CURVE module on its back.
  */
-class MainMenuScreen(ctx: AppContext) : UiScreen(ctx) {
+class MainMenuScreen(ctx: AppContext, curveBack: Boolean = false) : UiScreen(ctx) {
     private val sensState = SensState()
-    private val curveState = CurveState()
+    private val curveState = CurveState().also { it.flipped = curveBack }
     private val analysesFuture: CompletableFuture<SettingsAnalyses> = ctx.hub.analyses()
 
     /** The readout counts up and the modules enter only on the first build, not on every rebuild after a click. */

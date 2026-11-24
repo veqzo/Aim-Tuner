@@ -245,9 +245,10 @@ class AppContext(
         languageOverride = language
     }
 
-    fun showMenu() {
+    /** The dashboard; [curveBack] opens it with the CURVE module turned to its back (the Raw Accel settings), where the setting pages came from. */
+    fun showMenu(curveBack: Boolean = false) {
         languageOverride = null
-        switchTo(MainMenuScreen(this))
+        switchTo(MainMenuScreen(this, curveBack))
     }
 
     /** Start test: onboarding on first use, then the pre-test notice. */
@@ -271,7 +272,7 @@ class AppContext(
     fun showSettings(returnTo: (() -> Unit)? = null) {
         languageOverride = null
         settingsReturn = returnTo
-        if (isSetUp) switchTo(SettingsScreen(this, returnTo)) else showOnboarding(afterFinish = returnTo ?: ::showMenu)
+        if (isSetUp) switchTo(SettingsScreen(this, returnTo)) else showOnboarding(afterFinish = returnTo ?: { showMenu() })
     }
 
     fun showCrosshair() {

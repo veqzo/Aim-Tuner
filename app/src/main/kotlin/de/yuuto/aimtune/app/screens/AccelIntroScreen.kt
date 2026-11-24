@@ -1,10 +1,7 @@
 package de.yuuto.aimtune.app.screens
 
 import com.badlogic.gdx.scenes.scene2d.Actor
-import com.badlogic.gdx.scenes.scene2d.InputEvent
-import com.badlogic.gdx.scenes.scene2d.ui.CheckBox
 import com.badlogic.gdx.scenes.scene2d.ui.Table
-import com.badlogic.gdx.scenes.scene2d.utils.ClickListener
 import de.yuuto.aimtune.app.AccelBaseline
 import de.yuuto.aimtune.app.AppContext
 import de.yuuto.aimtune.app.FinderResult
@@ -19,7 +16,6 @@ import de.yuuto.aimtune.app.ui.Styles
 import de.yuuto.aimtune.app.ui.button
 import de.yuuto.aimtune.app.ui.caps
 import de.yuuto.aimtune.app.ui.label
-import de.yuuto.aimtune.app.ui.onChange
 import de.yuuto.aimtune.app.ui.primaryAction
 import de.yuuto.aimtune.app.ui.profileChart
 import de.yuuto.aimtune.core.accel.FeltStep
@@ -33,7 +29,6 @@ private const val SECONDARY_HEIGHT = 56f
 private const val SECONDARY_GAP = 12f
 private const val SIDE_WIDTH = 480f
 private const val SIDE_GAP = 40f
-private const val BOX_GAP = 12f
 
 /**
  * Entry of the acceleration steps, in the curve layout. Left: what the search does, the sensitivity the runs are played at
@@ -142,29 +137,11 @@ class AccelIntroScreen(
         return table
     }
 
-    /** A checkbox with its text wrapped beside it (a CheckBox label does not wrap) and the help under the text; a click on the text toggles too. */
-    private fun checkBlock(text: String, checked: Boolean, help: String, onToggle: (Boolean) -> Unit): Table {
-        val block = Table()
-        val box = CheckBox("", ui.skin)
-        box.isChecked = checked
-        box.onChange { onToggle(box.isChecked) }
-        val textWidth = SIDE_WIDTH - box.prefWidth - BOX_GAP
-        val label = ui.label(text, Styles.BODY, wrap = true)
-        label.addListener(object : ClickListener() {
-            override fun clicked(event: InputEvent, x: Float, y: Float) = box.toggle()
-        })
-        block.add(box).top().left()
-        block.add(label).left().width(textWidth).padLeft(BOX_GAP).row()
-        block.add()
-        block.add(ui.label(help, Styles.CAPTION_MUTED, wrap = true)).left().width(textWidth).padLeft(BOX_GAP).padTop(CURVE_SMALL_GAP / 2)
-        return block
-    }
-
     /** Lets the player play the curve runs at the finder's result; shown only when the finder is confident enough. */
     private fun finderCheck(baseline: AccelBaseline): Table {
         val finder = checkNotNull(baseline.finder)
         val label = t("accel.use_finder", "%.1f".format(Locale.ROOT, finder.cm360), baseline.gameName, finder.sensitivityText, finder.rounds, finder.confidencePercent)
-        return checkBlock(label, ctx.useFinderResult, t("accel.use_finder_help", FinderResult.MIN_CONFIDENCE)) {
+        return checkBlock(label, ctx.useFinderResult, t("accel.use_finder_help", FinderResult.MIN_CONFIDENCE), SIDE_WIDTH) {
             ctx.useFinderResult = it
             rebuild()
         }
@@ -187,12 +164,12 @@ class AccelIntroScreen(
             block.add(ui.label(reason, Styles.CAPTION_MUTED, wrap = true)).left().width(SIDE_WIDTH)
             return block
         }
-        return checkBlock(t("accel.use_own", label), ctx.useOwnCurve, t("accel.use_own_help")) { ctx.useOwnCurve = it }
+        return checkBlock(t("accel.use_own", label), ctx.useOwnCurve, t("accel.use_own_help"), SIDE_WIDTH) { ctx.useOwnCurve = it }
     }
 
     /** Lets the player start a strength search that ignores the stored ones (they are kept, not deleted). */
     private fun priorSearchCheck(rounds: Int): Table =
-        checkBlock(t("accel.use_prior", rounds), ctx.usePriorSearch, t("accel.use_prior_help")) { ctx.usePriorSearch = it }
+        checkBlock(t("accel.use_prior", rounds), ctx.usePriorSearch, t("accel.use_prior_help"), SIDE_WIDTH) { ctx.usePriorSearch = it }
 
     /** Where the stage plan stands: the rung, its step and anchors, the sessions played and what the evidence says so far. */
     private fun planBlock(plan: StageProgress): Table {

@@ -4,55 +4,67 @@ import com.badlogic.gdx.scenes.scene2d.Actor
 import com.badlogic.gdx.scenes.scene2d.ui.Table
 import de.yuuto.aimtune.app.AppContext
 import de.yuuto.aimtune.app.accel.RefineRun
+import de.yuuto.aimtune.app.ui.LedState
+import de.yuuto.aimtune.app.ui.ModuleStatus
 import de.yuuto.aimtune.app.ui.Styles
 import de.yuuto.aimtune.app.ui.addButton
 import de.yuuto.aimtune.app.ui.button
-import de.yuuto.aimtune.app.ui.caps
-import de.yuuto.aimtune.app.ui.frame
+import de.yuuto.aimtune.app.ui.compareChart
 import de.yuuto.aimtune.app.ui.label
 import de.yuuto.aimtune.core.accel.RefineParameter
 import de.yuuto.aimtune.core.accel.RefineResult
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-private const val TEXT_WIDTH = 1000f
-private const val CARD_WIDTH = 900f
-private const val CARD_PADDING = 32f
-private const val FOOTER_BUTTON_HEIGHT = 64f
+private const val READOUT_PADDING = 28f
+private const val ACTION_GAP = 16f
+private const val FEEL_WIDTH = 900f
 
 /**
- * The result of one refine stage: the best value of the parameter as a change against the imported curve, its credible range
- * and confidence, and whether it will be kept. The player continues, skips the remaining stages (to the test) or stops.
+ * The result of one refine stage, in the curve layout: the best value of the parameter as a change against the imported
+ * curve in the readout, its credible range and whether it is kept, on the left; the imported curve against the refined
+ * one so far on the display, with the feel question, the ratings of the stage and the sensitivity of the runs under it. The player continues, skips the remaining stages (to the test) or stops.
  */
-class RefineStageScreen(ctx: AppContext, private val run: RefineRun) : UiScreen(ctx) {
+class RefineStageScreen(ctx: AppContext, private val run: RefineRun) : AccelFitScreen(ctx) {
     private val engine = run.engine
     private val result: RefineResult? = engine.currentResult
     private val lastStage = engine.stageNumber + 1 >= engine.stages.size
 
     override fun build(): Actor {
-        val content = Table()
-        val parameter = result?.parameter
-        content.add(ui.label(t("refine.stage.title", parameterName(parameter)), Styles.HEADING)).left().padBottom(16f).row()
-        content.add(ctx.runsUseLine(run.runsUse, TEXT_WIDTH, { ctx.showRefineStep(run) })).left().width(TEXT_WIDTH).padBottom(24f).row()
-        content.add(ui.label(t("refine.stage.explain"), Styles.BODY_MUTED, wrap = true)).left().width(TEXT_WIDTH).padBottom(24f).row()
-        result?.let { content.add(card(it)).left().width(CARD_WIDTH).padBottom(24f).row() }
-        content.add(refineFeelPanel(ctx, run) { rebuild() }).left().padBottom(16f).row()
-        result?.let { content.add(refineFeelStageCard(ctx, run, it.parameter, CARD_WIDTH)).left().row() }
+        val animate = firstBuild()
+        val left = Table()
+        left.headline(t("refine.stage.title", parameterName(result?.parameter)))
+        left.text(t("refine.stage.explain"))
+        result?.let { left.add(readout(it)).left().width(CURVE_LEFT_WIDTH).padTop(CURVE_SECTION_GAP).row() }
 
-        val footer = Table()
-        footer.add(ui.button(t("common.stop"), Styles.TEXT) { ctx.showMenu() }).left().height(FOOTER_BUTTON_HEIGHT).padLeft(8f)
-        footer.add().expandX()
-        if (!lastStage) {
-            footer.addButton(ui.button(t("refine.stage.to_test"), Styles.SECONDARY) { toTest() }, minWidth = 300f).padRight(16f)
-        }
-        val nextLabel = if (lastStage) t("refine.stage.finish") else t("refine.stage.next", parameterName(engine.stages[engine.stageNumber + 1]))
-        footer.addButton(ui.button(nextLabel, Styles.PRIMARY) { next() }, minWidth = 340f)
-        return frame(content, footer, Chrome.MINIMAL)
+        val display = curveDisplay(t("curve.display.refined"), compareChart(ui.tokens, run.profile, engine.candidate), animate, t("curve.display.empty_title"), "")
+        val right = Table()
+        right.add(display).grow().row()
+        right.add(refineFeelPanel(ctx, run, FEEL_WIDTH) { rebuild() }).left().padTop(CURVE_SECTION_GAP).row()
+        result?.let { right.add(refineFeelStageCard(ctx, run, it.parameter, FEEL_WIDTH)).left().padTop(CURVE_SMALL_GAP).row() }
+        right.add(ctx.runsUseLine(run.runsUse, FEEL_WIDTH, { ctx.showRefineStep(run) })).left().width(FEEL_WIDTH).padTop(CURVE_SECTION_GAP)
+
+        val content = Table()
+        content.add(curvePanel(status(), left, right)).grow()
+        return frame(content, footer(), Chrome.MINIMAL)
     }
 
     override fun onEnter() = next()
 
     override fun onEscape() = ctx.showMenu()
+
+    private fun status(): ModuleStatus = when (result?.excludesNeutral) {
+        true -> ModuleStatus(LedState.OK, t("curve.status.kept"))
+        else -> ModuleStatus(LedState.OFF, t("curve.status.unclear"))
+    }
+
+    private fun footer(): Table {
+        val footer = curveFooter(t("common.stop")) { ctx.showMenu() }
+        if (!lastStage) footer.addButton(ui.button(t("refine.stage.to_test"), Styles.SECONDARY) { toTest() }, minWidth = 300f).padRight(ACTION_GAP)
+        val nextLabel = if (lastStage) t("refine.stage.finish") else t("refine.stage.next", parameterName(engine.stages[engine.stageNumber + 1]))
+        footer.addButton(ui.button(nextLabel, Styles.PRIMARY) { next() }, minWidth = 340f)
+        return footer
+    }
 
     private fun next() {
         engine.continueToNextStage()
@@ -64,19 +76,20 @@ class RefineStageScreen(ctx: AppContext, private val run: RefineRun) : UiScreen(
         ctx.showRefineStep(run)
     }
 
-    private fun card(r: RefineResult): Table {
-        val inner = CARD_WIDTH - 2 * CARD_PADDING
-        val card = Table()
-        card.background(ui.skin.getDrawable(Styles.CARD))
-        card.pad(CARD_PADDING)
-        card.add(ui.caps(t("refine.stage.card_title"))).left().row()
-        card.add(ui.label(change(r.best), Styles.TITLE, wrap = true)).left().width(inner).padTop(8f).row()
-        card.add(ui.label(t("refine.stage.range", change(r.low), change(r.high), r.confidencePercent, r.rounds), Styles.CAPTION_MUTED, wrap = true))
-            .left().width(inner).padTop(12f).row()
-        card.add(ui.label(if (r.excludesNeutral) t("refine.stage.kept") else t("refine.stage.unclear"), if (r.excludesNeutral) Styles.OK else Styles.BODY_MUTED, wrap = true))
-            .left().width(inner).padTop(12f).row()
-        if (r.atEdge) card.add(ui.label(t("refine.stage.edge"), Styles.CAUTION, wrap = true)).left().width(inner).padTop(12f)
-        return card
+    /** The recessed readout: the best change in big numbers, its range, and whether it is kept or at the edge. */
+    private fun readout(r: RefineResult): Table {
+        val inner = CURVE_LEFT_WIDTH - 2 * READOUT_PADDING
+        val well = Table().left()
+        well.background(ui.skin.getDrawable(Styles.WELL))
+        well.pad(READOUT_PADDING)
+        well.add(ui.label(t("refine.stage.card_title"), Styles.LABEL)).left().row()
+        well.add(ui.label(change(r.best), Styles.NUMBER_LG)).left().row()
+        well.add(ui.label(t("refine.stage.range", change(r.low), change(r.high), r.confidencePercent, r.rounds), Styles.MONO_MUTED, wrap = true))
+            .left().width(inner).padTop(CURVE_SMALL_GAP).row()
+        well.add(ui.label(if (r.excludesNeutral) t("refine.stage.kept") else t("refine.stage.unclear"), if (r.excludesNeutral) Styles.OK else Styles.BODY_MUTED, wrap = true))
+            .left().width(inner).padTop(CURVE_SMALL_GAP).row()
+        if (r.atEdge) well.add(ui.label(t("refine.stage.edge"), Styles.CAUTION, wrap = true)).left().width(inner).padTop(CURVE_SMALL_GAP)
+        return well
     }
 
     private fun parameterName(p: RefineParameter?) = when (p) {

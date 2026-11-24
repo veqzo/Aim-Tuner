@@ -1,20 +1,28 @@
 package de.yuuto.aimtune.app.screens
 
 import com.badlogic.gdx.scenes.scene2d.Actor
+import com.badlogic.gdx.scenes.scene2d.InputEvent
+import com.badlogic.gdx.scenes.scene2d.ui.CheckBox
 import com.badlogic.gdx.scenes.scene2d.ui.Table
+import com.badlogic.gdx.scenes.scene2d.utils.ClickListener
 import de.yuuto.aimtune.app.AppContext
 import de.yuuto.aimtune.app.accel.LastCalibration
 import de.yuuto.aimtune.app.accel.PriorCalibration
 import de.yuuto.aimtune.app.accel.StrengthResult
 import de.yuuto.aimtune.app.ui.ChartActor
 import de.yuuto.aimtune.app.ui.ChartSpec
+import de.yuuto.aimtune.app.ui.LedState
 import de.yuuto.aimtune.app.ui.ModuleStatus
+import de.yuuto.aimtune.app.ui.Motion
 import de.yuuto.aimtune.app.ui.Styles
 import de.yuuto.aimtune.app.ui.addButton
 import de.yuuto.aimtune.app.ui.button
 import de.yuuto.aimtune.app.ui.caps
 import de.yuuto.aimtune.app.ui.label
 import de.yuuto.aimtune.app.ui.modulePanel
+import de.yuuto.aimtune.app.ui.onChange
+import de.yuuto.aimtune.core.accel.AbStatus
+import de.yuuto.aimtune.core.accel.AbVerdict
 import de.yuuto.aimtune.core.accel.AccelFit
 import de.yuuto.aimtune.core.accel.AccelFitResult
 import de.yuuto.aimtune.core.accel.AccelReason
@@ -38,6 +46,9 @@ private const val CAPTION_PADDING_X = 16f
 private const val CAPTION_PADDING_Y = 4f
 private const val CHART_MIN_HEIGHT = 300f
 private const val EMPTY_PADDING = 36f
+private const val READOUT_PADDING_X = 36f
+private const val READOUT_PADDING_Y = 24f
+private const val BOX_GAP = 12f
 
 /**
  * The "curve expanded" layout that every screen of the curve flow shares (find, analysis, search result, verdict, last
@@ -93,6 +104,62 @@ abstract class AccelFitScreen(ctx: AppContext) : UiScreen(ctx) {
         if (animate) actor.drawOn(ui.tokens.motionSlow * 3, ui.tokens.motionBase)
         well.add(actor).grow().minHeight(CHART_MIN_HEIGHT).padTop(CURVE_SMALL_GAP)
         return well
+    }
+
+    /** A recessed panel for facts instead of a chart (setting pages, the patched copy); the caller fills it top to bottom. */
+    protected fun infoWell(): Table {
+        val well = Table().top().left()
+        well.background(ui.skin.getDrawable(Styles.WELL))
+        well.pad(EMPTY_PADDING)
+        return well
+    }
+
+    /** A caps title in a column, [gap] below the row above it. */
+    protected fun Table.caps(text: String, gap: Float = CURVE_SECTION_GAP) {
+        add(ui.caps(text)).left().padTop(gap).row()
+    }
+
+    /** The recessed readout of a blind test: the mean score difference of the curve against the baseline, then the pairs and the interval. */
+    protected fun verdictReadout(v: AbVerdict, animate: Boolean): Table {
+        val well = Table().left()
+        well.background(ui.skin.getDrawable(Styles.WELL))
+        well.pad(READOUT_PADDING_Y, READOUT_PADDING_X, READOUT_PADDING_Y, READOUT_PADDING_X)
+        well.add(ui.label(t("curve.result.difference"), Styles.LABEL)).left().row()
+        val format = { value: Double -> "%+.1f".format(Locale.ROOT, value) }
+        val number = ui.label(format(v.meanDifference), Styles.NUMBER_LG)
+        if (animate) Motion.countUp(number, 0.0, v.meanDifference, ui.tokens.motionSlow * 2, format = format)
+        well.add(number).left().row()
+        well.add(ui.label(t("curve.result.interval", v.pairs, format(v.lowerBound), format(v.upperBound)), Styles.MONO_MUTED)).left().padTop(CURVE_SMALL_GAP)
+        return well
+    }
+
+    /** The head LED and status of a blind test verdict. */
+    protected fun verdictStatus(v: AbVerdict?): ModuleStatus = when (v?.status) {
+        AbStatus.ACCEL_BETTER -> ModuleStatus(LedState.OK, t("curve.status.better"))
+        AbStatus.ACCEL_WORSE -> ModuleStatus(LedState.CAUTION, t("curve.status.worse"))
+        AbStatus.NO_DIFFERENCE -> ModuleStatus(LedState.OFF, t("curve.status.same"))
+        else -> ModuleStatus(LedState.OFF, t("curve.status.stopped"))
+    }
+
+    /**
+     * A checkbox with its [text] wrapped beside it (a CheckBox label does not wrap) and the [help] under the text, [width]
+     * wide in all; a click on the text toggles too.
+     */
+    protected fun checkBlock(text: String, checked: Boolean, help: String, width: Float, onToggle: (Boolean) -> Unit): Table {
+        val block = Table()
+        val box = CheckBox("", ui.skin)
+        box.isChecked = checked
+        box.onChange { onToggle(box.isChecked) }
+        val textWidth = width - box.prefWidth - BOX_GAP
+        val label = ui.label(text, Styles.BODY, wrap = true)
+        label.addListener(object : ClickListener() {
+            override fun clicked(event: InputEvent, x: Float, y: Float) = box.toggle()
+        })
+        block.add(box).top().left()
+        block.add(label).left().width(textWidth).padLeft(BOX_GAP).row()
+        block.add()
+        block.add(ui.label(help, Styles.CAPTION_MUTED, wrap = true)).left().width(textWidth).padLeft(BOX_GAP).padTop(CURVE_SMALL_GAP / 2)
+        return block
     }
 
     /** The found curve: its Raw Accel family and parameters, and how much its gain changes. */
