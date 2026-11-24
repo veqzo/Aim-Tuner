@@ -20,7 +20,7 @@ dependencies {
 }
 
 application {
-    mainClass.set("de.yuuto.aimtune.app.MainKt")
+    mainClass.set("dev.veqzo.aimtune.app.MainKt")
 }
 
 // Renders every screen with sample data into app/build/screenshots (hidden window, no user data touched).

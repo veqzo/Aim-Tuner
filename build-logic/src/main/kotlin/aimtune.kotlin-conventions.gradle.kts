@@ -2,7 +2,7 @@ plugins {
     kotlin("jvm")
 }
 
-group = "de.yuuto.aimtune"
+group = "dev.veqzo.aimtune"
 version = "0.1.0-SNAPSHOT"
 
 repositories {

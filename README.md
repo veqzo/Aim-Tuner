@@ -4,8 +4,8 @@
 
 <br>
 
-[![CI](https://img.shields.io/github/actions/workflow/status/Yuutokata/Aim-Tuner/ci.yml?style=flat-square&labelColor=1B1D1F&label=CI)](https://github.com/Yuutokata/Aim-Tuner/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/github/v/tag/Yuutokata/Aim-Tuner?style=flat-square&labelColor=1B1D1F&color=FFB020&label=version)](https://github.com/Yuutokata/Aim-Tuner/tags)
+[![CI](https://img.shields.io/github/actions/workflow/status/veqzo/Aim-Tuner/ci.yml?style=flat-square&labelColor=1B1D1F&label=CI)](https://github.com/veqzo/Aim-Tuner/actions/workflows/ci.yml)
+[![Version](https://img.shields.io/github/v/tag/veqzo/Aim-Tuner?style=flat-square&labelColor=1B1D1F&color=FFB020&label=version)](https://github.com/veqzo/Aim-Tuner/tags)
 [![License: MIT](https://img.shields.io/badge/license-MIT-3DDC97?style=flat-square&labelColor=1B1D1F)](LICENSE)
 ![Windows](https://img.shields.io/badge/platform-Windows-2A2D31?style=flat-square&labelColor=1B1D1F&logo=windows&logoColor=ECEDEE)
 ![Kotlin](https://img.shields.io/badge/Kotlin-JVM%2021-2A2D31?style=flat-square&labelColor=1B1D1F&logo=kotlin&logoColor=ECEDEE)
@@ -101,7 +101,7 @@ All values are sample data. `./gradlew :app:screenshots` renders the screens (`:
 
 ## 📦 Install
 
-1. Download `AimTune-<version>-windows.zip` from the [latest release](https://github.com/Yuutokata/Aim-Tuner/releases) and unzip it anywhere (or run the `-setup.exe` installer if the release has one).
+1. Download `AimTune-<version>-windows.zip` from the [latest release](https://github.com/veqzo/Aim-Tuner/releases) and unzip it anywhere (or run the `-setup.exe` installer if the release has one).
 2. Start `AimTune\AimTune.exe`. It brings its own Java runtime; you do not have to install anything else.
 3. The program is not code-signed yet. If Windows SmartScreen warns you, choose **More info**, then **Run anyway**.
 

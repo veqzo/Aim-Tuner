@@ -4,9 +4,9 @@ Single source of truth for project status. Update at the end of every task and b
 
 ## Current
 
-- **Latest:** M24 UI redesign "Rack" implemented (branch `feature/m24-ui-redesign`, plan approved 2026-11-09; steps 1-10 done, ADR 0006; the user approved the dashboard); waiting for the user's hands-on test, then merge into `dev`. Before that: M23 Valorant realism in progress (steps a-h done: both finders score Valorant click rounds by duel wins, the sim gates hold; i (hands-on test by the user and the friend) next; see M23 below). Before that: M22 Raw Accel hub implemented (M22a-g, branch `feature/m22-raw-accel-hub`, merged into `dev` in `cb4bd95`; plan and outcome in docs/RAWACCEL-HUB.md); waiting for the user's hands-on test. Before that: M18 Refine my Raw Accel curve is implemented (null gate met, level gate missed, see below). Before that: M14 Optimizer review fixes is implemented: curve finder v2 (bounded lookup table) is the new default. Speed rounds, the closed loop, grouped A/B and the time model missed their gates and stay off. Waiting for the user's test of the LUT export in Raw Accel.
-- **Milestone:** M11 Realistic target heights and M12 Valorant crosshair (in progress, M11 first); M10 Flash turn-away (implemented, waiting for the user's hands-on test); M9 Review fixes (implemented, waiting for the user's hands-on test); M8 Results, i18n, packaging is implemented and waiting for the user's hands-on test
-- **Task:** fixes are in (see M9 below and docs/history/REVIEW.md status table). The target sizes are assumptions until R1b. M7's second hands-on part (analysis, blind test, Raw Accel import) is still open, and per the review the acceleration results should not be trusted before R2.
+- **Latest (2026-11-24):** all milestones are tested by the user and work, except M22 and M23. M24 (UI "Rack") is on `dev`; `dev` is 55 commits ahead of `main` (last release v0.4.0). M15 is closed without the clips. Step 6 of the find-a-curve redesign (consistency metric) is dropped. The repository moved to `veqzo/Aim-Tuner` (public); the packages are now `dev.veqzo.aimtune`.
+- **Milestone:** M22 Raw Accel hub and M23 Valorant realism, hands-on tests open.
+- **Task:** M23 step i (the user and the friend), the rest of the M22 hands-on test, then merge `dev` into `main` and release, so the in-app updater (already on `dev`) ships.
 
 ## Checklist
 
@@ -57,7 +57,7 @@ Single source of truth for project status. Update at the end of every task and b
 - [x] Windows pointer acceleration read (`SystemParametersInfo`)
 - [x] Scene2D skin from `tokens.json`, screens: menu, onboarding (4 steps), pre-test notice, settings
 - [x] Screenshot tour (`--screenshots <dir>`) for design review
-- [ ] Hands-on test by the user: first launch goes through onboarding, settings persist, trainer uses the game's FOV
+- [x] Hands-on test by the user: first launch goes through onboarding, settings persist, trainer uses the game's FOV (tested by the user, works, 2026-11-24)
 
 ### Verification harness (cross-cutting, requested after M4)
 - [x] `SimulatedPlayer`/`SimulatedAimer` (Fitts' law, signal-dependent noise, reaction time, configurable optimum and gain preference, fatigue) + `ManualClock` + `HeadlessRound`
@@ -65,7 +65,7 @@ Single source of truth for project status. Update at the end of every task and b
 - [x] Headless end-to-end test: rounds -> segmentation -> metrics -> score -> baseline estimator vs ground truth, many seeds and noise levels, convergence report
 - [x] `RoundLogFile` raw event logs, `ReplayMouseSource`, `--record <dir>`, fixture regression test
 - [x] `:app:screenshots` task renders every screen offscreen to `app/build/screenshots/`
-- [ ] Optimizer (M5), more scenarios (M6) and accel fitting (M7) plug into the harness when they exist; the end-to-end test then asserts the recovered optimum/curve against the same ground truth
+- [x] Optimizer (M5), more scenarios (M6) and accel fitting (M7) plug into the harness when they exist; the end-to-end test then asserts the recovered optimum/curve against the same ground truth (done: `AccelPipelineTest`, the M14-M23 gate tests run on the harness)
 
 ### M5 Bayesian optimizer
 - [x] GP over ln(cm360) (Matern 5/2, noise, per-session offsets, own Cholesky, ADR 0004 amended), expected improvement, design and repeat rounds
@@ -98,7 +98,7 @@ Single source of truth for project status. Update at the end of every task and b
 - [x] Raw Accel export (`RawAccelExport`: settings.json in the 1.7.1 layout, Velocity form, factor in the output DPI); checked against the required properties and validation rules read from the source, but not loaded into Raw Accel itself (see open questions)
 - [x] Accel screens in the app (menu "Acceleration": intro with the Raw Accel check, calibration and test rounds through `RoundSession`, analysis, verdict with export and copy)
 - [x] Hands-on test, first part: calibration feels like normal aiming; stopped after 5 of 15 rounds, so the fit, A/B test and export are still untested by the user
-- [ ] Hands-on test, second part: analysis result, blind test and Raw Accel import
+- [x] Hands-on test, second part: analysis result, blind test and Raw Accel import (tested by the user, works, 2026-11-24)
 
 ### M8 Results, i18n, packaging
 - [x] Chart actor (`ChartActor`/`ChartSpec`: grid, bands, dashed lines, dots, markers), score chart on the results screen, wanted-gain chart on the accel analysis screen (no results tab, see DESIGN.md)
@@ -110,7 +110,7 @@ Single source of truth for project status. Update at the end of every task and b
 ### M9 Review fixes (from docs/history/REVIEW.md; the user asked for "M8 – Review fixes", M8 was already taken by Results/i18n/packaging, so this is M9). Approved and implemented, not yet committed
 Order: the four items that change the numbers first (R1-R4), then the rest.
 - [x] R1 (C1, M5) Realism (values are assumptions until measured in the game, see the remaining item below): target angular size, distance and flick-angle distribution, strafe speed and scenario weights move into the `GameProfile` JSON (`verified` flag and sources per field); the scenarios take them from the profile; default round = one scenario with a mixed distance distribution; measure the real head size in the Valorant range (procedure in docs/history/REVIEW.md) and replace the assumed values; document the sources in ALGORITHMS.md "Realism"
-- [ ] R1b (user) Measure a head in the game's shooting range (procedure in docs/history/REVIEW.md, Realism), put the values into `games/valorant.json` and set `trainer.verified` to true
+- [x] R1b (user) Measure a head in the game's shooting range (procedure in docs/history/REVIEW.md, Realism), put the values into `games/valorant.json` and set `trainer.verified` to true (tested by the user, works, 2026-11-24)
 - [x] R2 (C2) First-movement definition: first reach starts >= ~100 ms after the spawn, points to the target, covers >= ~30 % of the distance or exceeds a minimum peak speed; check on the real rounds (`RealDataReviewTest`: < 3 % with error < -0.5); add a real-round fixture (`--record`); "recompute stored metrics from the stored events" with `METRICS_VERSION` bump (Q4)
 - [x] R3 (C3) Remove consistency from the sensitivity objective (or make it distance-normalised and de-trended); `ReviewBiasTest` single-metric optima must be interior; warn in Settings about weights
 - [x] R4 (M1) Search range centred on the current value (log scale), pad width only a warning, plausibility check for extreme onboarding values
@@ -119,12 +119,12 @@ Order: the four items that change the numbers first (R1-R4), then the rest.
 - [x] R7 (M4) Accel only (GetRawInputBuffer and 4/8 kHz not done, see docs/history/REVIEW.md status) with the Raw Input source; same speed estimator for the fit and the driver simulation; jitter/batching tests; check 4/8 kHz with `GetRawInputBuffer` (Q1)
 - [x] R8 (M6, M8) First-shot accuracy metric; clicks read from the same raw packet stream and shot at the view of the click time
 - [x] R9 (M7) Valorant FOV (letterboxed to the profile aspect instead of measuring) at other aspect ratios: measure or fix to a 16:9 viewport, `aspectBehavior` in the profile
-- [ ] R10 (C4) Record real sessions of 2+ people over a sweep, fit/validate the simulated player against them, re-quote the convergence numbers
+- [x] R10 (C4) Record real sessions of 2+ people over a sweep, fit/validate the simulated player against them, re-quote the convergence numbers (closed 2026-11-24: the user tested the finder hands-on; a second person is M23 i)
 - [x] R11 (M9) Cache optimizer hyperparameters / cap the history refit, one query for rounds + metrics (Q5)
 - [x] R12 Minor (except Q3, Q8, GetRawInputBuffer): Q1-Q3, Q6-Q9 of docs/history/REVIEW.md
 - [x] R14 Detection power for weak effects (`ReviewAccelTest.detectionPower`, result in ALGORITHMS.md): curves of +-15 % are mostly not found or not confirmed
 - [x] R15 "Try a mild curve anyway" on the analysis screen (`trialAccel`, `AccelRun.startTrial`), same blind test, result marked as trial
-- [ ] R13 Release (done: README, THIRD-PARTY-NOTICES, link, SPEC/ALGORITHMS, CI smoke test; still open: load the exported settings.json into Raw Accel, installer test without a JDK): README for users (install, use, method in plain words, limitations), THIRD-PARTY-NOTICES, Raw Accel link, SPEC/ALGORITHMS corrections, CI smoke test of the packaged app, load the exported `settings.json` into Raw Accel, test an installer on a machine without a JDK
+- [x] R13 Release (done: README, THIRD-PARTY-NOTICES, link, SPEC/ALGORITHMS, CI smoke test; still open: load the exported settings.json into Raw Accel, installer test without a JDK): README for users (install, use, method in plain words, limitations), THIRD-PARTY-NOTICES, Raw Accel link, SPEC/ALGORITHMS corrections, CI smoke test of the packaged app, load the exported `settings.json` into Raw Accel, test an installer on a machine without a JDK (tested by the user, works, 2026-11-24)
 - [x] Review done: `docs/history/REVIEW.md`, review experiments (`core/.../harness/review`, `storage/.../review`, gated by `AIMTUNE_REVIEW` / `AIMTUNE_REAL_DB`), permanent `UnitChainTest`
 
 ### M10 Flash turn-away (requested: turning away from flashes in Valorant and back quickly is a key use case)
@@ -136,7 +136,7 @@ Order: the four items that change the numbers first (R1-R4), then the rest.
 - [x] Curve analysis with the returns (experiments in `FlashExperimentsTest`, results in ALGORITHMS.md "Flash turn-away"): flash rounds help the error analysis only for a hand too slow to judge by itself, make rising gains harder to find and fatten the false-offer tail (1 of 500 flat players at 50 % flash), flash only gives false offers. Decision: the error analysis keeps the click scenarios. The blind strength search and the blind A/B test do use flash rounds (half of their rounds, `AccelRun(flash = true)` unless importance is "never"): flat players are no longer sent to "a curve stands out" in two thirds of the runs (23/32 -> 1/32), real preferences are found as before or better, the A/B test keeps 2 % false verdicts and confirms 95-100 %
 - [x] Guard tests: `FlashScoreTest` (the dodge rate alone peaks at the fast end, the combined optimum is inside the range, "often" stays within 45 % of the return-only optimum), `FlashScenarioTest`, `TrainerHarnessTest` (the trainer records flash rounds like the headless runner)
 - [x] Docs: SPEC, ALGORITHMS, ARCHITECTURE, DESIGN, CONTRIBUTING, README
-- [ ] Open (user): check the flash timings in the game (the visible flight before the windup and the exit margin are assumptions, `trainer.flash.verified` in `games/valorant.json`), play flash rounds on the real mouse and judge the scenario (pop delay, enemy position, white-out)
+- [x] Open (user): check the flash timings in the game (the visible flight before the windup and the exit margin are assumptions, `trainer.flash.verified` in `games/valorant.json`), play flash rounds on the real mouse and judge the scenario (pop delay, enemy position, white-out) (tested by the user, works, 2026-11-24)
 
 ### M11 Realistic target heights and mini-map (requested: targets floated anywhere in a sphere; Valorant fights are on one level)
 - [x] Research: no separate vertical sensitivity in Valorant found (pitch = yaw 0.07, `pitchMultiplier` not needed so far); eye and head height are not published (assumed 1.6 m / 1.65 m, `verified: false`)
@@ -145,14 +145,14 @@ Order: the four items that change the numbers first (R1-R4), then the rest.
 - [x] Horizontal and vertical endpoint errors in the metrics (`METRICS_VERSION` 3, old rounds are recomputed), shown on the results screen ("most of your misses are vertical")
 - [x] Mini-map (floor, ring wall, corner pillars, door frames, columns under the heads) in the trainer scene; `trainer.arena` in the profile, 30 % of flick and switching targets stand at a corner or doorway
 - [x] Re-run the simulation experiments (`VerticalExperimentsTest`): no measurable change of the numbers except weaker detection of rising weak preferences at 15 rounds; results in ALGORITHMS.md "Vertical distribution" and section E of ANALYSE.md (E2 crosshair follows with M12)
-- [ ] Open (user): measure head height and the elevation of enemies in the shooting range (R1b), judge the mini-map
+- [x] Open (user): measure head height and the elevation of enemies in the shooting range (R1b), judge the mini-map (tested by the user, works, 2026-11-24)
 
 ### M12 Valorant crosshair (requested: players aim differently with an unfamiliar crosshair)
 - [x] `docs/CROSSHAIR.md`: code format with sources (community generator and parsers, no Riot spec), the keys, ranges and defaults, what 17 real codes show, decisions and open points
 - [x] `core/crosshair`: `CrosshairCode` (lossless), `Crosshair` (typed primary section, `fromCode`/`applyTo`/`toCode`), `CrosshairLayout` (pixel rectangles); movement/firing error are parsed and kept, not drawn
 - [x] Pixel-exact `CrosshairRenderer` on the back buffer in all scenarios (checked on a screenshot: 6 px lines, 2 px thick, offset 3 around (960, 540)), `CrosshairScreen` with named profiles (new, duplicate, delete, rename, select), import/export of codes, live preview on a bright, dark or trainer background, menu entry C; profiles are stored in the settings (`crosshairs`, `activeCrosshair`)
 - [x] Tests: round trips of 17 real codes (raw and through the typed model), invalid codes, layout reference sizes and pictures, settings round trip; screenshot tour step `crosshair` (EN/DE)
-- [ ] Open (user): export two or three of your own crosshairs from Valorant, paste them into the editor and compare the rendered crosshair side by side with the game at the same resolution (pixel lengths, gaps, outline, colors); check the meaning of `m`, header `s`/`c`, a custom color without `c;8`, rounding of odd thickness on an even screen (docs/CROSSHAIR.md "Open points")
+- [x] Open (user): export two or three of your own crosshairs from Valorant, paste them into the editor and compare the rendered crosshair side by side with the game at the same resolution (pixel lengths, gaps, outline, colors); check the meaning of `m`, header `s`/`c`, a custom color without `c;8`, rounding of odd thickness on an even screen (docs/CROSSHAIR.md "Open points") (tested by the user, works, 2026-11-24)
 
 ### M14 Optimizer review fixes (docs/OPTIMIZER-REVIEW.md, "Umsetzung und Ergebnisse"; implemented, waiting for the user's hands-on test)
 Verdict "fix, no ML rewrite". Decisions made while reading the code:
@@ -181,13 +181,13 @@ Gate for every task: tests green, before/after tables from the gated harness (`g
   - ±15 % is found in 2 of 20 runs.
   - A hand that undershoots when rushed gives 58 of 60 false offers.
 - [x] T5 Closed-loop prototype (`ClosedLoopGateTest`): **no-go**. Less benefit than the bounded fit (-15 %: +4.6 against +33.0) and more false exports for range-biased players (28 against 13 of 32).
-- [ ] T6 Closed loop in the app: dropped (T5 no-go).
+- [x] T6 Closed loop in the app: dropped (T5 no-go).
 - [x] T7 Time in the sensitivity GP (`OptimizerConfig.timeDrift`, `GpHyperParams.driftShare/driftDays`, `Observation.days`, `dayDriftDetected`, 42-day window): **gate failed**, off by default and not wired into the app (no `sensModel` setting).
   - At 10 % drift per session: median error 14.7 % against 16.6 % (goal 9 %).
   - At 5 % drift it is slightly worse than legacy.
 - [x] T8 Plateau: already shown (range of equivalent sensitivities). It contains the true optimum in 80-88 % of the runs at 30 rounds (`PlateauGateTest`), so nothing new was built.
 - [x] T9 Defaults switched only for the curve finder; refactor-cleaner run; ALGORITHMS, ARCHITECTURE, SPEC, ANALYSE (section F), OPTIMIZER-REVIEW ("Umsetzung und Ergebnisse") updated.
-- [ ] Open (user):
+- [x] Open (user): (tested by the user, works, 2026-11-24)
   - load an exported lookup table into Raw Accel ("Look Up Table", Velocity) and compare its graph with the app's;
   - judge how the bounded curve feels on fast flicks;
   - optionally compare blind with `--curve-finder legacy` over several days.
@@ -206,17 +206,17 @@ Gate for every task: tests green, before/after tables from the gated harness (`g
 - [x] `storage/RawAccelImport`: lossless tree, profile list, typed profile or a list of refusal reasons, warnings (DPI, polling, devices)
 - [x] `RawAccelExport.patch` / `write`: the user's file plus one changed copy of a profile, everything else the original elements; device DPI written as an int (Raw Accel's field is an int)
 - [x] Tests: reference values from a line-by-line port of the source for every mode and cap mode, the user's profile (1e-4 table, 1e-9 closed form), import refusals and warnings, patch invariants
-- [ ] Power mode (refused on import), rotation and Y/X ratio in the trainer (refused on import), diff screen (M18)
+- [x] Power mode (refused on import), rotation and Y/X ratio in the trainer (refused on import), diff screen (M18) (done in M22a/b: the full 1.7.1 driver model; the import refuses only what Raw Accel refuses)
 - [x] Exported lookup tables get a flat tail point at 10000 in/s (`RawAccelExport.FLAT_TAIL_SPEED`): Raw Accel extends a lut linearly past its last point, the app tests the last value held; checked against `RawAccelCurve`
-- [ ] Real Raw Accel load test by the user (patched file, lut)
+- [x] Real Raw Accel load test by the user (patched file, lut) (tested by the user, works, 2026-11-24)
 
 ### M18 Refine my Raw Accel curve (docs/history/CURVE-FINDER-AUDIT.md; implemented, level gate missed, waiting for the user's hands-on test)
 - [x] Core: `RefineParameter` (LEVEL, HIGH_GAIN, TRANSITION), `RawAccelProfile.adjusted/supports/played`, `RefineSearch`, `RefineEngine` (warm-up 8, stages of 12, test vs the imported profile; `AbCondition.PLAIN` is the control arm), tests
 - [x] Storage: `SessionKind.ACCEL_REFINE` (`accel_refine`), rounds store the played curve as `rawaccel1`; stored searches, prior calibration and "Last search" ignore it (no schema change needed)
 - [x] App: import screen (clipboard or `<data dir>/imports/`, profile choice, parsed values, chart, refusals, warnings, DPI check), between-rounds, stage result and result screens, patch export to `<data dir>/exports/rawaccel/` with the list of changed fields, button on the acceleration intro, i18n en/de, screenshot steps `refine-import` and `refine-stage`
 - [x] Gate `RefineGateTest` (500 runs): REFINE_NULL exports 0 / 500 (target <= 5 % met); LEVEL +-15 targets missed (right side 64 % / 55 % instead of >= 70 %, exported 0 % / 1 % instead of >= 50 %), 0 harmful exports at 12-round stages (2 of 9 at 24 rounds); cause: the simulated score changes by about 1 point over a 15 % level change against a round sd of 13 (ALGORITHMS "Refine my Raw Accel curve")
-- [ ] Open (user): complete the level part and the test on the real profile; judge whether real hands show a clearer level optimum than the simulated one; load an exported file into Raw Accel
-- [ ] Open: IMPORT is the import screen, not a phase of the run object; the intro's "Refine" button needs the Raw Accel check ticked on the import screen itself; power mode, rotation and Y/X ratio are still refused
+- [x] Open (user): complete the level part and the test on the real profile; judge whether real hands show a clearer level optimum than the simulated one; load an exported file into Raw Accel (tested by the user, works, 2026-11-24); LEVEL was removed in M22c
+- [x] Open: IMPORT is the import screen, not a phase of the run object; the intro's "Refine" button needs the Raw Accel check ticked on the import screen itself; power mode, rotation and Y/X ratio are still refused (resolved: M22 supports the settings, M24 step 8 uses the check chips)
 
 ### M22 Raw Accel hub (branch `feature/m22-raw-accel-hub`; plan in docs/RAWACCEL-HUB.md)
 - [x] Plan: settings audit of Raw Accel 1.7.1 with a decision per setting, driver order, hub design, milestones; approved 2026-10-24 (open questions answered with the plan's proposals until the user says otherwise)
@@ -246,7 +246,7 @@ Gate for every task: tests green, before/after tables from the gated harness (`g
 - [x] h Sim gates for the duel score (`DuelGateTest`), docs (ALGORITHMS, ARCHITECTURE, SPEC, DESIGN)
 - [ ] i Hands-on test by the user and the friend; acceptance: the friend's result within ±15 % of 0.8 @400 DPI, feels right in Valorant; merge to `dev` only then
 
-### M15 Range mode (branch `feature/m15-range-mode`; plan in docs/RANGE.md)
+### M15 Range mode (closed; plan in docs/RANGE.md)
 - [x] 1 Plan: `docs/RANGE.md` approved; corrected after the first clips: mode Eliminate 100, armor on, sensitivity 0.335
 - [x] 2 Recording kit (`tools/range-re/RECORDING.md`), waiting for the user's clips
 - [~] 3 Measurement scripts (`tools/range-re/`: `unitchain.py` + tests, `turn_calibration.py`, `detect_bots.py`, `analyse_tracks.py`) and a first `out/range-spec.json` from the two clips; preliminary, `verified: false` (the tracker finds only 7 of about 20 bots, see RANGE.md)
@@ -254,11 +254,12 @@ Gate for every task: tests green, before/after tables from the gated harness (`g
 - [x] M15a moving-target metrics: `StrafeMotion`, scenarios `micro-strafe` and `switch-strafe` (opt-in tiles in settings), metrics against the target at the end of the reach with lead and aim components, curve-analysis filter, strafing simulated aimer; gate `M15aGateTest` passed (static metrics identical, no false offers from strafing rounds); ALGORITHMS "Moving targets"
 - [x] 5 Integration, part M15c Range scenario: `trainer.range` profile block (all `verified: false`), `RangeScenario`, bot hit model, range metrics and score inputs, humanoid bot and lanes in the trainer, settings tile (speed, bots), simulated aimer, gate `M15cGateTest` run once (ALGORITHMS "Range mode (M15c)")
 - [x] 5b M15d: Range is in the default scenarios of games with a Range block (existing settings keep theirs), menu entry "Range mode" (M) starts a blind test of range + flick, the curve finder stays without Range (test-guarded), gate re-run with the slower strafe: default flat player 0/30 (ALGORITHMS "Range mode (M15d)")
-- [ ] 6 Docs, screenshot tour EN/DE
-- [ ] Open (user): record the clips from RECORDING.md
+- Closed 2026-11-24: the user records no clips. Range mode stays as built; its bot model stays `verified: false`. No more M15 work
 
 ## Last session
 
+- main hardened (2026-11-24): GitHub rulesets "main protection" (no deletion, no force push, changes only through a pull request with merge commits, required check `build` from GitHub Actions on an up-to-date branch, resolved conversations, no bypass) and "release tags" (`v*` tags cannot be moved or deleted). CI runs on every pull request without a path filter (a skipped required check would block the merge) and has a read-only token. The release workflow stops unless the tag points to a commit on `main`. Review count is 0: GitHub does not let the PR author approve their own PR, the user approves by merging. Next: PR `dev` -> `main`, then tag v1.1.0.
+- Roadmap cleanup (2026-11-24): the user confirmed every milestone except M22 and M23 as tested and working; open boxes closed. M15 closed (no clips). Find-a-curve step 6 dropped. The curve finder audit questions and the find-a-curve product questions were already settled by M16-M18, M22 and the redesign steps. Package rename `de.yuuto.aimtune` -> `dev.veqzo.aimtune` in all modules; `UpdateChecker.REPO` and the README links now point to `veqzo/Aim-Tuner` (the old name made the release URL check fail, so the update check found nothing).
 - M24 docs: README rewritten in the Rack look (SVG banner `docs/screenshots/banner.svg` with system font fallbacks, flat badges in the Rack colours, feature grid, mermaid in Rack colours, current flow and keys); `docs/screenshots/` refreshed from the tour (`menu.png` replaced by `dashboard.png`; new onboarding, between-rounds, setup-panel). Tester guides (EN, DE) and NEXT-STEPS.de.md describe the dashboard, the one-screen setup and the countdown. Countdown decision: no setting to turn it off, the user keeps it as it is.
 - M24 fix from the hands-on test: the trainer cleared the screen with the UI background (`tokens.bg`, graphite since M24 step 1) instead of the room fog colour, so the room parts beyond the far plane showed as a dark rectangle; `TrainerScene.clear()` now clears with `Theme.roomFog` (also for the round overlay backdrop). The HUD instruction before a blind round wraps at 60 % of the width; the flash text ran off the screen. Build green; screenshots checked (EN, DE, 1080, 720).
 - M24 step 10 (cleanup): HUD restyle, old screens, styles and i18n keys removed, DESIGN.md rewritten, ADR 0006, code review. Build green; screenshots checked at 1920x1080 (EN, DE) and 1280x720 (EN, DE). M24 is complete; the hands-on test is next.
@@ -448,18 +449,9 @@ Gate for every task: tests green, before/after tables from the gated harness (`g
 
 ## Next steps
 
-- M24 hands-on test by the user (dashboard, onboarding, round overlay, curve flow, settings), then merge `feature/m24-ui-redesign` into `dev`.
-- M23: the sim does not show the 1.5x bias direction (M23 recommends faster than before M23 for the same simulated hand). The user accepted this on 2026-11-09: the sim hand is not the real hand, and the hands-on test i decides. If i fails, look at the head size first (head x0.7 moved the sim optimum to 38/62/80).
-- M23: step i: the user and the friend run the sensitivity finder in the packaged app with the Valorant defaults; acceptance: the friend's result within ±15 % of 0.8 @400 DPI. The user merged M23 into `dev` before i on 2026-11-09 (`898c321`); i is still open before a merge to `main`.
-- Find-a-curve redesign: the user answers the open product questions in `docs/FIND-CURVE-REDESIGN.md` section 6; steps 0 and 1 are done (see Last session); step 2 next, decide the consequence of step 0 for steps 5-6 along the way.
-- User tests M22 hands-on (`gradlew.bat :app:run` and the app image from `:app:jpackage`): the Raw Accel hub with real data, open/cancel/wrong file/save as in the native dialogs (also a path with umlauts), a refine run with `settings.json`, the patched export loaded into Raw Accel. Then decide about merging `feature/m22-raw-accel-hub` into `dev`. Possible follow-up: a refine experiment with a profile whose rise lies at 15-25 in/s.
-- User reads `docs/history/CURVE-FINDER-AUDIT.md` (branch `audit/curve-finder`), answers its open questions and decides which milestones (M16-M19, M15 split) to build. Until then do not load the exported natural 0.70 curve.
-
-0. User tests M9 with `gradlew.bat :app:run`: the targets are now head-sized and much smaller (expect low accuracy at first), the pre-test notice says "Estimate", the between-rounds screen may warn about drift. Then R1b: measure a head in Valorant's range and set `verified`.
-
-1. User tests M8 with `gradlew.bat :app:run` (or the app image from `:app:jpackage`): Results (R) with the chart, History (H) after a few sessions, Settings → Language (Deutsch/English, applies at once, kept on Save), the packaged `AimTune.exe` (does it start, does raw input work, does it create the database).
-2. Still open from M7: the second hands-on part (analysis result, blind test, Raw Accel import of `settings.json`).
-3. Then decide about pushing M8 and what comes after the milestones (pooling the A/B test over days, mixed-scenario confidence, refit with the curve on, see Open questions).
+1. M22: the user finishes the hands-on test: the Raw Accel hub with real data, the native open/save dialogs (also a path with umlauts), a refine run with `settings.json`, the patched export loaded into Raw Accel.
+2. M23 step i: the user and the friend run the sensitivity finder in the packaged app with the Valorant defaults; acceptance: the friend's result within ±15 % of 0.8 @400 DPI. If it fails, look at the head size first (head x0.7 moved the sim optimum to 38/62/80). The sim does not show the 1.5x bias direction; the user accepted that on 2026-11-09.
+3. Then merge `dev` into `main` through a pull request (CI must pass) and tag v1.1.0. Copies on v0.4.0 or older check `Yuutokata/Aim-Tuner` and cannot update themselves: install the next release once by hand; from then on the in-app update works.
 
 ## Known bugs
 
