@@ -104,6 +104,7 @@ Original geometry, no assets of any game. The bot is a head sphere in sand (`#e6
 | 2D circles as targets | Real 3D spheres, unlit accent color with an outline ring | The trainer is 3D; it must use the game's FOV |
 | Icons (play, history, gear, hand …) | Line icons rendered into a texture atlas | Scene2D has no SVG; icon set and license to be confirmed |
 | CSS hover/focus effects | Explicit hover, pressed, focus and disabled drawables (not shown in the mockups) | Scene2D needs them defined; designed to match the outlined style |
+| Check chips never block a start (M24) | The curve start on the find screen stays disabled until the Raw Accel chip is confirmed | The blind curve runs apply the curve in the app; a curve in the driver on top would falsify every round |
 | Game tiles show CS2, Apex, Overwatch 2, Fortnite | Valorant ships first; other profiles are added only after yaw/FOV are verified | Spec: Valorant first, never guess values |
 | Raw Accel row in the pre-test notice has an "Open Raw Accel" button | Manual checkbox "I checked: Raw Accel is off or linear" | Raw Accel exposes no query API and stores no readable state, so it cannot be detected; the Windows pointer acceleration setting is auto-detected |
 | Language selector in onboarding | Omitted until i18n (M8) | No translations yet |

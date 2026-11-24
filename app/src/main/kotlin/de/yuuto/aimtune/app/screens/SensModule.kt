@@ -7,12 +7,9 @@ import com.badlogic.gdx.scenes.scene2d.ui.Table
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton
 import de.yuuto.aimtune.app.AppContext
 import de.yuuto.aimtune.app.i18n.scenarioName
-import de.yuuto.aimtune.app.pretest.CheckLevel
 import de.yuuto.aimtune.app.pretest.CheckRow
 import de.yuuto.aimtune.app.pretest.PreTestChecks
 import de.yuuto.aimtune.app.trainerConfigFor
-import de.yuuto.aimtune.app.ui.CheckChip
-import de.yuuto.aimtune.app.ui.Disclosure
 import de.yuuto.aimtune.app.ui.LedState
 import de.yuuto.aimtune.app.ui.ModuleStatus
 import de.yuuto.aimtune.app.ui.Styles
@@ -101,14 +98,10 @@ internal class SensModule(
         }
         if (hasRange) table.add(variantSwitch()).left().padTop(GAP).row()
         val rows = checkRows()
-        val open = rows.firstOrNull { it.level == CheckLevel.ATTENTION }
-        val detail = open?.let { row ->
-            val short = t("dash.check.${row.id}.short", row.detailArg)
-            val more = if (row.detailArg == null) t(row.detail) else t(row.detail, row.detailArg)
-            Disclosure(ui, short, more, t("dash.more") to t("dash.less"), width, state.detailOpen) { state.detailOpen = it }
-        }
+        val detail = ctx.checkDetail(ui, rows, width, state.detailOpen) { state.detailOpen = it }
         val label = if (ctx.isSetUp) t("dash.sens.start") else t("dash.sens.setup")
-        table.add(ui.primaryAction(rows.map(::chip), detail, label, width) { start() }).left().padTop(GAP).row()
+        val chips = rows.map { row -> ctx.checkChip(row, { state.acceleration = WindowsPointerSettings.readAcceleration() }, rebuild) }
+        table.add(ui.primaryAction(chips, detail, label, width) { start() }).left().padTop(GAP).row()
         table.add(links()).left().padTop(SMALL_GAP)
         return table
     }
@@ -117,22 +110,6 @@ internal class SensModule(
         state.acceleration, ctx.rawAccelConfirmed, ctx.source.name, ctx.source is WindowsRawInputSource,
         targetsVerified = config?.profile?.geometry?.verified, gameName = config?.profile?.name.orEmpty(),
     )
-
-    private fun chip(row: CheckRow): CheckChip {
-        val led = when (row.level) {
-            CheckLevel.OK -> LedState.OK
-            CheckLevel.ATTENTION -> LedState.CAUTION
-            CheckLevel.UNKNOWN -> LedState.OFF
-        }
-        val text = t("dash.check.${row.id}") + ": " + t(row.state)
-        val action: (() -> Unit)? = when (row.id) {
-            // Raw Accel cannot be detected; the click is the player's word that it is off or linear, a second click takes it back.
-            PreTestChecks.RAW_ACCEL -> { { ctx.rawAccelConfirmed = !ctx.rawAccelConfirmed; rebuild() } }
-            PreTestChecks.POINTER -> { { state.acceleration = WindowsPointerSettings.readAcceleration(); rebuild() } }
-            else -> null
-        }
-        return CheckChip(text, led, action)
-    }
 
     private fun variantSwitch(): Table {
         val table = Table()

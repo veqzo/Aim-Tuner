@@ -30,13 +30,15 @@ class ChipButton(text: String, state: LedState, ui: UiSkin) : TextButton(text, u
 /**
  * The main action of a module: the checks that matter before it, as chips in one row, an optional
  * [detail] (normally a [Disclosure]) that says what the open check means, and the amber button. The checks never block
- * the button; a click on a chip confirms or re-reads it.
+ * the button; a click on a chip confirms or re-reads it. Only a run that cannot work without a check (the curve runs need a
+ * plain mouse) passes [enabled] false until it is given.
  */
-fun UiSkin.primaryAction(chips: List<CheckChip>, detail: Actor?, text: String, width: Float, onStart: () -> Unit): Table {
+fun UiSkin.primaryAction(chips: List<CheckChip>, detail: Actor?, text: String, width: Float, enabled: Boolean = true, onStart: () -> Unit): Table {
     val table = Table()
     if (chips.isNotEmpty()) table.add(chipRows(chips, width)).left().row()
     if (detail != null) table.add(detail).left().width(width).padTop(DETAIL_GAP).row()
-    val start = button(text, Styles.PRIMARY, onStart)
+    val start = button(text, Styles.PRIMARY) { if (enabled) onStart() }
+    start.isDisabled = !enabled
     table.add(start).left().width(width).height(BUTTON_HEIGHT).padTop(if (chips.isEmpty() && detail == null) 0f else ROW_GAP)
     return table
 }

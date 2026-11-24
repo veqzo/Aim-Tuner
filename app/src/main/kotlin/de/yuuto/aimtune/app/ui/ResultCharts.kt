@@ -84,9 +84,14 @@ private const val PROFILE_CHART_MAX_SPEED = 120.0
 private const val PROFILE_CHART_POINTS = 120
 
 /** The total multiplier of a Raw Accel profile (curve times output DPI / device DPI) against hand speed in in/s, with the line at 1. */
-fun profileChart(tokens: Tokens, profile: de.yuuto.aimtune.core.accel.RawAccelProfile): ChartSpec {
+fun profileChart(tokens: Tokens, profile: de.yuuto.aimtune.core.accel.RawAccelProfile): ChartSpec = multiplierChart(tokens, profile::totalMultiplier)
+
+/** The total gain of a found or offered curve against hand speed in in/s, with the line at 1; for curves without measured speed bins. */
+fun fitChart(tokens: Tokens, fit: AccelFit): ChartSpec = multiplierChart(tokens, fit::totalGain)
+
+private fun multiplierChart(tokens: Tokens, multiplier: (Double) -> Double): ChartSpec {
     val xs = DoubleArray(PROFILE_CHART_POINTS) { PROFILE_CHART_MAX_SPEED * (it + 1) / PROFILE_CHART_POINTS }
-    val ys = DoubleArray(xs.size) { profile.totalMultiplier(xs[it]) }
+    val ys = DoubleArray(xs.size) { multiplier(xs[it]) }
     val low = minOf(ys.min(), 1.0)
     val high = maxOf(ys.max(), 1.0)
     val margin = maxOf((high - low) * 0.15, 0.05)
