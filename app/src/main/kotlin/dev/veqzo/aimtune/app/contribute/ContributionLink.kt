@@ -29,7 +29,7 @@ object ContributionLink {
     /** GitHub answers 414 above an unstated server limit; this stays well below the usual 8 KB. */
     const val MAX_LENGTH = 6000
 
-    /** The id of the summary field in docs/contribution/training-data.yml. */
+    /** The id of the summary field in .github/ISSUE_TEMPLATE/training-data.yml. */
     const val SUMMARY_FIELD = "summary"
 
     fun build(config: ContributionConfig, title: String, summary: String?, maxLength: Int = MAX_LENGTH): Result<String> {

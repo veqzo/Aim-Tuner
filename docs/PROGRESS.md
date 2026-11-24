@@ -13,7 +13,7 @@ Single source of truth for project status. Update at the end of every task and b
 ### Training data contributions (branch `feature/training-data-contributions`; plan approved 2026-11-24; ADR 0007)
 - [x] Privacy audit of the research export: format 2 without round seeds (they showed the PC's uptime) and with a fixed file name (no date); gzip header checked (no time, no name)
 - [x] `app/contribute`: config from `contribution.properties` (build switch, off), encoded issue link without measurements or paths, flow state machine, `ContributeScreen` (en, de), button in Share data, Explorer reveal
-- [x] Inactive issue form in `docs/contribution/training-data.yml`; tests for privacy, link, config, flow, texts and no network code; docs (RESEARCH-EXPORT, SPEC, ARCHITECTURE, DESIGN, ADR 0007, tester guides)
+- [x] Issue form (first in `docs/contribution/`, moved to `.github/ISSUE_TEMPLATE/training-data.yml` on 2026-11-24, label `training-data` created); tests for privacy, link, config, flow, texts and no network code; docs (RESEARCH-EXPORT, SPEC, ARCHITECTURE, DESIGN, ADR 0007, tester guides)
 - [ ] Legal questions settled, then activation (docs/RESEARCH-EXPORT.md "Turn it on")
 
 ### M24 UI redesign "Rack" (branch `feature/m24-ui-redesign`; plan approved 2026-11-09)
@@ -467,7 +467,7 @@ Gate for every task: tests green, before/after tables from the gated harness (`g
 
 ## Open questions
 
-- Training data contributions (ADR 0007): before activation, settle whether a public collection through GitHub issues needs an Impressum or a data protection notice from the maintainer, and how to meet that without a residential address. Until then `aimtune.contribution.enabled=false` and the issue form stays in `docs/contribution/`.
+- Training data contributions (ADR 0007): before activation, settle whether a public collection through GitHub issues needs an Impressum or a data protection notice from the maintainer, and how to meet that without a residential address. Until then `aimtune.contribution.enabled=false`. The issue form is in `.github/ISSUE_TEMPLATE/` and goes live on GitHub with the next merge to `main`, even with the app switch off.
 
 - WM_INPUT `wParam` (RIM_INPUT vs RIM_INPUTSINK) semantics for a message-only window are unverified; it is counted but not used for gating (ADR 0002).
 - Trainer FOV assumes the game's FOV value refers to a 16:9 window and keeps the vertical FOV fixed when the window aspect changes. Real per-game aspect behavior is verified in M4.

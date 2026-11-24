@@ -67,7 +67,7 @@ class ContributionLinkTest {
 
     @Test
     fun `the issue form in the docs has the summary field the link fills`() {
-        val form = java.io.File("../docs/contribution/training-data.yml").readText()
+        val form = java.io.File("../.github/ISSUE_TEMPLATE/training-data.yml").readText()
         assertTrue(form.contains("id: ${ContributionLink.SUMMARY_FIELD}"))
         assertTrue(form.contains("required: true"))
     }

@@ -83,8 +83,8 @@ An invalid repository or template keeps the feature off.
 ### Turn it on
 
 1. Settle the legal questions first (docs/PROGRESS.md, open questions).
-2. Move `docs/contribution/training-data.yml` to `.github/ISSUE_TEMPLATE/` on `main` (GitHub reads issue forms
-   only from the default branch) and create the label `training-data`.
+2. Done (2026-11-24): the issue form is in `.github/ISSUE_TEMPLATE/training-data.yml` (GitHub reads issue forms
+   only from the default branch, so it goes live with the next merge to `main`) and the label `training-data` exists.
 3. Set `aimtune.contribution.enabled=true` (or pass `-Paimtune.contribution.enabled=true` to the release build).
 
 ### Turn it off or remove it
@@ -94,4 +94,4 @@ An invalid repository or template keeps the feature off.
   `ShareDataScreen`, `contributions`, `showContribute` and `revealFile` in `AppContext`, the `contribute.*` keys
   in both bundles (and `contribute` in the `BundlesTest` key pattern), `contribution.properties`, the three
   `aimtune.contribution.*` properties and the `contribution` lines in `processResources`, the two tour steps,
-  and `docs/contribution/`.
+  and `.github/ISSUE_TEMPLATE/training-data.yml`.

@@ -1,6 +1,6 @@
-# Issue form for "Contribute training data" (ADR 0007). Inactive here on purpose: GitHub only uses forms in
-# .github/ISSUE_TEMPLATE/ on the default branch. Move it there only when the feature is switched on
-# (docs/RESEARCH-EXPORT.md "Contributions"). The field id "summary" is filled by the link the app opens.
+# Issue form for "Contribute training data" (ADR 0007). GitHub uses it once it is on the default branch.
+# The app opens it only when aimtune.contribution.enabled=true (docs/RESEARCH-EXPORT.md "Contributions").
+# The field id "summary" is filled by the link the app opens.
 name: Training data
 description: Share an AimTune training data file (voluntary, public).
 title: "Training data"
