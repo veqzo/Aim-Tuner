@@ -124,4 +124,4 @@ Deviations from the original mockup (`AimTune.pdf`) that still apply:
 
 ## Open design questions
 
-See `docs/PROGRESS.md` ("Open questions"). A setting to turn the round countdown off does not exist yet.
+See `docs/PROGRESS.md` ("Open questions"). The round countdown has no setting to turn it off: after a hands-on test the user keeps it as it is (2026-11-24).

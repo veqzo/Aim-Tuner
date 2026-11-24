@@ -8,23 +8,24 @@
 
 ## 2. Set up once
 
-On first launch, a four-step setup asks for:
+On first launch, one setup screen asks for:
 
-- your mouse **DPI**
 - your **game** (Valorant) and its **current sensitivity**
-- your **aim style** (wrist / mixed / arm)
-- your **mousepad size**
+- your mouse **DPI**
 
-Before you test, turn off **Enhance pointer precision** in Windows (Settings > Mouse > Additional mouse settings > Pointer Options). If you use a Raw Accel curve, disable it too. Otherwise the measurements are distorted.
+The screen shows your cm/360° live. Aim style, mousepad size and flash turn-away are preset (Mixed, Medium, Sometimes). Change them if they do not fit you. Later, click the **setup pill** at the top of the window to change any of these values.
+
+Before you test, turn off **Enhance pointer precision** in Windows (Settings > Mouse > Additional mouse settings > Pointer Options). If you use a Raw Accel curve, disable it too. Otherwise the measurements are distorted. The check chips on the **Sensitivity** module show both states.
 
 ## 3. Run a test
 
-1. Click **Start a test** in the main menu.
+1. On the dashboard, click **Find my sens** on the **Sensitivity** module (or press Enter).
 2. Each round lasts **45 seconds**. Click the targets as fast and accurately as you can.
 3. After each round you see how many targets you hit and how sure the program is. The sensitivity of each round is **never shown on purpose**, so do not try to judge whether a round felt good or bad.
+   From the second round, a **3 s countdown** starts the next round by itself. Press **Space** to pause it.
 4. Play **15 to 30 rounds**, ideally on **two different days**. Use **Stop for today** at any time.
 
-Controls: click starts a round, `Esc` aborts it, `F11` toggles fullscreen.
+Controls: click starts a round, `Esc` aborts it, `Space` pauses the countdown, `F11` toggles fullscreen.
 
 Raw Accel is not part of this test. Section 4 explains the optional curve search.
 
@@ -35,11 +36,11 @@ Only do this part if you already use Raw Accel or you want to check whether a cu
 You need a mouse with a report rate of **1000 Hz or higher**. Keep Raw Accel disabled in Windows: AimTune simulates the curves itself and does not change your game or the Raw Accel driver.
 
 1. Finish section 3 first.
-2. In the main menu, open **Raw Accel** (key **A**), then choose **Find a curve**.
+2. On the dashboard, click **Find a curve** on the **Curve** module (key **A**).
 3. Play the blind rounds as before. You do not see which curve is tested.
 4. At the end, AimTune runs a blind A/B test of the curve against your normal sensitivity.
 5. A Raw Accel `settings.json` is exported **only** if the result says the curve is clearly better. Otherwise the answer is "no curve".
-6. If you already have a Raw Accel `settings.json`, choose **Refine my curve** and open the file with **Open settings.json...**. Refine only tries small changes, and it rarely finds one worth exporting.
+6. If you already have a Raw Accel `settings.json`, import it on the **Curve** module with **Import Raw Accel profile**, then click **Refine my curve**. Refine only tries small changes, and it rarely finds one worth exporting.
 
 **Report:** whether you got a curve or "no curve", the exact text on the Results screen, and your current Raw Accel curve values if you use one.
 
@@ -55,7 +56,7 @@ Enter the recommended value in your game and play with it for a few days before 
 
 ## 6. Share your data
 
-1. Open **History** in AimTune.
+1. Open **History** (key **H**) or **Settings** in AimTune.
 2. Click **Share data for research**. This writes one file named `aimtune-research-<date>.json.gz` to `%APPDATA%\AimTune\exports\research\`. Paste that path into the Explorer address bar to open the folder directly.
 3. Send that file to the developer. It contains no name, file paths or clock times, only your rounds, DPI and sensitivity. Nothing is uploaded automatically.
 4. Please also send a short note with:

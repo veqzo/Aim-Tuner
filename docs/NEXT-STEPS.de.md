@@ -7,7 +7,7 @@ Wichtig vorab: Ich habe nichts davon mit einer echten Hand und nichts in Raw Acc
 ## Teil 1: Was du testen sollst
 
 ### Test A: Analyse mit deiner Kurve (ca. 15 Runden, einmal)
-1. Im Raw-Accel-Hub deine `settings.json` importieren (falls noch nicht geschehen). Raw Accel muss beim Spielen der Runden **aus oder linear** sein, die App spielt deine Kurve selbst.
+1. Im Dashboard im Modul **Kurve** mit "Raw-Accel-Profil importieren" deine `settings.json` importieren (falls noch nicht geschehen). Raw Accel muss beim Spielen der Runden **aus oder linear** sein, die App spielt deine Kurve selbst.
 2. "Find a curve" öffnen, **"Gegen meine eigene Kurve analysieren"** ankreuzen, dann **"Zuerst meine Fehler analysieren"** starten und die Kalibrierung zu Ende spielen.
 3. Auf der Analyse-Seite die Karte **"Entwurf aus deinem Bewegungsprofil"** ansehen.
 
