@@ -266,6 +266,7 @@ Gate for every task: tests green, before/after tables from the gated harness (`g
 
 ## Last session
 
+- Update check fix (2026-11-24): v1.1.0 showed "GitHub not reachable" although v1.1.1 is out. Cause: the jpackage runtime (JDK 21) had no `jdk.crypto.ec`, so every HTTPS handshake failed (`SSLHandshakeException: handshake_failure`); checked with a jlink runtime with the same modules (fails) and with `jdk.crypto.ec` added (HTTP 200). The module is added in `app/build.gradle.kts`. Not committed yet. v1.1.0 and v1.1.1 cannot update themselves: install the fixed release once by hand.
 - CI speed (2026-11-24): the Gradle cache was never written (setup-gradle writes only on the default branch, and CI did not run on `main`). CI now runs on pushes to `main` and `dev`, both write the cache, and the Gradle build cache and parallel builds are on, so unchanged modules skip their tests. Parallel test forks were tried and dropped: the sim gates already use all cores.
 - App icon (2026-11-24): the maintainer supplied the artwork; window icon (`setWindowIcon`), exe icon (jpackage `--icon`, checked in the built `AimTune.exe`), top bar logo and README banner use it.
 - Contributions switched on for v1.1.1 (2026-11-24): the maintainer tested the flow locally and the issue form in a scratch repo; PR to `main`, then tag v1.1.1.
@@ -468,6 +469,7 @@ Gate for every task: tests green, before/after tables from the gated harness (`g
 
 ## Known bugs
 
+- v1.1.0 and v1.1.1 builds: the update check and download fail (missing `jdk.crypto.ec` in the bundled runtime); fixed in the build script, ships with the next release.
 - see docs/history/REVIEW.md: C1-C4 (targets too large, spurious first movements, consistency metric bias, no validation on real people), M1-M9. M4 UI has only been checked through rendered screenshots.
 
 ## Open questions

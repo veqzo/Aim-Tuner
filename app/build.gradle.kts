@@ -79,7 +79,9 @@ interface Injected {
     @get:javax.inject.Inject val fileSystem: FileSystemOperations
 }
 
-val jpackageRuntimeModules = "java.base,java.desktop,java.logging,java.management,java.naming,java.sql,java.net.http,jdk.unsupported"
+// jdk.crypto.ec holds the elliptic-curve ciphers of JDK 21 (moved into java.base only in JDK 22). Without it every HTTPS
+// handshake with GitHub fails, so the update check and the update download never work in the packaged app.
+val jpackageRuntimeModules = "java.base,java.desktop,java.logging,java.management,java.naming,java.sql,java.net.http,jdk.crypto.ec,jdk.unsupported"
 
 tasks.register<Exec>("jpackage") {
     group = "distribution"
