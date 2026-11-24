@@ -1,10 +1,11 @@
 name: CI
 
 # main only receives pull requests from dev. The ruleset on main requires the "build" check, so pull requests run
-# without a path filter: a skipped required check would block the merge.
+# without a path filter: a skipped required check would block the merge. Pushes to main run too: only runs on the
+# default branch write the Gradle cache that pull requests can read.
 on:
   push:
-    branches: [dev]
+    branches: [main, dev]
     paths-ignore: ["docs/**", "**.md"]
   pull_request:
 
@@ -25,6 +26,9 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
+      # Restores dependencies and the build cache (unchanged modules skip their tests). main and dev write it.
       - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/dev' }}
       - name: Build and test
         run: ./gradlew build --console=plain
